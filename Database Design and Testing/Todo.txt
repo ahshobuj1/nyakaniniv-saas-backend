@@ -1,0 +1,27 @@
+1. Tools
+    - MYSQL
+    - AI -> Antigravity
+    - GUI (VS Code, MySQL Extenstion, PgAdmin 4, PostgreSQL)
+    - draw.io, dbdiagram.io (Online tool)
+
+2. Sofware Development Approaches
+    - Backend First Approach
+    - Frontend First Approach
+
+3. Backend first Development (BFD)
+    - Database
+    - API 
+    - Postman
+    - Deployment
+    
+4. Database Design & Testing
+    - Application Features & Requirement Listing (Completed) ✅
+    - Data Flow Diagram (DFD) (Completed) ✅
+    - User Journey & Technical Flow (Completed) ✅
+    - Database Schema Planning (Completed) ✅
+    - ERD Diagram & Relationship (Completed) ✅
+    - Write Table SQL Database Design Language (DDL) (Completed) ✅
+    - Execute (DDL) (Completed) ✅
+    - Prepare Test Data (DQL) (Completed) ✅
+    - Execute Test Data (DQL) (Completed) ✅
+    - Evaluate Database Tables Keys And Relationship (Completed) ✅

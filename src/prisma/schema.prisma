@@ -1,0 +1,328 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../prisma/generated"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  DJ
+}
+
+enum SubscriptionStatus {
+  active
+  past_due
+  canceled
+}
+
+enum EventStatus {
+  upcoming
+  completed
+  canceled
+}
+
+enum BookingStatus {
+  pending
+  accepted
+  completed
+}
+
+enum InvoiceType {
+  SUBSCRIPTION
+  BOOKING
+}
+
+enum InvoiceMethod {
+  STRIPE
+  CASH
+}
+
+enum InvoicePaymentStatus {
+  paid
+  unpaid
+}
+
+enum TicketStatus {
+  open
+  in_progress
+  resolved
+}
+
+enum NotificationType {
+  booking_request
+  payment
+  system
+}
+
+model User {
+  id         String    @id @default(uuid()) @db.Uuid
+  firstName  String?   @map("first_name") @db.VarChar(255)
+  lastName   String?   @map("last_name") @db.VarChar(255)
+  email      String    @unique @db.VarChar(255)
+  password   String    @db.VarChar(255)
+  role       UserRole
+  profileImg String?   @map("profile_img") @db.VarChar(255)
+  isVerified Boolean?  @default(false) @map("is_verified")
+  otp        String?   @db.VarChar(255)
+  otpExpiry  DateTime? @map("otp_expiry")
+  createdAt  DateTime? @default(now()) @map("created_at")
+  updatedAt  DateTime? @default(now()) @updatedAt @map("updated_at")
+
+  tenant         Tenant?
+  subscriptions  Subscription[]
+  invoices       Invoice[]
+  auditLogs      AuditLog[]
+  supportTickets SupportTicket[]
+  notifications  Notification[]
+
+  @@map("users")
+}
+
+model Theme {
+  id              Int       @id @default(autoincrement())
+  name            String?   @db.VarChar(255)
+  slug            String?   @db.VarChar(255)
+  previewImageUrl String?   @map("preview_image_url") @db.VarChar(255)
+  defaultConfig   Json?     @map("default_config")
+  createdAt       DateTime? @default(now()) @map("created_at")
+  updatedAt       DateTime? @default(now()) @updatedAt @map("updated_at")
+
+  tenants Tenant[]
+
+  @@map("themes")
+}
+
+model Tenant {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String?   @unique @map("user_id") @db.Uuid
+  subdomain   String?   @unique @db.VarChar(255)
+  stageName   String?   @map("stage_name") @db.VarChar(255)
+  country     String?   @db.VarChar(255)
+  city        String?   @db.VarChar(255)
+  genres      Json?
+  themeId     Int?      @map("theme_id")
+  logoUrl     String?   @map("logo_url") @db.VarChar(255)
+  bio         String?   @db.Text
+  timezone    String?   @db.VarChar(255)
+  isActive    Boolean?  @map("is_active")
+  socialLinks Json?     @map("social_links")
+  config      Json?
+  createdAt   DateTime? @default(now()) @map("created_at")
+  updatedAt   DateTime? @default(now()) @updatedAt @map("updated_at")
+
+  user  User?  @relation(fields: [userId], references: [id])
+  theme Theme? @relation(fields: [themeId], references: [id])
+
+  mixTapes MixTape[]
+  events   Event[]
+  bookings Booking[]
+  invoices Invoice[]
+
+  @@map("tenants")
+}
+
+model SubscriptionPlan {
+  id                   Int       @id @default(autoincrement())
+  name                 String?   @db.VarChar(255)
+  priceMonthly         Decimal?  @map("price_monthly") @db.Decimal(10, 2)
+  priceAnnually        Decimal?  @map("price_annually") @db.Decimal(10, 2)
+  stripeMonthlyPriceId String?   @map("stripe_monthly_price_id") @db.VarChar(255)
+  stripeAnnualPriceId  String?   @map("stripe_annual_price_id") @db.VarChar(255)
+  discountPercentage   Int?      @map("discount_percentage")
+  features             Json?
+  createdAt            DateTime? @default(now()) @map("created_at")
+  updatedAt            DateTime? @default(now()) @updatedAt @map("updated_at")
+
+  subscriptions Subscription[]
+
+  @@map("subscription_plans")
+}
+
+model Subscription {
+  id          String              @id @default(uuid()) @db.Uuid
+  userId      String?             @map("user_id") @db.Uuid
+  planId      Int?                @map("plan_id")
+  stripeSubId String?             @map("stripe_sub_id") @db.VarChar(255)
+  status      SubscriptionStatus?
+  periodEnd   DateTime?           @map("period_end")
+  createdAt   DateTime?           @default(now()) @map("created_at")
+  updatedAt   DateTime?           @default(now()) @updatedAt @map("updated_at")
+
+  user User?             @relation(fields: [userId], references: [id])
+  plan SubscriptionPlan? @relation(fields: [planId], references: [id])
+
+  @@map("subscriptions")
+}
+
+model MixTape {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String?   @map("tenant_id") @db.Uuid
+  title     String?   @db.VarChar(255)
+  audioUrl  String?   @map("audio_url") @db.VarChar(255)
+  coverUrl  String?   @map("cover_url") @db.VarChar(255)
+  order     Int?
+  createdAt DateTime? @default(now()) @map("created_at")
+  updatedAt DateTime? @default(now()) @updatedAt @map("updated_at")
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@map("mix_tapes")
+}
+
+model Event {
+  id           String       @id @default(uuid()) @db.Uuid
+  tenantId     String?      @map("tenant_id") @db.Uuid
+  title        String?      @db.VarChar(255)
+  description  String?      @db.Text
+  eventDate    DateTime?    @map("event_date") @db.Date
+  venueName    String?      @map("venue_name") @db.VarChar(255)
+  venueAddress String?      @map("venue_address") @db.VarChar(255)
+  capacity     Int?
+  price        Decimal?     @db.Decimal(10, 2)
+  status       EventStatus?
+  createdAt    DateTime?    @default(now()) @map("created_at")
+  updatedAt    DateTime?    @default(now()) @updatedAt @map("updated_at")
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@map("events")
+}
+
+model Booking {
+  id           String         @id @default(uuid()) @db.Uuid
+  tenantId     String?        @map("tenant_id") @db.Uuid
+  clientName   String?        @map("client_name") @db.VarChar(255)
+  clientEmail  String?        @map("client_email") @db.VarChar(255)
+  eventType    String?        @map("event_type") @db.VarChar(255)
+  eventDetails String?        @map("event_details") @db.Text
+  status       BookingStatus?
+  totalAmount  Decimal?       @map("total_amount") @db.Decimal(10, 2)
+  createdAt    DateTime?      @default(now()) @map("created_at")
+  updatedAt    DateTime?      @default(now()) @updatedAt @map("updated_at")
+
+  tenant  Tenant?  @relation(fields: [tenantId], references: [id])
+  invoice Invoice?
+
+  @@map("bookings")
+}
+
+model Invoice {
+  id        String                @id @default(uuid()) @db.Uuid
+  tenantId  String?               @map("tenant_id") @db.Uuid
+  bookingId String?               @unique @map("booking_id") @db.Uuid
+  userId    String?               @map("user_id") @db.Uuid
+  amount    Decimal?              @db.Decimal(10, 2)
+  type      InvoiceType?
+  method    InvoiceMethod?
+  status    InvoicePaymentStatus?
+  createdAt DateTime?             @default(now()) @map("created_at")
+  updatedAt DateTime?             @default(now()) @updatedAt @map("updated_at")
+
+  tenant  Tenant?  @relation(fields: [tenantId], references: [id])
+  booking Booking? @relation(fields: [bookingId], references: [id])
+  user    User?    @relation(fields: [userId], references: [id])
+
+  @@map("invoices")
+}
+
+model WebhookEvent {
+  id            String    @id @default(uuid()) @db.Uuid
+  stripeEventId String    @unique @map("stripe_event_id") @db.VarChar(255)
+  type          String?   @db.VarChar(255)
+  status        String?   @db.VarChar(255)
+  createdAt     DateTime? @default(now()) @map("created_at")
+
+  @@map("webhook_events")
+}
+
+model AuditLog {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String?   @map("user_id") @db.Uuid
+  action    String?   @db.VarChar(255)
+  metadata  Json?
+  ipAddress String?   @map("ip_address") @db.VarChar(255)
+  createdAt DateTime? @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model SupportTicket {
+  id        String        @id @default(uuid()) @db.Uuid
+  userId    String?       @map("user_id") @db.Uuid
+  fullName  String?       @map("full_name") @db.VarChar(255)
+  email     String?       @db.VarChar(255)
+  subject   String?       @db.VarChar(255)
+  issue     String?       @db.Text
+  status    TicketStatus?
+  createdAt DateTime?     @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@map("support_tickets")
+}
+
+model Notification {
+  id        String            @id @default(uuid()) @db.Uuid
+  userId    String?           @map("user_id") @db.Uuid
+  title     String?           @db.VarChar(255)
+  message   String?           @db.Text
+  type      NotificationType?
+  isRead    Boolean?          @default(false) @map("is_read")
+  createdAt DateTime?         @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
+}
+
+model LandingPageHero {
+  id          Int      @id @default(autoincrement())
+  title       String?  @db.VarChar(255)
+  description String?  @db.Text
+  imageUrl    String?  @map("image_url") @db.VarChar(255)
+  isActive    Boolean? @default(false) @map("is_active")
+
+  @@map("landing_page_heroes")
+}
+
+model LandingPageStep {
+  id          Int     @id @default(autoincrement())
+  title       String? @db.VarChar(255)
+  description String? @db.Text
+  imageUrl    String? @map("image_url") @db.VarChar(255)
+  order       Int?
+
+  @@map("landing_page_steps")
+}
+
+model LandingPageService {
+  id          Int     @id @default(autoincrement())
+  title       String? @db.VarChar(255)
+  description String? @db.Text
+  imageUrl    String? @map("image_url") @db.VarChar(255)
+  order       Int?
+
+  @@map("landing_page_services")
+}
+
+model LandingPageFaq {
+  id       Int     @id @default(autoincrement())
+  question String? @db.VarChar(255)
+  answer   String? @db.Text
+  order    Int?
+
+  @@map("landing_page_faqs")
+}
+
+model LandingPageMarquee {
+  id       Int     @id @default(autoincrement())
+  imageUrl String? @map("image_url") @db.VarChar(255)
+  order    Int?
+
+  @@map("landing_page_marquees")
+}
