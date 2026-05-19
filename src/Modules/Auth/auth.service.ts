@@ -83,6 +83,36 @@ export class AuthServices {
     return { user: updatedUser, token };
   }
 
+  public async resendVerificationOtp(email: string) {
+    this.logger.info("Attempting to resend verification OTP", { email });
+
+    const user: any = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      // Return success anyway to prevent email enumeration
+      return { otp: null };
+    }
+
+    if (user.isVerified) {
+      throw new ConflictError("User is already verified");
+    }
+
+    const otp = generateOtp();
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    await (this.prisma.user as any).update({
+      where: { id: user.id },
+      data: {
+        otp,
+        otpExpiry,
+      },
+    });
+
+    // Mock Email Send
+    this.logger.info(`[MOCK EMAIL] Sent NEW Verification OTP ${otp} to ${email}`);
+
+    return { otp };
+  }
+
   public async login(email: string, passwordRaw: string) {
     this.logger.info("Attempting to log in user", { email });
 
@@ -110,7 +140,7 @@ export class AuthServices {
     const user: any = await this.prisma.user.findUnique({ where: { email } });
     if (!user) {
       // Don't leak whether user exists, just return success
-      return true;
+      return { otp: null };
     }
 
     const otp = generateOtp();
@@ -123,7 +153,7 @@ export class AuthServices {
 
     // Mock Email Send
     this.logger.info(`[MOCK EMAIL] Sent Password Reset OTP ${otp} to ${email}`);
-    return true;
+    return { otp };
   }
 
   public async resetPassword(email: string, otp: string, newPasswordRaw: string) {

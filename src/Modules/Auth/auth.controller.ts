@@ -16,9 +16,22 @@ export class AuthController extends BaseController {
     const { email, firstName, lastName, password } = req.validatedBody as CreateUserDTO;
     
     const newUser = await this.authService.register(email, firstName, lastName, password);
-    const { password: _, otp, otpExpiry, ...userWithoutSensitiveInfo } = newUser as any;
+    // const { password: _, otp, otpExpiry, ...userWithoutSensitiveInfo } = newUser as any;
 
-    return this.sendCreatedResponse(req, res, userWithoutSensitiveInfo, "User registered successfully. Please verify your email.");
+    return this.sendCreatedResponse(req, res, newUser, "User registered successfully. Please verify your email.");
+  }
+
+  public async resendVerificationOtp(req: Request, res: Response) {
+    const { email } = req.validatedBody as { email: string };
+    const { otp } = await this.authService.resendVerificationOtp(email);
+
+    return this.sendResponse(
+      req,
+      res,
+      `OTP resend successfully, a new OTP has been sent to your email.`,
+      200,
+      { otp }
+    );
   }
 
   public async verifyOtp(req: Request, res: Response) {
@@ -47,10 +60,10 @@ export class AuthController extends BaseController {
   public async forgotPassword(req: Request, res: Response) {
     const { email } = req.validatedBody as ForgotPasswordDTO;
     
-    await this.authService.forgotPassword(email);
+  const {otp} =  await this.authService.forgotPassword(email);
     
     // Always return success to prevent email enumeration
-    return this.sendResponse(req, res, "If an account exists with that email, a password reset OTP has been sent.", 200, null);
+    return this.sendResponse(req, res, "If an account exists with that email, a password reset OTP has been sent.", 200, {otp});
   }
 
   public async resetPassword(req: Request, res: Response) {

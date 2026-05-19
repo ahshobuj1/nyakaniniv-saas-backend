@@ -12,11 +12,12 @@ This document tracks the active progress of the project.
 
 ### Auth Module
 
-- [ ] Implement Login endpoint (JWT generation).
-- [ ] Implement Logout endpoint.
-- [ ] Implement Password Reset flow.
-- [ ] Implement Email Verification / OTP validation.
-- [ ] Secure routes with JWT middleware.
+- [x] Implement Login endpoint (JWT generation).
+- [x] Implement Logout endpoint.
+- [x] Implement Password Reset flow.
+- [x] Implement Email Verification / OTP validation.
+- [x] Implement Resend Verification OTP.
+- [x] Secure routes with JWT middleware.
 
 ### Theme Module
 

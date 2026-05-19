@@ -44,7 +44,22 @@ This document contains the API endpoints for the project. You can use this to ma
   - **Code:** 200
   - **Content:** Email verified successfully. Returns JWT token and user info.
 
-### 3. Login
+### 3. Resend Verification OTP
+
+- **URL:** `/auth/v1/resend-otp`
+- **Method:** `POST`
+- **Description:** Request a new verification OTP for an unverified account.
+- **Request Body:**
+  ```json
+  {
+    "email": "user@example.com"
+  }
+  ```
+- **Success Response:**
+  - **Code:** 200
+  - **Content:** If your account exists and is not verified, a new OTP has been sent.
+
+### 4. Login
 
 - **URL:** `/auth/v1/login`
 - **Method:** `POST`
@@ -60,7 +75,7 @@ This document contains the API endpoints for the project. You can use this to ma
   - **Code:** 200
   - **Content:** Login successful. Returns JWT token and user info.
 
-### 4. Logout
+### 5. Logout
 
 - **URL:** `/auth/v1/logout`
 - **Method:** `POST`
@@ -71,7 +86,7 @@ This document contains the API endpoints for the project. You can use this to ma
   - **Code:** 200
   - **Content:** Logout successful.
 
-### 5. Forgot Password
+### 6. Forgot Password
 
 - **URL:** `/auth/v1/forgot-password`
 - **Method:** `POST`
@@ -86,7 +101,7 @@ This document contains the API endpoints for the project. You can use this to ma
   - **Code:** 200
   - **Content:** If an account exists with that email, a password reset OTP has been sent.
 
-### 6. Reset Password
+### 7. Reset Password
 
 - **URL:** `/auth/v1/reset-password`
 - **Method:** `POST`

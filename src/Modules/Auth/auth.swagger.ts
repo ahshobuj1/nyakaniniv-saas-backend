@@ -42,6 +42,31 @@
 
 /**
  * @swagger
+ * /auth/v1/resend-otp:
+ *   post:
+ *     summary: Resend Verification OTP
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: If your account exists and is not verified, a new OTP has been sent.
+ *       409:
+ *         description: User is already verified
+ */
+
+/**
+ * @swagger
  * /auth/v1/verify:
  *   post:
  *     summary: Verify OTP

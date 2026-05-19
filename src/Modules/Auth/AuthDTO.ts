@@ -18,6 +18,12 @@ export const verifyOtpSchema = {
   }),
 };
 
+export const resendOtpSchema = {
+  body: z.object({
+    email: z.string().email("Invalid email address"),
+  }),
+};
+
 export const loginSchema = {
   body: z.object({
     email: z.string().email("Invalid email address"),

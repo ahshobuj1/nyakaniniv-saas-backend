@@ -8,6 +8,7 @@ import { authenticateUser } from "@/middleware/auth";
 import {
   createUserSchema,
   verifyOtpSchema,
+  resendOtpSchema,
   loginSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
@@ -45,6 +46,13 @@ export class AuthModule extends BaseModule {
       "/verify",
       validateRequest(verifyOtpSchema),
       controller.verifyOtp.bind(controller),
+    );
+
+    // Resend Verification OTP
+    this.router.post(
+      "/resend-otp",
+      validateRequest(resendOtpSchema),
+      controller.resendVerificationOtp.bind(controller),
     );
 
     // Login
