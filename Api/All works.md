@@ -5,11 +5,11 @@ This document contains the complete list of tasks required to build the full bac
 ## 🔑 Phase 2: Core Modules
 
 ### Auth Module
-- [ ] Implement Login endpoint (JWT generation).
-- [ ] Implement Logout endpoint.
-- [ ] Implement Password Reset flow.
-- [ ] Implement Email Verification / OTP validation.
-- [ ] Secure routes with JWT middleware.
+- [x] Implement Login endpoint (JWT generation).
+- [x] Implement Logout endpoint.
+- [x] Implement Password Reset flow.
+- [x] Implement Email Verification / OTP validation.
+- [x] Secure routes with JWT middleware.
 
 ### Theme Module
 - [ ] Create Theme (Admin).

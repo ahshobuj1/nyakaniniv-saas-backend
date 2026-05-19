@@ -1,47 +1,63 @@
-// src/Modules/Auth/AuthController.ts
+// src/Modules/Auth/auth.controller.ts
 import { Request, Response } from "express";
 import { BaseController } from "@/core/BaseController";
 import { AppLogger } from "@/core/logging/logger";
-import { CreateUserDTO } from "./AuthDTO";
+import { CreateUserDTO, VerifyOtpDTO, LoginDTO, ForgotPasswordDTO, ResetPasswordDTO } from "./AuthDTO";
 import { AuthServices } from "./auth.service";
 
 export class AuthController extends BaseController {
-  // Initialize the contextual logger
   private logger = new AppLogger("AuthController");
 
-  // Inject the service via the constructor
   constructor(private readonly authService: AuthServices) {
     super();
   }
 
-  /**
-   * Endpoint: POST /auth/v1/users
-   */
-  public async createUser(req: Request, res: Response) {
-    this.logger.info("Received request to create a new user");
+  public async register(req: Request, res: Response) {
+    const { email, firstName, lastName, password } = req.validatedBody as CreateUserDTO;
+    
+    const newUser = await this.authService.register(email, firstName, lastName, password);
+    const { password: _, otp, otpExpiry, ...userWithoutSensitiveInfo } = newUser as any;
 
-    // 1. Extract the validated body (populated by your validateRequest middleware)
-    const { email, firstName, lastName, password } =
-      req.validatedBody as CreateUserDTO;
+    return this.sendCreatedResponse(req, res, userWithoutSensitiveInfo, "User registered successfully. Please verify your email.");
+  }
 
-    // 2. Pass the data to the Service Layer (Business Logic)
-    const newUser = await this.authService.register(
-      email,
-      firstName,
-      lastName,
-      password,
-    );
+  public async verifyOtp(req: Request, res: Response) {
+    const { email, otp } = req.validatedBody as VerifyOtpDTO;
+    
+    const { user, token } = await this.authService.verifyOtp(email, otp);
+    const { password: _, ...safeUser } = user;
 
-    // 3. Remove sensitive information before sending it back to the client
-    // (Alternatively, you can use Prisma's `omit` feature if you configure it)
-    const { password: _, ...userWithoutPassword } = newUser;
+    return this.sendResponse(req, res, "Email verified successfully", 200, { user: safeUser, token });
+  }
 
-    // 4. Send the standardized response using BaseController's built-in method
-    return this.sendCreatedResponse(
-      req,
-      res,
-      userWithoutPassword,
-      "User registered successfully",
-    );
+  public async login(req: Request, res: Response) {
+    const { email, password } = req.validatedBody as LoginDTO;
+
+    const { user, token } = await this.authService.login(email, password);
+    const { password: _, otp, otpExpiry, ...safeUser } = user as any;
+
+    return this.sendResponse(req, res, "Login successful", 200, { user: safeUser, token });
+  }
+
+  public async logout(req: Request, res: Response) {
+    // With stateless JWT, logout is primarily a client-side action.
+    return this.sendResponse(req, res, "Logout successful", 200, null);
+  }
+
+  public async forgotPassword(req: Request, res: Response) {
+    const { email } = req.validatedBody as ForgotPasswordDTO;
+    
+    await this.authService.forgotPassword(email);
+    
+    // Always return success to prevent email enumeration
+    return this.sendResponse(req, res, "If an account exists with that email, a password reset OTP has been sent.", 200, null);
+  }
+
+  public async resetPassword(req: Request, res: Response) {
+    const { email, otp, newPassword } = req.validatedBody as ResetPasswordDTO;
+    
+    await this.authService.resetPassword(email, otp, newPassword);
+    
+    return this.sendResponse(req, res, "Password has been reset successfully", 200, null);
   }
 }
