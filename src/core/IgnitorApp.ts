@@ -4,6 +4,8 @@ import { Context } from "./Context";
 import { IgnitorModule } from "./IgnitorModule";
 import { config } from "./config";
 import { BaseModule } from "./BaseModule";
+import { AuthModule } from "@/Modules/Auth/AuthModule";
+import { TenantModule } from "@/Modules/Tenant/TenantModule";
 import { AppError } from "./errors/AppError";
 import { HTTPStatusCode } from "@/types/HTTPStatusCode";
 import { AppLogger } from "./logging/logger";
@@ -43,11 +45,23 @@ export class IgnitorApp {
     AppLogger.info(`⚙ Registered module: ${module.name}`);
   }
 
+  private async loadModules(): Promise<void> {
+    const modules: BaseModule[] = [
+      new AuthModule(),
+      new TenantModule(),
+    ];
+    for (const module of modules) {
+      this.registerModule(module);
+    }
+  }
+
   // The main boot sequence
   public async spark(port: number): Promise<void> {
     try {
       // 1. Initialize Infrastructure (Connects Prisma, Redis, etc.)
       await this.context.initialize();
+
+      await this.loadModules();
 
       // 2. Sort and Initialize Modules
       const sortedModules = sortModulesByDependencies(this.modules);

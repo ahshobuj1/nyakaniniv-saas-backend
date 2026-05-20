@@ -29,10 +29,11 @@ This document tracks the active progress of the project.
 
 ### Tenant Module
 
-- [ ] Create Tenant Profile (DJ onboarding).
-- [ ] Get Tenant by Subdomain.
-- [ ] Update Tenant Profile.
-- [ ] Assign Theme to Tenant.
+- [x] Get All Tenants (Admin).
+- [x] Create Tenant Profile (DJ onboarding).
+- [x] Get Tenant by Subdomain.
+- [x] Update Tenant Profile.
+- [x] Assign Theme to Tenant.
 
 ## ☁️ Phase 3: SaaS & Content
 

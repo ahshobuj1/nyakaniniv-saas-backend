@@ -118,6 +118,84 @@ This document contains the API endpoints for the project. You can use this to ma
   - **Code:** 200
   - **Content:** Password has been reset successfully.
 
+## 🏢 Tenant Module
+
+### 1. Create Tenant Profile (Onboarding)
+- **URL:** `/tenant/v1/onboard`
+- **Method:** `POST`
+- **Description:** Create the initial DJ profile (subdomain, stage name, location, genres).
+- **Headers:** 
+  - `Authorization: Bearer <token>`
+- **Request Body:**
+  ```json
+  {
+    "subdomain": "dj-alex",
+    "stageName": "Alex Vibes",
+    "country": "USA",
+    "city": "New York",
+    "genres": ["House", "Techno"]
+  }
+  ```
+- **Success Response:**
+  - **Code:** 201
+  - **Content:** Tenant profile created successfully. Returns created tenant object.
+
+### 2. Get All Tenants (Admin Only)
+- **URL:** `/tenant/v1/`
+- **Method:** `GET`
+- **Description:** Fetch a paginated list of all tenants across the platform. Includes the basic user info.
+- **Headers:** 
+  - `Authorization: Bearer <token>`
+- **Query Parameters:**
+  - `page` (optional): Page number, default 1
+  - `limit` (optional): Items per page, default 10
+- **Success Response:**
+  - **Code:** 200
+  - **Content:** Paginated list of tenants.
+
+### 3. Get Public Profile
+- **URL:** `/tenant/v1/:subdomain`
+- **Method:** `GET`
+- **Description:** Fetch the public portfolio data for rendering the DJ website.
+- **Success Response:**
+  - **Code:** 200
+  - **Content:** Tenant profile retrieved successfully. Includes nested Theme, MixTapes, and Events.
+
+### 3. Update Tenant Profile
+- **URL:** `/tenant/v1/profile`
+- **Method:** `PUT`
+- **Description:** Update bio, social links, logo, and other details.
+- **Headers:** 
+  - `Authorization: Bearer <token>`
+- **Request Body:**
+  ```json
+  {
+    "bio": "International DJ based in NY",
+    "socialLinks": {
+      "instagram": "https://instagram.com/alexvibes"
+    }
+  }
+  ```
+- **Success Response:**
+  - **Code:** 200
+  - **Content:** Tenant profile updated successfully.
+
+### 4. Assign Theme
+- **URL:** `/tenant/v1/theme`
+- **Method:** `PUT`
+- **Description:** Choose or change the portfolio theme.
+- **Headers:** 
+  - `Authorization: Bearer <token>`
+- **Request Body:**
+  ```json
+  {
+    "themeId": 1
+  }
+  ```
+- **Success Response:**
+  - **Code:** 200
+  - **Content:** Theme assigned successfully.
+
 ---
 
-_More endpoints will be documented here as they are built._
+*More endpoints will be documented here as they are built.*
