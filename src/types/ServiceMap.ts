@@ -1,4 +1,4 @@
-import { PrismaClient } from "@/generated/prisma/client";
+import { PrismaClient } from "@/prisma/generated/client";
 // import { Redis } from "ioredis";
 // import Stripe from "stripe";
 

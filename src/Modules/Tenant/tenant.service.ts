@@ -1,14 +1,14 @@
 // src/Modules/Tenant/tenant.service.ts
-import {PrismaClient} from '@/prisma/generated/client';
-import {AppLogger} from '@/core/logging/logger';
-import {ConflictError, NotFoundError} from '@/core/errors/AppError';
-import {CreateTenantDTO, UpdateTenantDTO} from './TenantDTO';
-import {QueryBuilder} from '@/utils/QueryBuilder';
+import { PrismaClient } from '@/prisma/generated/client';
+import { AppLogger } from '@/core/logging/logger';
+import { ConflictError, NotFoundError } from '@/core/errors/AppError';
+import { CreateTenantDTO, UpdateTenantDTO } from './TenantDTO';
+import { QueryBuilder } from '@/utils/QueryBuilder';
 
 export class TenantServices {
   private logger = new AppLogger('TenantServices');
 
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(private readonly prisma: PrismaClient) { }
 
   public async createTenant(userId: string, data: CreateTenantDTO) {
     this.logger.info('Attempting to onboard tenant', {
@@ -18,7 +18,7 @@ export class TenantServices {
 
     // 1. Check if user already has a tenant profile
     const existingUserTenant = await this.prisma.tenant.findUnique({
-      where: {userId},
+      where: { userId },
     });
 
     if (existingUserTenant) {
@@ -27,7 +27,7 @@ export class TenantServices {
 
     // 2. Check if subdomain is taken
     const existingSubdomain = await this.prisma.tenant.findUnique({
-      where: {subdomain: data.subdomain},
+      where: { subdomain: data.subdomain },
     });
 
     if (existingSubdomain) {
@@ -51,7 +51,7 @@ export class TenantServices {
   }
 
   public async getAllTenants(query: Record<string, unknown>) {
-    this.logger.info('Fetching all tenants (Admin)', {query});
+    this.logger.info('Fetching all tenants (Admin)', { query });
 
     const tenantQuery = new QueryBuilder(this.prisma.tenant, query)
       .search(['subdomain', 'stageName', 'country', 'city'])
@@ -66,6 +66,7 @@ export class TenantServices {
       tenantQuery.prismaArgs.include = {
         user: {
           select: {
+            id: true,
             email: true,
             firstName: true,
             lastName: true,
@@ -84,17 +85,17 @@ export class TenantServices {
   }
 
   public async getTenantBySubdomain(subdomain: string) {
-    this.logger.info('Fetching tenant profile publicly', {subdomain});
+    this.logger.info('Fetching tenant profile publicly', { subdomain });
 
     const tenant = await this.prisma.tenant.findUnique({
-      where: {subdomain},
+      where: { subdomain },
       include: {
         theme: true,
         mixTapes: {
-          orderBy: {order: 'asc'},
+          orderBy: { order: 'asc' },
         },
         events: {
-          orderBy: {eventDate: 'asc'},
+          orderBy: { eventDate: 'asc' },
         },
       },
     });
@@ -107,10 +108,10 @@ export class TenantServices {
   }
 
   public async updateTenantProfile(userId: string, data: UpdateTenantDTO) {
-    this.logger.info('Updating tenant profile', {userId});
+    this.logger.info('Updating tenant profile', { userId });
 
     const tenant = await this.prisma.tenant.findUnique({
-      where: {userId},
+      where: { userId },
     });
 
     if (!tenant) {
@@ -118,7 +119,7 @@ export class TenantServices {
     }
 
     const updatedTenant = await this.prisma.tenant.update({
-      where: {id: tenant.id},
+      where: { id: tenant.id },
       data: {
         stageName: data.stageName,
         country: data.country,
@@ -135,10 +136,10 @@ export class TenantServices {
   }
 
   public async assignTheme(userId: string, themeId: number) {
-    this.logger.info('Assigning theme to tenant', {userId, themeId});
+    this.logger.info('Assigning theme to tenant', { userId, themeId });
 
     const tenant = await this.prisma.tenant.findUnique({
-      where: {userId},
+      where: { userId },
     });
 
     if (!tenant) {
@@ -146,7 +147,7 @@ export class TenantServices {
     }
 
     const theme = await this.prisma.theme.findUnique({
-      where: {id: themeId},
+      where: { id: themeId },
     });
 
     if (!theme) {
@@ -156,7 +157,7 @@ export class TenantServices {
     // When assigning a theme, we might want to copy its default config
     // into the tenant's config to allow them to override it later.
     const updatedTenant = await this.prisma.tenant.update({
-      where: {id: tenant.id},
+      where: { id: tenant.id },
       data: {
         themeId,
         config: theme.defaultConfig || {},

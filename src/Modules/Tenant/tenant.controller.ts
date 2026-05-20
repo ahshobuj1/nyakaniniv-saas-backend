@@ -14,9 +14,9 @@ export class TenantController extends BaseController {
 
   public async onboard(req: Request, res: Response) {
     const data = req.validatedBody as CreateTenantDTO;
-    
+
     // User is extracted from authenticateUser middleware
-    const userId = req.user!.id; 
+    const userId = req.user!.id;
 
     const newTenant = await this.tenantService.createTenant(userId, data);
 

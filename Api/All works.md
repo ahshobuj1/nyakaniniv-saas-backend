@@ -15,11 +15,11 @@ Important: This document contains the complete list of tasks required to build t
 
 ### Theme Module
 
-- [ ] Create Theme (Admin).
-- [ ] Get All Themes.
-- [ ] Get Theme by Slug.
-- [ ] Update Theme.
-- [ ] Delete Theme.
+- [x] Create Theme (Admin).
+- [x] Get All Themes.
+- [x] Get Theme by Slug.
+- [x] Update Theme.
+- [x] Delete Theme.
 
 ### Tenant Module
 
@@ -48,10 +48,10 @@ Important: This document contains the complete list of tasks required to build t
 
 ### Event Module
 
-- [ ] Create Event.
-- [ ] Get Tenant Events (Filtered by upcoming/past).
-- [ ] Update Event.
-- [ ] Delete Event.
+- [x] Create Event.
+- [x] Get Tenant Events (Filtered by upcoming/past).
+- [x] Update Event.
+- [x] Delete Event.
 
 ## 💼 Phase 4: Business Logic
 
