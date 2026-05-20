@@ -5,6 +5,7 @@ import { config } from "./core/config";
 
 // Providers (Infrastructure)
 import { PrismaProvider } from "./providers/PrismaProvider";
+import { FileUploaderProvider } from "./providers/FileUploaderProvider";
 import { prisma } from "./lib/prisma";
 import { AuthModule } from "./Modules/Auth/AuthModule";
 
@@ -24,6 +25,7 @@ async function bootstrap() {
     // 2. Register Infrastructure Providers
     AppLogger.info("⚙ Registering infrastructure...");
     app.getContext().registerProvider("prisma", new PrismaProvider(prisma));
+    app.getContext().registerProvider("fileUploader", new FileUploaderProvider());
 
     // 3. Register Application Modules
     AppLogger.info("⚙ Registering modules...");

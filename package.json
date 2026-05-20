@@ -27,12 +27,14 @@
         "add:module": "bun scripts/generate-module.ts"
     },
     "dependencies": {
+        "@aws-sdk/client-s3": "^3.1050.0",
         "@prisma/adapter-pg": "^7.5.0",
         "@prisma/client": "^7.2.0",
         "axios": "^1.12.2",
         "bcrypt": "^6.0.0",
         "bcryptjs": "^3.0.3",
         "chalk": "^5.6.0",
+        "cloudinary": "^2.10.0",
         "compression": "^1.8.1",
         "connect-timeout": "^1.9.1",
         "cookie-parser": "^1.4.7",
@@ -49,7 +51,7 @@
         "prisma": "^7.2.0",
         "swagger-jsdoc": "^6.2.8",
         "swagger-ui-express": "^5.0.1",
-        "uuid": "^11.1.0",
+        "uuid": "^14.0.0",
         "winston": "^3.17.0",
         "winston-daily-rotate-file": "^5.0.0",
         "zod": "^4.1.1"

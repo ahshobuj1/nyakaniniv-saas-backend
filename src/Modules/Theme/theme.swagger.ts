@@ -55,21 +55,19 @@
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
  *             required:
- *               - name
- *               - slug
+ *               - data
  *             properties:
- *               name:
+ *               previewImage:
  *                 type: string
- *               slug:
+ *                 format: binary
+ *                 description: Image file to upload for the preview
+ *               data:
  *                 type: string
- *               previewImageUrl:
- *                 type: string
- *               defaultConfig:
- *                 type: object
+ *                 description: JSON string containing name, slug, and optional defaultConfig. Example - {"name":"My Theme", "slug":"my-theme"}
  *     responses:
  *       201:
  *         description: Theme created successfully
@@ -101,18 +99,17 @@
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
  *             properties:
- *               name:
+ *               previewImage:
  *                 type: string
- *               slug:
+ *                 format: binary
+ *                 description: Image file to upload for the preview
+ *               data:
  *                 type: string
- *               previewImageUrl:
- *                 type: string
- *               defaultConfig:
- *                 type: object
+ *                 description: JSON string containing name, slug, and optional defaultConfig
  *     responses:
  *       200:
  *         description: Theme updated successfully

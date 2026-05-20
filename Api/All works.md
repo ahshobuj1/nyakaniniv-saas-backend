@@ -1,8 +1,12 @@
 # All Works Checklist
 
-Important: This document contains the complete list of tasks required to build the full backend system. When you completed any works, must update here, Porgress works.md file, API Documentation and also add swagger for each endpoin
+Important: This document contains the complete list of tasks required to build the full backend system. When you completed any works, must update here, [Porgress works.md](<Progress works.md>) file, [API Documentation](<API Documentation.md>) and also add swagger for each endpoin
 
 ## 🔑 Phase 2: Core Modules
+
+### 📁 File Upload Service (Plug-and-play)
+- [x] Implement generic upload endpoint `POST /uploads/v1/`
+> **Note:** Right now we are exclusively using **Cloudinary** for file uploads. In the final step before deployment, we will replace it with **AWS S3** by simply changing the `FILE_UPLOADER` environment variable. The API layer will remain completely untouched.
 
 ### Auth Module
 
@@ -15,10 +19,10 @@ Important: This document contains the complete list of tasks required to build t
 
 ### Theme Module
 
-- [x] Create Theme (Admin).
+- [x] Create Theme (Admin - supports multipart/form-data for image upload).
 - [x] Get All Themes.
 - [x] Get Theme by Slug.
-- [x] Update Theme.
+- [x] Update Theme (supports multipart/form-data for image upload).
 - [x] Delete Theme.
 
 ### Tenant Module

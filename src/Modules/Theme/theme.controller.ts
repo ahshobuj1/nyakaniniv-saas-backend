@@ -1,13 +1,21 @@
 import { Request, Response } from 'express';
 import { ThemeServices } from './theme.service';
 import { BaseController } from '@/core/BaseController';
+import { IFileUploader } from '@/utils/IFileUploader';
 
 export class ThemeController extends BaseController {
-  constructor(private readonly themeService: ThemeServices) {
+  constructor(
+    private readonly themeService: ThemeServices,
+    private readonly fileUploader: IFileUploader
+  ) {
     super();
   }
 
   public async createTheme(req: Request, res: Response) {
+    if (req.file) {
+      const url = await this.fileUploader.upload(req.file);
+      req.body.previewImageUrl = url;
+    }
     const result = await this.themeService.createTheme(req.body);
     return this.sendCreatedResponse(req, res, result, 'Theme created successfully');
   }
@@ -25,6 +33,10 @@ export class ThemeController extends BaseController {
 
   public async updateTheme(req: Request, res: Response) {
     const id = Number(req.params.id);
+    if (req.file) {
+      const url = await this.fileUploader.upload(req.file);
+      req.body.previewImageUrl = url;
+    }
     const result = await this.themeService.updateTheme(id, req.body);
     return this.sendResponse(req, res, 'Theme updated successfully', 200, result);
   }
