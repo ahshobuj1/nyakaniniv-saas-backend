@@ -201,6 +201,142 @@ This document contains the API endpoints for the project. You can use this to ma
   - **Code:** 200
   - **Content:** Theme assigned successfully.
 
+## 🎨 Theme Module
+
+### 1. Get All Themes
+
+- **URL:** `/themes/v1/`
+- **Method:** `GET`
+- **Description:** Fetch a list of all themes.
+- **Success Response:**
+  - **Code:** 200
+  - **Content:** List of themes.
+
+### 2. Get Theme by Slug
+
+- **URL:** `/themes/v1/slug/:slug`
+- **Method:** `GET`
+- **Description:** Fetch a specific theme by its slug.
+- **Success Response:**
+  - **Code:** 200
+  - **Content:** Theme object.
+
+### 3. Create Theme (Admin)
+
+- **URL:** `/themes/v1/`
+- **Method:** `POST`
+- **Description:** Create a new theme. Supports `multipart/form-data`.
+- **Headers:**
+  - `Authorization: Bearer <token>`
+- **Request Body:** (`multipart/form-data`)
+  - `name`: "Dark Mode Theme"
+  - `slug`: "dark-mode"
+  - `previewImage`: (File - optional)
+  - `data`: (Optional) JSON string containing `defaultConfig` or other fields.
+- **Success Response:**
+  - **Code:** 201
+  - **Content:** Theme created successfully.
+
+### 4. Update Theme (Admin)
+
+- **URL:** `/themes/v1/:id`
+- **Method:** `PATCH`
+- **Description:** Update an existing theme. Supports `multipart/form-data`.
+- **Headers:**
+  - `Authorization: Bearer <token>`
+- **Request Body:** (`multipart/form-data`)
+  - `name`: "Updated Theme Name" (Optional)
+  - `slug`: "updated-slug" (Optional)
+  - `previewImage`: (File - optional)
+  - `data`: (Optional) JSON string containing `defaultConfig` or other fields.
+- **Success Response:**
+  - **Code:** 200
+  - **Content:** Theme updated successfully.
+
+### 5. Delete Theme (Admin)
+
+- **URL:** `/themes/v1/:id`
+- **Method:** `DELETE`
+- **Description:** Delete a theme by ID.
+- **Headers:**
+  - `Authorization: Bearer <token>`
+- **Success Response:**
+  - **Code:** 200
+  - **Content:** Theme deleted successfully.
+
+## 📅 Event Module
+
+### 1. Get Tenant Events
+
+- **URL:** `/events/v1/tenant/:tenantId`
+- **Method:** `GET`
+- **Description:** Fetch all events for a specific tenant.
+- **Success Response:**
+  - **Code:** 200
+  - **Content:** List of events for the given tenant.
+
+### 2. Get Event by ID
+
+- **URL:** `/events/v1/:id`
+- **Method:** `GET`
+- **Description:** Fetch a specific event by its ID.
+- **Success Response:**
+  - **Code:** 200
+  - **Content:** Event object.
+
+### 3. Create Event (DJ)
+
+- **URL:** `/events/v1/`
+- **Method:** `POST`
+- **Description:** Create a new event for the logged-in DJ (Tenant).
+- **Headers:**
+  - `Authorization: Bearer <token>`
+- **Request Body:** (`application/json`)
+  ```json
+  {
+    "title": "Summer Beach Party",
+    "description": "The biggest beach party of the year.",
+    "eventDate": "2026-07-15T20:00:00Z",
+    "venueName": "Miami Beach",
+    "venueAddress": "Ocean Drive, Miami, FL",
+    "capacity": 500,
+    "price": 25.00,
+    "status": "upcoming"
+  }
+  ```
+- **Success Response:**
+  - **Code:** 201
+  - **Content:** Event created successfully.
+
+### 4. Update Event (DJ)
+
+- **URL:** `/events/v1/:id`
+- **Method:** `PATCH`
+- **Description:** Update an existing event.
+- **Headers:**
+  - `Authorization: Bearer <token>`
+- **Request Body:** (`application/json`)
+  ```json
+  {
+    "title": "Updated Summer Beach Party",
+    "price": 30.00
+  }
+  ```
+- **Success Response:**
+  - **Code:** 200
+  - **Content:** Event updated successfully.
+
+### 5. Delete Event (DJ)
+
+- **URL:** `/events/v1/:id`
+- **Method:** `DELETE`
+- **Description:** Delete an event by ID.
+- **Headers:**
+  - `Authorization: Bearer <token>`
+- **Success Response:**
+  - **Code:** 200
+  - **Content:** Event deleted successfully.
+
 ---
 
 _More endpoints will be documented here as they are built._
