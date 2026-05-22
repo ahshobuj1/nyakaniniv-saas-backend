@@ -19,11 +19,22 @@ export class CloudinaryUploader implements IFileUploader {
     }
 
     try {
+      const timestamp = Math.round(new Date().getTime() / 1000);
+      const signature = cloudinary.utils.api_sign_request(
+        {
+          timestamp,
+          folder: config.cloudinary.folder,
+        },
+        config.cloudinary.apiSecret!
+      );
+
       const result = await cloudinary.uploader.upload(file.path, {
         folder: config.cloudinary.folder,
-        cloud_name: config.cloudinary.cloudName,
+        timestamp,
+        signature,
         api_key: config.cloudinary.apiKey,
-        api_secret: config.cloudinary.apiSecret,
+        cloud_name: config.cloudinary.cloudName,
+        resource_type: 'auto',
       });
 
       return result.secure_url;

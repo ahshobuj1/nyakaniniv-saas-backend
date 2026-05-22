@@ -12,6 +12,13 @@ import { AuthModule } from "./Modules/Auth/AuthModule";
 import { TenantModule } from "./Modules/Tenant/TenantModule";
 import { ThemeModule } from "./Modules/Theme/ThemeModule";
 import { EventModule } from "./Modules/Event/EventModule";
+import { SubscriptionModule } from "./Modules/Subscription/SubscriptionModule";
+import { MixTapeModule } from "./Modules/MixTape/MixTapeModule";
+import { BookingModule } from "./Modules/Booking/BookingModule";
+import { InvoiceModule } from "./Modules/Invoice/InvoiceModule";
+import { SupportTicketModule } from "./Modules/SupportTicket/SupportTicketModule";
+import { NotificationModule } from "./Modules/Notification/NotificationModule";
+import { LandingPageModule } from "./Modules/LandingPage/LandingPageModule";
 
 // Modules (Business Logic)
 
@@ -33,6 +40,13 @@ async function bootstrap() {
     app.registerModule(new TenantModule());
     app.registerModule(new ThemeModule());
     app.registerModule(new EventModule());
+    app.registerModule(new SubscriptionModule());
+    app.registerModule(new MixTapeModule());
+    app.registerModule(new BookingModule());
+    app.registerModule(new InvoiceModule());
+    app.registerModule(new SupportTicketModule());
+    app.registerModule(new NotificationModule());
+    app.registerModule(new LandingPageModule());
     AppLogger.info("✔ All modules registered successfully");
 
     // 4. Spark the server!

@@ -39,18 +39,18 @@ This document tracks the active progress of the project.
 
 ### Subscription Module
 
-- [ ] Create/Manage Plans (Admin).
-- [ ] Subscribe to Plan (Stripe Integration).
-- [ ] Cancel Subscription.
-- [ ] Handle Stripe Webhooks for subscription status.
+- [x] Create/Manage Plans (Admin).
+- [x] Subscribe to Plan (Stripe Integration).
+- [x] Cancel Subscription.
+- [x] Handle Stripe Webhooks for subscription status.
 
 ### MixTape Module
 
-- [ ] Upload MixTape (Integrate AWS S3).
-- [ ] Get Tenant MixTapes.
-- [ ] Update MixTape details.
-- [ ] Delete MixTape.
-- [ ] Reorder MixTapes.
+- [x] Upload MixTape (Integrate AWS S3).
+- [x] Get Tenant MixTapes.
+- [x] Update MixTape details.
+- [x] Delete MixTape.
+- [x] Reorder MixTapes.
 
 ### Event Module
 
@@ -63,34 +63,34 @@ This document tracks the active progress of the project.
 
 ### Booking Module
 
-- [ ] Create Booking Request (Public client).
-- [ ] Get Tenant Bookings (For DJ dashboard).
-- [ ] Accept/Reject Booking.
+- [x] Create Booking Request (Public client).
+- [x] Get Tenant Bookings (For DJ dashboard).
+- [x] Accept/Reject Booking.
 
 ### Invoice Module
 
-- [ ] Generate Invoice for Booking.
-- [ ] Generate Invoice for Subscription.
-- [ ] Pay Invoice (Stripe).
+- [x] Generate Invoice for Booking.
+- [x] Generate Invoice for Subscription.
+- [x] Pay Invoice (Stripe).
 
 ## 📣 Phase 5: Support & Communication
 
 ### Support Ticket Module
 
-- [ ] Create Support Ticket (Public or User).
-- [ ] Get Support Tickets (Admin).
-- [ ] Update Ticket Status.
+- [x] Create Support Ticket (Public or User).
+- [x] Get Support Tickets (Admin).
+- [x] Update Ticket Status.
 
 ### Notification Module
 
-- [ ] Create Notification (Triggered by events).
-- [ ] Get User Notifications.
-- [ ] Mark Notification as Read.
+- [x] Create Notification (Triggered by events).
+- [x] Get User Notifications.
+- [x] Mark Notification as Read.
 
 ## 🌐 Phase 6: Admin Content (Landing Page)
 
-- [ ] Manage Landing Page Heroes.
-- [ ] Manage Landing Page Steps.
-- [ ] Manage Landing Page Services.
-- [ ] Manage Landing Page FAQs.
-- [ ] Manage Landing Page Marquees.
+- [x] Manage Landing Page Heroes.
+- [x] Manage Landing Page Steps.
+- [x] Manage Landing Page Services.
+- [x] Manage Landing Page FAQs.
+- [x] Manage Landing Page Marquees.
