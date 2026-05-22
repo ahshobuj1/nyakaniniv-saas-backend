@@ -14,8 +14,8 @@ export class NotificationController extends BaseController {
 
   public async getMyNotifications(req: Request, res: Response): Promise<void> {
     const userId = req.user!.id;
-    const notifications = await this.notificationService.getMyNotifications(userId);
-    this.sendResponse(req, res, 'Notifications retrieved successfully', undefined, notifications);
+    const { notifications, meta } = await this.notificationService.getMyNotifications(userId, req.query);
+    this.sendPaginatedResponse(req, res, meta, 'Notifications retrieved successfully', notifications);
   }
 
   public async markAsRead(req: Request, res: Response): Promise<void> {

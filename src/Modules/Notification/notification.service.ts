@@ -1,6 +1,7 @@
 import { PrismaClient, NotificationType } from '@/prisma/generated/client';
 import { NotFoundError, BadRequestError, AuthorizationError } from '@/core/errors/AppError';
 import { CreateNotificationDTO } from './NotificationDTO';
+import { QueryBuilder } from '@/utils/QueryBuilder';
 
 export class NotificationServices {
   constructor(private prisma: PrismaClient) {}
@@ -33,11 +34,24 @@ export class NotificationServices {
     return { success: true, count: users.length };
   }
 
-  async getMyNotifications(userId: string) {
-    return this.prisma.notification.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-    });
+  async getMyNotifications(userId: string, query: Record<string, unknown> = {}) {
+    const notificationQuery = new QueryBuilder(this.prisma.notification, query)
+      .search(['title', 'message', 'type'])
+      .filter()
+      .sort()
+      .pagination()
+      .fields();
+
+    // Ensure users only see their own notifications
+    notificationQuery.prismaArgs.where = {
+      ...notificationQuery.prismaArgs.where,
+      userId,
+    };
+
+    const notifications = await notificationQuery.model.findMany(notificationQuery.prismaArgs);
+    const meta = await notificationQuery.countTotal();
+
+    return { notifications, meta };
   }
 
   async markAsRead(userId: string, id: string) {

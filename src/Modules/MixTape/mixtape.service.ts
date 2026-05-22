@@ -7,7 +7,7 @@ export class MixTapeServices {
   constructor(
     private prisma: PrismaClient,
     private fileUploader: IFileUploader
-  ) {}
+  ) { }
 
   private async getTenantIdByUserId(userId: string): Promise<string> {
     const tenant = await this.prisma.tenant.findUnique({ where: { userId } });
@@ -17,12 +17,12 @@ export class MixTapeServices {
     return tenant.id;
   }
 
-  async createMixTape(userId: string, data: CreateMixTapeDTO, coverFile?: Express.Multer.File) {
+  async createMixTape(userId: string, data: CreateMixTapeDTO) {
     const tenantId = await this.getTenantIdByUserId(userId);
-    let coverUrl = undefined;
-    if (coverFile) {
-      coverUrl = await this.fileUploader.upload(coverFile);
-    }
+    // let coverUrl = undefined;
+    // if (coverFile) {
+    //   coverUrl = await this.fileUploader.upload(coverFile);
+    // }
 
     let order = data.order;
     if (order === undefined) {
@@ -38,7 +38,7 @@ export class MixTapeServices {
         tenantId,
         title: data.title,
         audioUrl: data.audioUrl,
-        coverUrl,
+        coverUrl: data.coverUrl,
         order,
       },
     });
@@ -48,6 +48,27 @@ export class MixTapeServices {
     return this.prisma.mixTape.findMany({
       where: { tenantId },
       orderBy: { order: 'asc' },
+      include: {
+        tenant: {
+          select: {
+            id: true,
+            userId: true,
+            subdomain: true,
+            stageName: true,
+            city: true,
+            country: true,
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                profileImg: true,
+              }
+            }
+          }
+        }
+      }
     });
   }
 

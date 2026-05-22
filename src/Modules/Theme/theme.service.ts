@@ -76,15 +76,15 @@ export class ThemeServices {
     if (!theme) {
       throw new NotFoundError('Theme not found');
     }
-    
-    if (data.slug && data.slug !== theme.slug) {
-        const existingTheme = await this.prisma.theme.findFirst({
-            where: { slug: data.slug },
-        });
 
-        if (existingTheme) {
-            throw new ConflictError('Theme with this slug already exists');
-        }
+    if (data.slug && data.slug !== theme.slug) {
+      const existingTheme = await this.prisma.theme.findFirst({
+        where: { slug: data.slug },
+      });
+
+      if (existingTheme) {
+        throw new ConflictError('Theme with this slug already exists');
+      }
     }
 
     const updatedTheme = await this.prisma.theme.update({
@@ -107,7 +107,7 @@ export class ThemeServices {
       where: { id },
       include: {
         _count: {
-            select: { tenants: true }
+          select: { tenants: true }
         }
       }
     });
@@ -115,10 +115,10 @@ export class ThemeServices {
     if (!theme) {
       throw new NotFoundError('Theme not found');
     }
-    
+
     // We shouldn't delete themes that are currently used by tenants
     if (theme._count.tenants > 0) {
-        throw new ConflictError('Cannot delete theme because it is assigned to one or more tenants');
+      throw new ConflictError('Cannot delete theme because it is assigned to one or more tenants');
     }
 
     await this.prisma.theme.delete({

@@ -9,13 +9,13 @@ export class InvoiceController extends BaseController {
 
   public async getMyInvoices(req: Request, res: Response): Promise<void> {
     const userId = req.user!.id;
-    const invoices = await this.invoiceService.getMyInvoices(userId);
-    this.sendResponse(req, res, 'Invoices retrieved successfully', undefined, invoices);
+    const { invoices, meta } = await this.invoiceService.getMyInvoices(userId, req.query);
+    this.sendPaginatedResponse(req, res, meta, 'Invoices retrieved successfully', invoices);
   }
 
   public async getAllInvoices(req: Request, res: Response): Promise<void> {
-    const invoices = await this.invoiceService.getAllInvoices();
-    this.sendResponse(req, res, 'All invoices retrieved successfully', undefined, invoices);
+    const { invoices, meta } = await this.invoiceService.getAllInvoices(req.query);
+    this.sendPaginatedResponse(req, res, meta, 'All invoices retrieved successfully', invoices);
   }
 
   public async payInvoice(req: Request, res: Response): Promise<void> {

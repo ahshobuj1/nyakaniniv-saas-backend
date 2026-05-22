@@ -1,7 +1,7 @@
 import { v2 as cloudinary } from 'cloudinary';
 import { IFileUploader } from './IFileUploader';
-import config from '@/core/config';
 import fs from 'fs/promises';
+import { config } from '../core/config';
 
 export class CloudinaryUploader implements IFileUploader {
   constructor() {
@@ -13,42 +13,31 @@ export class CloudinaryUploader implements IFileUploader {
   }
 
   async upload(file: Express.Multer.File): Promise<string> {
-    // 🔴 1. Add this check to catch the real issue!
-    if (!config.cloudinary.apiKey || !config.cloudinary.apiSecret) {
-      throw new Error(`Cloudinary Config Missing! Key: ${config.cloudinary.apiKey}, Secret: ${config.cloudinary.apiSecret}`);
-    }
+    const folder = config.cloudinary.folder || 'uploads';
 
     try {
-      const timestamp = Math.round(new Date().getTime() / 1000);
-      const signature = cloudinary.utils.api_sign_request(
-        {
-          timestamp,
-          folder: config.cloudinary.folder,
-        },
-        config.cloudinary.apiSecret!
-      );
-
-      const result = await cloudinary.uploader.upload(file.path, {
-        folder: config.cloudinary.folder,
-        timestamp,
-        signature,
-        api_key: config.cloudinary.apiKey,
-        cloud_name: config.cloudinary.cloudName,
+      // We use unsigned_upload here so it will always use your upbeat-africa preset reliably
+      const result = await cloudinary.uploader.unsigned_upload(file.path, 'upbeat-africa', {
+        folder,
         resource_type: 'auto',
+        cloud_name: config.cloudinary.cloudName,
       });
+
 
       return result.secure_url;
     } catch (err: any) {
-      const message = err?.message || err?.error?.message || JSON.stringify(err);
-      throw new Error(`Cloudinary upload failed: ${message}`);
+      console.error('FULL CLOUDINARY ERROR:', err);
+
+      throw new Error(
+        `Cloudinary upload failed: ${err?.message ||
+        err?.error?.message ||
+        JSON.stringify(err)
+        }`
+      );
     } finally {
-      if (file.path) {
-        try {
-          await fs.unlink(file.path);
-        } catch (unlinkErr) {
-          console.error(`Failed to delete temp file: ${file.path}`, unlinkErr);
-        }
-      }
+      try {
+        await fs.unlink(file.path);
+      } catch { }
     }
   }
 }

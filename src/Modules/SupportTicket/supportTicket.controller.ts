@@ -14,14 +14,14 @@ export class SupportTicketController extends BaseController {
   }
 
   public async getAllTickets(req: Request, res: Response): Promise<void> {
-    const tickets = await this.ticketService.getAllTickets();
-    this.sendResponse(req, res, 'Tickets retrieved successfully', undefined, tickets);
+    const { tickets, meta } = await this.ticketService.getAllTickets(req.query);
+    this.sendPaginatedResponse(req, res, meta, 'Tickets retrieved successfully', tickets);
   }
 
   public async getMyTickets(req: Request, res: Response): Promise<void> {
     const userId = req.user!.id;
-    const tickets = await this.ticketService.getMyTickets(userId);
-    this.sendResponse(req, res, 'Tickets retrieved successfully', undefined, tickets);
+    const { tickets, meta } = await this.ticketService.getMyTickets(userId, req.query);
+    this.sendPaginatedResponse(req, res, meta, 'Tickets retrieved successfully', tickets);
   }
 
   public async updateTicketStatus(req: Request, res: Response): Promise<void> {

@@ -1,9 +1,10 @@
 import { PrismaClient, TicketStatus } from '@/prisma/generated/client';
 import { NotFoundError, BadRequestError, AuthorizationError } from '@/core/errors/AppError';
 import { CreateSupportTicketDTO, UpdateTicketStatusDTO } from './SupportTicketDTO';
+import { QueryBuilder } from '@/utils/QueryBuilder';
 
 export class SupportTicketServices {
-  constructor(private prisma: PrismaClient) {}
+  constructor(private prisma: PrismaClient) { }
 
   async createTicket(data: CreateSupportTicketDTO, userId?: string) {
     return this.prisma.supportTicket.create({
@@ -18,20 +19,43 @@ export class SupportTicketServices {
     });
   }
 
-  async getAllTickets() {
-    return this.prisma.supportTicket.findMany({
-      orderBy: { createdAt: 'desc' },
-      include: {
-        user: true, // to see who submitted if it's a logged in user
-      }
-    });
+  async getAllTickets(query: Record<string, unknown> = {}) {
+    const ticketQuery = new QueryBuilder(this.prisma.supportTicket, query)
+      .search(['fullName', 'email', 'subject', 'issue', 'status'])
+      .filter()
+      .sort()
+      .pagination()
+      .fields();
+
+    if (!ticketQuery.prismaArgs.select) {
+      ticketQuery.prismaArgs.include = {
+        user: true,
+      };
+    }
+
+    const tickets = await ticketQuery.model.findMany(ticketQuery.prismaArgs);
+    const meta = await ticketQuery.countTotal();
+
+    return { tickets, meta };
   }
 
-  async getMyTickets(userId: string) {
-    return this.prisma.supportTicket.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-    });
+  async getMyTickets(userId: string, query: Record<string, unknown> = {}) {
+    const ticketQuery = new QueryBuilder(this.prisma.supportTicket, query)
+      .search(['fullName', 'email', 'subject', 'issue', 'status'])
+      .filter()
+      .sort()
+      .pagination()
+      .fields();
+
+    ticketQuery.prismaArgs.where = {
+      ...ticketQuery.prismaArgs.where,
+      userId,
+    };
+
+    const tickets = await ticketQuery.model.findMany(ticketQuery.prismaArgs);
+    const meta = await ticketQuery.countTotal();
+
+    return { tickets, meta };
   }
 
   async updateTicketStatus(id: string, data: UpdateTicketStatusDTO) {

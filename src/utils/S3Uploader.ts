@@ -31,20 +31,32 @@ export class S3Uploader implements IFileUploader {
   }
 
   async upload(file: Express.Multer.File): Promise<string> {
-    const body = await readFile(file.path);
-    const key = `${config.s3.folder ?? ''}${uuidv4()}${extname(file.originalname)}`;
+    try {
+      const body = await readFile(file.path);
+      const key = `${config.s3.folder ?? ''}${uuidv4()}${extname(file.originalname)}`;
 
-    await this.client.send(
-      new PutObjectCommand({
-        Bucket: config.s3.bucket,
-        Key: key,
-        Body: body,
-        ACL: 'public-read',
-        ContentType: file.mimetype,
-      })
-    );
+      await this.client.send(
+        new PutObjectCommand({
+          Bucket: config.s3.bucket,
+          Key: key,
+          Body: body,
+          ContentType: file.mimetype,
+        })
+      );
 
-    // Construct a public URL – this works for most S3 public‑read buckets.
-    return `https://${config.s3.bucket}.s3.${config.s3.region}.amazonaws.com/${key}`;
+      // Construct a public URL – this works for most S3 public‑read buckets.
+      return `https://${config.s3.bucket}.s3.${config.s3.region}.amazonaws.com/${key}`;
+    } catch (err: any) {
+      console.error('FULL S3 ERROR:', err);
+      throw new Error(`S3 upload failed: ${err.message || JSON.stringify(err)}`);
+    } finally {
+      if (file.path) {
+        try {
+          await require('fs/promises').unlink(file.path);
+        } catch {
+          // ignore cleanup errors
+        }
+      }
+    }
   }
 }

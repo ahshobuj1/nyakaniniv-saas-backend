@@ -2,6 +2,7 @@ import { PrismaClient, InvoicePaymentStatus, InvoiceType } from '@/prisma/genera
 import { NotFoundError, BadRequestError, AuthorizationError } from '@/core/errors/AppError';
 import Stripe from 'stripe';
 import { PayInvoiceDTO } from './InvoiceDTO';
+import { QueryBuilder } from '@/utils/QueryBuilder';
 
 export class InvoiceServices {
   private stripe: any = null;
@@ -22,33 +23,74 @@ export class InvoiceServices {
     return tenant.id;
   }
 
-  async getMyInvoices(userId: string) {
+
+  async getMyInvoices(userId: string, query: Record<string, unknown> = {}) {
     // DJ can see their subscription invoices and booking invoices for their tenant
     const tenantId = await this.getTenantIdByUserId(userId).catch(() => null);
 
-    return this.prisma.invoice.findMany({
-      where: {
-        OR: [
-          { userId },
-          ...(tenantId ? [{ tenantId }] : [])
-        ]
-      },
-      orderBy: { createdAt: 'desc' },
-      include: {
+    const baseWhere = {
+      OR: [
+        { userId },
+        ...(tenantId ? [{ tenantId }] : [])
+      ]
+    };
+
+    const invoiceQuery = new QueryBuilder(this.prisma.invoice, query)
+      .search(['status', 'type'])
+      .filter()
+      .sort()
+      .pagination()
+      .fields();
+
+    // Merge our base conditions with whatever QueryBuilder found
+    invoiceQuery.prismaArgs.where = {
+      ...invoiceQuery.prismaArgs.where,
+      ...baseWhere,
+    };
+
+    if (!invoiceQuery.prismaArgs.select) {
+      invoiceQuery.prismaArgs.include = {
         booking: true,
-      }
-    });
+      };
+    }
+
+    const invoices = await invoiceQuery.model.findMany(invoiceQuery.prismaArgs);
+    const meta = await invoiceQuery.countTotal();
+
+    return { invoices, meta };
   }
 
-  async getAllInvoices() {
-    return this.prisma.invoice.findMany({
-      orderBy: { createdAt: 'desc' },
-      include: {
+  async getAllInvoices(query: Record<string, unknown> = {}) {
+    const invoiceQuery = new QueryBuilder(this.prisma.invoice, query)
+      .search(['status', 'type'])
+      .filter()
+      .sort()
+      .pagination()
+      .fields();
+
+    if (!invoiceQuery.prismaArgs.select) {
+      invoiceQuery.prismaArgs.include = {
         booking: true,
-        user: true,
-        tenant: true,
-      }
-    });
+        tenant: {
+          select: {
+            subdomain: true,
+            stageName: true,
+          }
+        },
+        user: {
+          select: {
+            email: true,
+            firstName: true,
+            lastName: true,
+          }
+        }
+      };
+    }
+
+    const invoices = await invoiceQuery.model.findMany(invoiceQuery.prismaArgs);
+    const meta = await invoiceQuery.countTotal();
+
+    return { invoices, meta };
   }
 
   async markAsPaid(userId: string, id: string) {

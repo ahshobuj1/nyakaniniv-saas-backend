@@ -1,16 +1,26 @@
 import { Request, Response } from 'express';
 import { BaseController } from '@/core/BaseController';
 import { MixTapeServices } from './mixtape.service';
+import { IFileUploader } from '@/utils/IFileUploader';
 
 export class MixTapeController extends BaseController {
-  constructor(private mixTapeService: MixTapeServices) {
+  constructor(
+    private mixTapeService: MixTapeServices,
+    private readonly fileUploader: IFileUploader
+  ) {
     super();
   }
 
   public async createMixTape(req: Request, res: Response): Promise<void> {
     const userId = req.user!.id;
-    const coverFile = req.file;
-    const mixTape = await this.mixTapeService.createMixTape(userId, req.body, coverFile);
+    console.log('file', req.file)
+
+    if (req.file) {
+      const url = await this.fileUploader.upload(req.file);
+      req.body.coverUrl = url;
+    }
+
+    const mixTape = await this.mixTapeService.createMixTape(userId, req.body);
     this.sendCreatedResponse(req, res, mixTape, 'MixTape created successfully');
   }
 

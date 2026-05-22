@@ -15,6 +15,7 @@ export const createMixTapeSchema = {
   body: z.object({
     title: z.string().min(2, "Title must be at least 2 characters"),
     audioUrl: z.string().url("Must be a valid URL"),
+    coverUrl: z.string().url().optional(),
     order: z.preprocess((val) => Number(val), z.number().int().optional()),
   }),
 };

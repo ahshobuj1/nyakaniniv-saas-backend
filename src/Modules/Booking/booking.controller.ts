@@ -14,8 +14,8 @@ export class BookingController extends BaseController {
 
   public async getMyBookings(req: Request, res: Response): Promise<void> {
     const userId = req.user!.id;
-    const bookings = await this.bookingService.getMyBookings(userId);
-    this.sendResponse(req, res, 'Bookings retrieved successfully', undefined, bookings);
+    const { bookings, meta } = await this.bookingService.getMyBookings(userId, req.query);
+    this.sendPaginatedResponse(req, res, meta, 'Bookings retrieved successfully', bookings);
   }
 
   public async getBookingById(req: Request, res: Response): Promise<void> {

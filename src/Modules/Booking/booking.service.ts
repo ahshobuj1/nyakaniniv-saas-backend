@@ -1,6 +1,7 @@
 import { PrismaClient, BookingStatus, InvoiceType, InvoiceMethod, InvoicePaymentStatus } from '@/prisma/generated/client';
 import { NotFoundError, BadRequestError, AuthorizationError } from '@/core/errors/AppError';
 import { CreateBookingDTO, UpdateBookingStatusDTO } from './BookingDTO';
+import { QueryBuilder } from '@/utils/QueryBuilder';
 
 export class BookingServices {
   constructor(private prisma: PrismaClient) {}
@@ -31,15 +32,31 @@ export class BookingServices {
     });
   }
 
-  async getMyBookings(userId: string) {
+  async getMyBookings(userId: string, query: Record<string, unknown> = {}) {
     const tenantId = await this.getTenantIdByUserId(userId);
-    return this.prisma.booking.findMany({
-      where: { tenantId },
-      orderBy: { createdAt: 'desc' },
-      include: {
+
+    const bookingQuery = new QueryBuilder(this.prisma.booking, query)
+      .search(['clientName', 'clientEmail', 'status', 'eventType'])
+      .filter()
+      .sort()
+      .pagination()
+      .fields();
+
+    bookingQuery.prismaArgs.where = {
+      ...bookingQuery.prismaArgs.where,
+      tenantId,
+    };
+
+    if (!bookingQuery.prismaArgs.select) {
+      bookingQuery.prismaArgs.include = {
         invoice: true,
-      }
-    });
+      };
+    }
+
+    const bookings = await bookingQuery.model.findMany(bookingQuery.prismaArgs);
+    const meta = await bookingQuery.countTotal();
+
+    return { bookings, meta };
   }
 
   async getBookingById(userId: string, id: string) {

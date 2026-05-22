@@ -29,7 +29,15 @@ export class MixTapeModule extends BaseModule {
 
   protected async setupControllers(): Promise<void> {
     const mixTapeService = this.getService<MixTapeServices>("MixTapeService");
-    this.registerController("MixTapeController", new MixTapeController(mixTapeService));
+    const fileUploader = this.context.getService("fileUploader") as IFileUploader;
+
+    this.registerController(
+      "MixTapeController",
+      new MixTapeController(
+        mixTapeService,
+        fileUploader
+      )
+    );
   }
 
   protected async setupRoutes(): Promise<void> {
