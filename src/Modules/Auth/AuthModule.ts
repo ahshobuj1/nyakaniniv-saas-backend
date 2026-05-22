@@ -1,9 +1,18 @@
+// src/Modules/Auth/AuthModule.ts
 import { BaseModule } from "@/core/BaseModule";
 import { AppLogger } from "@/core/logging/logger";
 import { AuthServices } from "./auth.service";
 import { AuthController } from "./auth.controller";
 import { validateRequest } from "@/middleware/validation";
-import { createUserSchema } from "./AuthDTO";
+import { authenticateUser } from "@/middleware/auth";
+import {
+  createUserSchema,
+  verifyOtpSchema,
+  resendOtpSchema,
+  loginSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+} from "./AuthDTO";
 
 export class AuthModule extends BaseModule {
   public name: string = "AuthModule";
@@ -24,43 +33,54 @@ export class AuthModule extends BaseModule {
 
   protected async setupRoutes(): Promise<void> {
     const controller = this.getController<AuthController>("AuthController");
-    /**
-     * @swagger
-     * /auth/v1/register:
-     *   post:
-     *     summary: Register a new user
-     *     tags: [Auth]
-     *     requestBody:
-     *       required: true
-     *       content:
-     *         application/json:
-     *           schema:
-     *             type: object
-     *             required:
-     *               - email
-     *               - password
-     *               - name
-     *             properties:
-     *               email:
-     *                 type: string
-     *                 format: email
-     *                 example: user@example.com
-     *               password:
-     *                 type: string
-     *                 example: strongPassword123
-     *               name:
-     *                 type: string
-     *                 example: John Doe
-     *     responses:
-     *       201:
-     *         description: User registered successfully
-     *       400:
-     *         description: Bad request (validation error)
-     */
+
+    // Registration
     this.router.post(
       "/register",
-      validateRequest(createUserSchema), // 1. Intercepts & validates request
-      controller.createUser.bind(controller),
+      validateRequest(createUserSchema),
+      controller.register.bind(controller),
+    );
+
+    // Verify OTP
+    this.router.post(
+      "/verify",
+      validateRequest(verifyOtpSchema),
+      controller.verifyOtp.bind(controller),
+    );
+
+    // Resend Verification OTP
+    this.router.post(
+      "/resend-otp",
+      validateRequest(resendOtpSchema),
+      controller.resendVerificationOtp.bind(controller),
+    );
+
+    // Login
+    this.router.post(
+      "/login",
+      validateRequest(loginSchema),
+      controller.login.bind(controller),
+    );
+
+    // Logout
+    this.router.post(
+      "/logout",
+      authenticateUser,
+      controller.logout.bind(controller),
+    );
+
+    // Forgot Password
+    this.router.post(
+      "/forgot-password",
+      validateRequest(forgotPasswordSchema),
+      controller.forgotPassword.bind(controller),
+    );
+
+    // Reset Password
+    this.router.post(
+      "/reset-password",
+      validateRequest(resetPasswordSchema),
+      controller.resetPassword.bind(controller),
     );
   }
 }

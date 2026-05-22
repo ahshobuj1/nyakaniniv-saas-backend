@@ -52,6 +52,20 @@ export const config = {
     email: process.env.DEFAULT_ADMIN_EMAIL,
     password: process.env.DEFAULT_ADMIN_PASSWORD,
   },
+  cloudinary: {
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+    apiKey: process.env.CLOUDINARY_API_KEY,
+    apiSecret: process.env.CLOUDINARY_API_SECRET,
+    folder: process.env.CLOUDINARY_FOLDER || 'uploads',
+  },
+  s3: {
+    bucket: process.env.S3_BUCKET,
+    region: process.env.S3_REGION,
+    accessKeyId: process.env.S3_ACCESS_KEY_ID,
+    secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+    folder: process.env.S3_FOLDER || 'uploads/',
+  },
+  fileUploader: process.env.FILE_UPLOADER || 'cloudinary',
   logging: {
     level: process.env.LOG_LEVEL || "info",
     path: process.env.LOG_FILE_PATH || "logs/app.log",
