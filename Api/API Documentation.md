@@ -472,8 +472,8 @@ This document contains the API endpoints for the project. You can use this to ma
     "clientPhone": "1234567890",
     "eventDate": "2026-10-10T20:00:00Z",
     "eventType": "Wedding",
-    "venueDetails": "Grand Hall",
-    "message": "Looking forward to it!"
+    "eventDetails": "Looking forward to it!",
+    "address": "Grand Hall, 123 Main St"
   }
   ```
 - **Success Response:**
@@ -497,9 +497,38 @@ This document contains the API endpoints for the project. You can use this to ma
     "totalAmount": 500.00
   }
   ```
-- **Description:** Accepts booking and generates an invoice automatically.
+- **Description:** Accepts booking, generates an invoice, and returns a `checkoutUrl` for Stripe.
 - **Success Response:**
   - **Code:** 200
+
+---
+
+## 🔗 Stripe Connect Module
+
+### 1. Get Onboarding Link (DJ)
+- **URL:** `/stripe-connect/v1/onboard`
+- **Method:** `POST`
+- **Headers:** `Authorization: Bearer <token>`
+- **Request Body:**
+  ```json
+  {
+    "tenantId": "uuid-tenant",
+    "returnUrl": "https://yourfrontend.com/settings/stripe/return",
+    "refreshUrl": "https://yourfrontend.com/settings/stripe/refresh"
+  }
+  ```
+- **Success Response:**
+  - **Code:** 200
+  - **Content:** Returns Stripe Connect onboarding URL and account ID.
+
+### 2. Check Account Status (DJ)
+- **URL:** `/stripe-connect/v1/status`
+- **Method:** `GET`
+- **Headers:** `Authorization: Bearer <token>`
+- **Query Parameters:** `tenantId=uuid-tenant`
+- **Success Response:**
+  - **Code:** 200
+  - **Content:** Returns `isConnected`, `detailsSubmitted`, and `payoutsEnabled`.
 
 ## 🧾 Invoice Module
 

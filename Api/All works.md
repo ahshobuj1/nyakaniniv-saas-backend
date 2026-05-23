@@ -61,15 +61,15 @@ Important: This document contains the complete list of tasks required to build t
 
 ### Booking Module
 
-- [ ] Create Booking Request (Public client).
-- [ ] Get Tenant Bookings (For DJ dashboard).
-- [ ] Accept/Reject Booking.
+- [x] Create Booking Request (Public client).
+- [x] Get Tenant Bookings (For DJ dashboard).
+- [x] Accept/Reject Booking (Integrates Stripe Checkout).
 
 ### Invoice Module
 
-- [ ] Generate Invoice for Booking.
+- [x] Generate Invoice for Booking.
 - [ ] Generate Invoice for Subscription.
-- [ ] Pay Invoice (Stripe).
+- [x] Pay Invoice (Stripe Connect).
 
 ## 📣 Phase 5: Support & Communication
 
@@ -81,9 +81,9 @@ Important: This document contains the complete list of tasks required to build t
 
 ### Notification Module
 
-- [ ] Create Notification (Triggered by events).
-- [ ] Get User Notifications.
-- [ ] Mark Notification as Read.
+- [x] Create Notification (Triggered by events).
+- [x] Get User Notifications.
+- [x] Mark Notification as Read.
 
 ## 🌐 Phase 6: Admin Content (Landing Page)
 
