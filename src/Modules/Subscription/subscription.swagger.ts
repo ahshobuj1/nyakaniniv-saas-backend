@@ -34,12 +34,12 @@
  *               discountPercentage:
  *                 type: number
  *               features:
- *                 type: object
- *                 additionalProperties: true
+ *                 type: array
+ *                 items:
+ *                   type: string
  *                 example:
- *                   max_events: 5
- *                   custom_domain: false
- *                   storage_gb: 10
+ *                   - CUSTOM_SUBDOMAIN
+ *                   - ONLINE_PAYMENTS
  *     responses:
  *       201:
  *         description: Plan created
@@ -73,12 +73,12 @@
  *               priceAnnually:
  *                 type: number
  *               features:
- *                 type: object
- *                 additionalProperties: true
+ *                 type: array
+ *                 items:
+ *                   type: string
  *                 example:
- *                   max_events: 5
- *                   custom_domain: false
- *                   storage_gb: 10
+ *                   - CUSTOM_SUBDOMAIN
+ *                   - ONLINE_PAYMENTS
  *     responses:
  *       200:
  *         description: Plan updated

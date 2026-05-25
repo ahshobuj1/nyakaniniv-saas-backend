@@ -10,6 +10,83 @@ This document contains the API endpoints for the project. You can use this to ma
 
 ---
 
+## 📊 Analytics Module
+
+### 1. Get Admin Analytics
+- **URL:** `/analytics/v1/admin`
+- **Method:** `GET`
+- **Description:** Retrieve platform-wide metrics: total users, total revenue, subscription metrics, and recent bookings.
+- **Headers:** `Authorization: Bearer <token>`
+- **Success Response:** `200 OK`
+
+### 2. Get Tenant Analytics
+- **URL:** `/analytics/v1/tenant`
+- **Method:** `GET`
+- **Description:** Retrieve DJ-specific metrics: total earnings, pending invoices, and booking statistics. Requires active subscription.
+- **Headers:** `Authorization: Bearer <token>`
+- **Success Response:** `200 OK`
+
+---
+
+## 🪝 Webhook Module
+
+### 1. Stripe Webhook (Payments & Invoices)
+- **URL:** `/webhooks/v1/stripe`
+- **Method:** `POST`
+- **Description:** Centralized endpoint to listen for Stripe events (e.g. `checkout.session.completed`). Updates Invoices to `paid` and Bookings to `completed`.
+- **Headers:** `stripe-signature: <signature>`
+- **Body:** Raw Body
+- **Success Response:** `200 OK`
+
+---
+
+## 👤 User Module
+
+### 1. Get All Users (Admin)
+- **URL:** `/users/v1/`
+- **Method:** `GET`
+- **Description:** Get all users with pagination and search.
+- **Headers:** `Authorization: Bearer <token>`
+- **Query Parameters:** `page`, `limit`, `search`
+- **Success Response:** `200 OK`
+
+### 2. Get Current Profile
+- **URL:** `/users/v1/me`
+- **Method:** `GET`
+- **Description:** Get the logged-in user profile.
+- **Headers:** `Authorization: Bearer <token>`
+- **Success Response:** `200 OK`
+
+### 3. Update Current Profile
+- **URL:** `/users/v1/me`
+- **Method:** `PATCH`
+- **Description:** Update first name, last name, profile image.
+- **Headers:** `Authorization: Bearer <token>`
+- **Success Response:** `200 OK`
+
+### 4. Update User Status (Admin)
+- **URL:** `/users/v1/:id/status`
+- **Method:** `PATCH`
+- **Description:** Update user verification status.
+- **Headers:** `Authorization: Bearer <token>`
+- **Success Response:** `200 OK`
+
+### 5. Update User Role (Admin)
+- **URL:** `/users/v1/:id/role`
+- **Method:** `PATCH`
+- **Description:** Update user role to SUPER_ADMIN or DJ.
+- **Headers:** `Authorization: Bearer <token>`
+- **Success Response:** `200 OK`
+
+### 6. Delete User (Admin)
+- **URL:** `/users/v1/:id`
+- **Method:** `DELETE`
+- **Description:** Delete a user account.
+- **Headers:** `Authorization: Bearer <token>`
+- **Success Response:** `200 OK`
+
+---
+
 ## 🔑 Auth Module
 
 ### 1. Register User
@@ -343,6 +420,9 @@ This document contains the API endpoints for the project. You can use this to ma
 
 ## 💳 Subscription Module
 
+> **Note:** The `checkSubscription(['FEATURE_NAME'])` middleware is now available and should be applied to DJ endpoints to ensure they have an active plan and necessary features (e.g. `ONLINE_PAYMENTS`).
+
+
 ### 1. Get All Subscription Plans
 - **URL:** `/subscriptions/v1/plans`
 - **Method:** `GET`
@@ -362,7 +442,7 @@ This document contains the API endpoints for the project. You can use this to ma
     "priceMonthly": 9.99,
     "priceAnnually": 99.99,
     "discountPercentage": 10,
-    "features": { "max_events": 5 }
+    "features": ["CUSTOM_SUBDOMAIN", "ONLINE_PAYMENTS"]
   }
   ```
 - **Success Response:**

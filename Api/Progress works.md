@@ -10,6 +10,15 @@ This document tracks the active progress of the project.
 
 ## 🔑 Phase 2: Core Modules
 
+### User Module
+
+- [x] Implement Get All Users (Admin).
+- [x] Implement Get Current User Profile (Me).
+- [x] Implement Update Current User Profile.
+- [x] Implement Update User Status (Admin).
+- [x] Implement Update User Role (Admin).
+- [x] Implement Delete User (Admin).
+
 ### Auth Module
 
 - [x] Implement Login endpoint (JWT generation).
@@ -43,6 +52,9 @@ This document tracks the active progress of the project.
 - [x] Subscribe to Plan (Stripe Integration).
 - [x] Cancel Subscription.
 - [x] Handle Stripe Webhooks for subscription status.
+- [x] Create Database Seeder for Subscription Plans (Starter, Pro, Elite).
+- [x] Implement AccessControlService for plan features.
+- [x] Implement checkSubscription middleware for route protection.
 
 ### MixTape Module
 
@@ -72,6 +84,16 @@ This document tracks the active progress of the project.
 - [x] Generate Invoice for Booking.
 - [x] Generate Invoice for Subscription.
 - [x] Pay Invoice (Stripe).
+
+### Webhook Module (Payment & Invoice)
+- [x] Implement Stripe Webhook (`checkout.session.completed`).
+- [x] Extract `invoiceId` and update Invoice to `paid`.
+- [x] Update Booking status to `completed` upon payment.
+- [x] Automate DJ Notification on payment receipt.
+
+### Analytics Module
+- [x] Implement Admin Dashboard Analytics (Users, Revenue, Subscriptions, Bookings).
+- [x] Implement Tenant Dashboard Analytics (Earnings, Invoices, Bookings stats, Requests).
 
 ## 📣 Phase 5: Support & Communication
 
