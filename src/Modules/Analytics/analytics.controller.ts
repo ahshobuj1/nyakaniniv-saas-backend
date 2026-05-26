@@ -25,4 +25,23 @@ export class AnalyticsController extends BaseController {
       next(error);
     }
   };
+
+  getAdminCharts = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await this.analyticsServices.getAdminCharts();
+      return this.sendResponse(req, res, 'Admin charts retrieved successfully', 200, result);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getTenantCharts = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = (req as any).user.id;
+      const result = await this.analyticsServices.getTenantCharts(userId);
+      return this.sendResponse(req, res, 'Tenant charts retrieved successfully', 200, result);
+    } catch (error) {
+      next(error);
+    }
+  };
 }

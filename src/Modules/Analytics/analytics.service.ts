@@ -89,4 +89,47 @@ export class AnalyticsServices {
       recentRequests
     };
   }
+
+  async getAdminCharts() {
+    const revenueChart = await this.prisma.$queryRaw`
+      SELECT to_char(DATE_TRUNC('month', created_at), 'YYYY-MM') as month, COALESCE(SUM(amount), 0)::float as amount
+      FROM invoices
+      WHERE status = 'paid' AND created_at >= CURRENT_DATE - INTERVAL '12 months'
+      GROUP BY month
+      ORDER BY month ASC;
+    `;
+
+    const usersGrowthChart = await this.prisma.$queryRaw`
+      SELECT to_char(DATE_TRUNC('month', created_at), 'YYYY-MM') as month, COUNT(id)::int as count
+      FROM users
+      WHERE created_at >= CURRENT_DATE - INTERVAL '12 months'
+      GROUP BY month
+      ORDER BY month ASC;
+    `;
+
+    return { revenueChart, usersGrowthChart };
+  }
+
+  async getTenantCharts(userId: string) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { userId } });
+    if (!tenant) return null;
+
+    const earningsChart = await this.prisma.$queryRaw`
+      SELECT to_char(DATE_TRUNC('month', created_at), 'YYYY-MM') as month, COALESCE(SUM(amount), 0)::float as amount
+      FROM invoices
+      WHERE tenant_id = CAST(${tenant.id} AS UUID) AND status = 'paid' AND created_at >= CURRENT_DATE - INTERVAL '12 months'
+      GROUP BY month
+      ORDER BY month ASC;
+    `;
+
+    const bookingsChart = await this.prisma.$queryRaw`
+      SELECT to_char(DATE_TRUNC('month', created_at), 'YYYY-MM') as month, COUNT(id)::int as count
+      FROM bookings
+      WHERE tenant_id = CAST(${tenant.id} AS UUID) AND created_at >= CURRENT_DATE - INTERVAL '12 months'
+      GROUP BY month
+      ORDER BY month ASC;
+    `;
+
+    return { earningsChart, bookingsChart };
+  }
 }

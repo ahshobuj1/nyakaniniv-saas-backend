@@ -43,18 +43,22 @@ export class WebhookServices {
       const session = event.data.object as any;
       const invoiceId = session.metadata?.invoiceId;
       const bookingId = session.metadata?.bookingId;
+      const planId = session.metadata?.planId;
+      const userId = session.metadata?.userId;
+      const stripeSubId = session.subscription as string;
+      const amountPaid = (session.amount_total || 0) / 100;
 
+      // 1. Handle Booking Payments
       if (invoiceId && bookingId) {
         // Run in transaction
         await this.prisma.$transaction(async (tx) => {
-          // 1. Update Invoice Status
+          // Update Invoice Status
           await tx.invoice.update({
             where: { id: invoiceId },
             data: { status: InvoicePaymentStatus.paid }
           });
 
-          // 2. Update Booking Status (if it's not already completed)
-          // We assume 'accepted' -> 'paid' -> done.
+          // Update Booking Status
           const booking = await tx.booking.findUnique({ where: { id: bookingId } });
           if (booking && booking.status !== BookingStatus.completed) {
             await tx.booking.update({
@@ -69,7 +73,7 @@ export class WebhookServices {
           //  Since there's no Transaction model in Prisma schema according to previous contexts, 
           //  we skip explicit transaction record or we could add it if it exists. Let's just create a Notification).
 
-          // 4. Notify DJ
+          // Notify DJ
           if (booking && booking.tenantId) {
             const tenant = await tx.tenant.findUnique({ where: { id: booking.tenantId } });
             if (tenant && tenant.userId) {
@@ -85,6 +89,37 @@ export class WebhookServices {
           }
         });
       }
+
+      // 2. Handle Subscription Payments
+      if (userId && planId) {
+        await this.prisma.$transaction(async (tx) => {
+          await tx.subscription.create({
+            data: {
+              userId,
+              planId: parseInt(planId, 10),
+              stripeSubId: stripeSubId || 'one_time_sub', // If mode is not subscription
+              status: 'active',
+              periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // approx
+            }
+          });
+
+          await tx.invoice.create({
+            data: {
+              userId,
+              amount: amountPaid,
+              type: 'SUBSCRIPTION',
+              method: 'STRIPE',
+              status: 'paid'
+            }
+          });
+        });
+      }
+    } else if (event.type === 'customer.subscription.deleted') {
+      const stripeSub = event.data.object as any;
+      await this.prisma.subscription.updateMany({
+        where: { stripeSubId: stripeSub.id },
+        data: { status: 'canceled' }
+      });
     }
 
     await this.prisma.webhookEvent.update({

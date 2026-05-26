@@ -48,6 +48,8 @@ This document tracks the active progress of the project.
 
 ### Subscription Module
 
+- [x] Subscription History Tracking (Auto-Invoicing).
+- [x] Webhook integration for Stripe Events.
 - [x] Create/Manage Plans (Admin).
 - [x] Subscribe to Plan (Stripe Integration).
 - [x] Cancel Subscription.
@@ -94,6 +96,8 @@ This document tracks the active progress of the project.
 ### Analytics Module
 - [x] Implement Admin Dashboard Analytics (Users, Revenue, Subscriptions, Bookings).
 - [x] Implement Tenant Dashboard Analytics (Earnings, Invoices, Bookings stats, Requests).
+- [x] Implement Admin Dashboard Charts (Revenue, User Growth over 12 months).
+- [x] Implement Tenant Dashboard Charts (Earnings, Bookings over 12 months).
 
 ## 📣 Phase 5: Support & Communication
 

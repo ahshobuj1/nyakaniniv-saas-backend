@@ -60,6 +60,13 @@ export class SubscriptionModule extends BaseModule {
     );
 
     // DJ Routes for Subscription
+    this.router.get(
+      "/my-subscription",
+      authenticateUser,
+      authorizeRole([UserRole.DJ]),
+      controller.getMySubscription.bind(controller),
+    );
+
     this.router.post(
       "/subscribe",
       authenticateUser,
@@ -73,13 +80,6 @@ export class SubscriptionModule extends BaseModule {
       authenticateUser,
       authorizeRole([UserRole.DJ]),
       controller.cancelSubscription.bind(controller),
-    );
-
-    // Stripe Webhook Route (Needs raw body)
-    this.router.post(
-      "/webhook",
-      express.raw({ type: 'application/json' }),
-      controller.handleWebhook.bind(controller),
     );
   }
 }

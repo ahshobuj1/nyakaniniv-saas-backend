@@ -13,11 +13,12 @@ async function main() {
       discountPercentage: 16,
       stripeMonthlyPriceId: 'price_starter_monthly_mock',
       stripeAnnualPriceId: 'price_starter_annual_mock',
-      features: [
-        'CUSTOM_SUBDOMAIN', 
-        'BASIC_PROFILE', 
-        'MANUAL_BOOKINGS'
-      ]
+      features: {
+        CUSTOM_SUBDOMAIN: true,
+        BASIC_PROFILE: true,
+        MANUAL_BOOKINGS: true,
+        MAX_EVENTS: 5
+      }
     },
     {
       id: 2,
@@ -27,16 +28,17 @@ async function main() {
       discountPercentage: 16,
       stripeMonthlyPriceId: 'price_pro_monthly_mock',
       stripeAnnualPriceId: 'price_pro_annual_mock',
-      features: [
-        'CUSTOM_SUBDOMAIN', 
-        'BASIC_PROFILE', 
-        'MANUAL_BOOKINGS', 
-        'ONLINE_PAYMENTS', 
-        'AUTOMATED_INVOICING', 
-        'MULTIPLE_THEMES', 
-        'EMAIL_NOTIFICATIONS', 
-        'BASIC_ANALYTICS'
-      ]
+      features: {
+        CUSTOM_SUBDOMAIN: true,
+        BASIC_PROFILE: true,
+        MANUAL_BOOKINGS: true,
+        ONLINE_PAYMENTS: true,
+        AUTOMATED_INVOICING: true,
+        MULTIPLE_THEMES: true,
+        EMAIL_NOTIFICATIONS: true,
+        BASIC_ANALYTICS: true,
+        MAX_EVENTS: 50
+      }
     },
     {
       id: 3,
@@ -46,20 +48,21 @@ async function main() {
       discountPercentage: 16,
       stripeMonthlyPriceId: 'price_elite_monthly_mock',
       stripeAnnualPriceId: 'price_elite_annual_mock',
-      features: [
-        'CUSTOM_SUBDOMAIN', 
-        'BASIC_PROFILE', 
-        'MANUAL_BOOKINGS', 
-        'ONLINE_PAYMENTS', 
-        'AUTOMATED_INVOICING', 
-        'MULTIPLE_THEMES', 
-        'EMAIL_NOTIFICATIONS', 
-        'BASIC_ANALYTICS', 
-        'CUSTOM_DOMAIN', 
-        'ADVANCED_ANALYTICS', 
-        'REMOVE_BRANDING', 
-        'PRIORITY_SUPPORT'
-      ]
+      features: {
+        CUSTOM_SUBDOMAIN: true,
+        BASIC_PROFILE: true,
+        MANUAL_BOOKINGS: true,
+        ONLINE_PAYMENTS: true,
+        AUTOMATED_INVOICING: true,
+        MULTIPLE_THEMES: true,
+        EMAIL_NOTIFICATIONS: true,
+        BASIC_ANALYTICS: true,
+        CUSTOM_DOMAIN: true,
+        ADVANCED_ANALYTICS: true,
+        REMOVE_BRANDING: true,
+        PRIORITY_SUPPORT: true,
+        MAX_EVENTS: -1 // -1 means unlimited
+      }
     }
   ];
 

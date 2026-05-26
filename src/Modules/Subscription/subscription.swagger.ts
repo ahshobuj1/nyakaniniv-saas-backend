@@ -34,12 +34,12 @@
  *               discountPercentage:
  *                 type: number
  *               features:
- *                 type: array
- *                 items:
- *                   type: string
+ *                 type: object
+ *                 additionalProperties: true
  *                 example:
- *                   - CUSTOM_SUBDOMAIN
- *                   - ONLINE_PAYMENTS
+ *                   CUSTOM_SUBDOMAIN: true
+ *                   ONLINE_PAYMENTS: true
+ *                   MAX_EVENTS: 5
  *     responses:
  *       201:
  *         description: Plan created
@@ -73,12 +73,12 @@
  *               priceAnnually:
  *                 type: number
  *               features:
- *                 type: array
- *                 items:
- *                   type: string
+ *                 type: object
+ *                 additionalProperties: true
  *                 example:
- *                   - CUSTOM_SUBDOMAIN
- *                   - ONLINE_PAYMENTS
+ *                   CUSTOM_SUBDOMAIN: true
+ *                   ONLINE_PAYMENTS: true
+ *                   MAX_EVENTS: 5
  *     responses:
  *       200:
  *         description: Plan updated
@@ -96,6 +96,21 @@
  *     responses:
  *       200:
  *         description: Plan deleted
+ */
+
+/**
+ * @swagger
+ * /subscriptions/v1/my-subscription:
+ *   get:
+ *     summary: Get current active subscription details
+ *     tags: [Subscription]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Active subscription details retrieved successfully
+ *       404:
+ *         description: No active subscription found
  */
 
 /**

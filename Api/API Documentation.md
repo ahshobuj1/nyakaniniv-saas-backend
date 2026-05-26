@@ -26,6 +26,20 @@ This document contains the API endpoints for the project. You can use this to ma
 - **Headers:** `Authorization: Bearer <token>`
 - **Success Response:** `200 OK`
 
+### 3. Get Admin Charts
+- **URL:** `/analytics/v1/admin/charts`
+- **Method:** `GET`
+- **Description:** Retrieve time-series data for admin charts (revenue over time, user growth).
+- **Headers:** `Authorization: Bearer <token>`
+- **Success Response:** `200 OK`
+
+### 4. Get Tenant Charts
+- **URL:** `/analytics/v1/tenant/charts`
+- **Method:** `GET`
+- **Description:** Retrieve time-series data for DJ charts (earnings over time, bookings over time). Requires active subscription.
+- **Headers:** `Authorization: Bearer <token>`
+- **Success Response:** `200 OK`
+
 ---
 
 ## 🪝 Webhook Module
@@ -465,7 +479,16 @@ This document contains the API endpoints for the project. You can use this to ma
 - **Success Response:**
   - **Code:** 200
 
-### 5. Subscribe to Plan
+### 5. Get My Active Subscription (DJ)
+- **URL:** `/subscriptions/v1/my-subscription`
+- **Method:** `GET`
+- **Description:** Fetch the currently active subscription and its plan details for the logged-in DJ.
+- **Headers:** `Authorization: Bearer <token>`
+- **Success Response:**
+  - **Code:** 200
+  - **Content:** Returns the `Subscription` object, including nested `plan` object (features, limits, etc.).
+
+### 6. Subscribe to Plan
 - **URL:** `/subscriptions/v1/subscribe`
 - **Method:** `POST`
 - **Headers:** `Authorization: Bearer <token>`
@@ -480,7 +503,7 @@ This document contains the API endpoints for the project. You can use this to ma
   - **Code:** 200
   - **Content:** Returns Stripe Checkout URL or Mock URL.
 
-### 6. Cancel Subscription
+### 7. Cancel Subscription
 - **URL:** `/subscriptions/v1/cancel`
 - **Method:** `POST`
 - **Headers:** `Authorization: Bearer <token>`
@@ -615,6 +638,7 @@ This document contains the API endpoints for the project. You can use this to ma
 ### 1. Get My Invoices (DJ)
 - **URL:** `/invoices/v1/my-invoices`
 - **Method:** `GET`
+- **Description:** Returns both **Booking Invoices** and **Subscription Invoices** for the DJ. Subscription invoices are automatically generated when subscribing to a plan.
 - **Headers:** `Authorization: Bearer <token>`
 - **Success Response:**
   - **Code:** 200

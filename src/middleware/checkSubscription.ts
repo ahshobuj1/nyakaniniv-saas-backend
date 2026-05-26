@@ -17,7 +17,7 @@ export const checkSubscription = (requiredFeatures: string[] = []) => {
     try {
       // Typically the tenantId should be in req.user (from auth middleware) or req.tenant (from subdomain middleware)
       const user = (req as any).user;
-      
+
       if (!user) {
         throw new AuthorizationError('User not authenticated.');
       }

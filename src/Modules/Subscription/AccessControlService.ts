@@ -25,7 +25,13 @@ export class AccessControlService {
       return false;
     }
 
-    const features = plan.features as string[];
-    return features.includes(feature);
+    const features = plan.features as Record<string, any>;
+    
+    // Check if the feature exists and is explicitly true, or has a value (like a limit number)
+    if (typeof features[feature] === 'boolean') {
+      return features[feature];
+    }
+    
+    return features[feature] !== undefined && features[feature] !== false;
   }
 }
