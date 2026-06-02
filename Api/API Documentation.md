@@ -10,6 +10,97 @@ This document contains the API endpoints for the project. You can use this to ma
 
 ---
 
+## 📊 Analytics Module
+
+### 1. Get Admin Analytics
+- **URL:** `/analytics/v1/admin`
+- **Method:** `GET`
+- **Description:** Retrieve platform-wide metrics: total users, total revenue, subscription metrics, and recent bookings.
+- **Headers:** `Authorization: Bearer <token>`
+- **Success Response:** `200 OK`
+
+### 2. Get Tenant Analytics
+- **URL:** `/analytics/v1/tenant`
+- **Method:** `GET`
+- **Description:** Retrieve DJ-specific metrics: total earnings, pending invoices, and booking statistics. Requires active subscription.
+- **Headers:** `Authorization: Bearer <token>`
+- **Success Response:** `200 OK`
+
+### 3. Get Admin Charts
+- **URL:** `/analytics/v1/admin/charts`
+- **Method:** `GET`
+- **Description:** Retrieve time-series data for admin charts (revenue over time, user growth).
+- **Headers:** `Authorization: Bearer <token>`
+- **Success Response:** `200 OK`
+
+### 4. Get Tenant Charts
+- **URL:** `/analytics/v1/tenant/charts`
+- **Method:** `GET`
+- **Description:** Retrieve time-series data for DJ charts (earnings over time, bookings over time). Requires active subscription.
+- **Headers:** `Authorization: Bearer <token>`
+- **Success Response:** `200 OK`
+
+---
+
+## 🪝 Webhook Module
+
+### 1. Stripe Webhook (Payments & Invoices)
+- **URL:** `/webhooks/v1/stripe`
+- **Method:** `POST`
+- **Description:** Centralized endpoint to listen for Stripe events (e.g. `checkout.session.completed`). Updates Invoices to `paid` and Bookings to `completed`.
+- **Headers:** `stripe-signature: <signature>`
+- **Body:** Raw Body
+- **Success Response:** `200 OK`
+
+---
+
+## 👤 User Module
+
+### 1. Get All Users (Admin)
+- **URL:** `/users/v1/`
+- **Method:** `GET`
+- **Description:** Get all users with pagination and search.
+- **Headers:** `Authorization: Bearer <token>`
+- **Query Parameters:** `page`, `limit`, `search`
+- **Success Response:** `200 OK`
+
+### 2. Get Current Profile
+- **URL:** `/users/v1/me`
+- **Method:** `GET`
+- **Description:** Get the logged-in user profile.
+- **Headers:** `Authorization: Bearer <token>`
+- **Success Response:** `200 OK`
+
+### 3. Update Current Profile
+- **URL:** `/users/v1/me`
+- **Method:** `PATCH`
+- **Description:** Update first name, last name, profile image.
+- **Headers:** `Authorization: Bearer <token>`
+- **Success Response:** `200 OK`
+
+### 4. Update User Status (Admin)
+- **URL:** `/users/v1/:id/status`
+- **Method:** `PATCH`
+- **Description:** Update user verification status.
+- **Headers:** `Authorization: Bearer <token>`
+- **Success Response:** `200 OK`
+
+### 5. Update User Role (Admin)
+- **URL:** `/users/v1/:id/role`
+- **Method:** `PATCH`
+- **Description:** Update user role to SUPER_ADMIN or DJ.
+- **Headers:** `Authorization: Bearer <token>`
+- **Success Response:** `200 OK`
+
+### 6. Delete User (Admin)
+- **URL:** `/users/v1/:id`
+- **Method:** `DELETE`
+- **Description:** Delete a user account.
+- **Headers:** `Authorization: Bearer <token>`
+- **Success Response:** `200 OK`
+
+---
+
 ## 🔑 Auth Module
 
 ### 1. Register User
@@ -343,6 +434,9 @@ This document contains the API endpoints for the project. You can use this to ma
 
 ## 💳 Subscription Module
 
+> **Note:** The `checkSubscription(['FEATURE_NAME'])` middleware is now available and should be applied to DJ endpoints to ensure they have an active plan and necessary features (e.g. `ONLINE_PAYMENTS`).
+
+
 ### 1. Get All Subscription Plans
 - **URL:** `/subscriptions/v1/plans`
 - **Method:** `GET`
@@ -362,7 +456,7 @@ This document contains the API endpoints for the project. You can use this to ma
     "priceMonthly": 9.99,
     "priceAnnually": 99.99,
     "discountPercentage": 10,
-    "features": { "max_events": 5 }
+    "features": ["CUSTOM_SUBDOMAIN", "ONLINE_PAYMENTS"]
   }
   ```
 - **Success Response:**
@@ -385,7 +479,16 @@ This document contains the API endpoints for the project. You can use this to ma
 - **Success Response:**
   - **Code:** 200
 
-### 5. Subscribe to Plan
+### 5. Get My Active Subscription (DJ)
+- **URL:** `/subscriptions/v1/my-subscription`
+- **Method:** `GET`
+- **Description:** Fetch the currently active subscription and its plan details for the logged-in DJ.
+- **Headers:** `Authorization: Bearer <token>`
+- **Success Response:**
+  - **Code:** 200
+  - **Content:** Returns the `Subscription` object, including nested `plan` object (features, limits, etc.).
+
+### 6. Subscribe to Plan
 - **URL:** `/subscriptions/v1/subscribe`
 - **Method:** `POST`
 - **Headers:** `Authorization: Bearer <token>`
@@ -400,7 +503,7 @@ This document contains the API endpoints for the project. You can use this to ma
   - **Code:** 200
   - **Content:** Returns Stripe Checkout URL or Mock URL.
 
-### 6. Cancel Subscription
+### 7. Cancel Subscription
 - **URL:** `/subscriptions/v1/cancel`
 - **Method:** `POST`
 - **Headers:** `Authorization: Bearer <token>`
@@ -472,8 +575,8 @@ This document contains the API endpoints for the project. You can use this to ma
     "clientPhone": "1234567890",
     "eventDate": "2026-10-10T20:00:00Z",
     "eventType": "Wedding",
-    "venueDetails": "Grand Hall",
-    "message": "Looking forward to it!"
+    "eventDetails": "Looking forward to it!",
+    "address": "Grand Hall, 123 Main St"
   }
   ```
 - **Success Response:**
@@ -497,15 +600,45 @@ This document contains the API endpoints for the project. You can use this to ma
     "totalAmount": 500.00
   }
   ```
-- **Description:** Accepts booking and generates an invoice automatically.
+- **Description:** Accepts booking, generates an invoice, and returns a `checkoutUrl` for Stripe.
 - **Success Response:**
   - **Code:** 200
+
+---
+
+## 🔗 Stripe Connect Module
+
+### 1. Get Onboarding Link (DJ)
+- **URL:** `/stripe-connect/v1/onboard`
+- **Method:** `POST`
+- **Headers:** `Authorization: Bearer <token>`
+- **Request Body:**
+  ```json
+  {
+    "tenantId": "uuid-tenant",
+    "returnUrl": "https://yourfrontend.com/settings/stripe/return",
+    "refreshUrl": "https://yourfrontend.com/settings/stripe/refresh"
+  }
+  ```
+- **Success Response:**
+  - **Code:** 200
+  - **Content:** Returns Stripe Connect onboarding URL and account ID.
+
+### 2. Check Account Status (DJ)
+- **URL:** `/stripe-connect/v1/status`
+- **Method:** `GET`
+- **Headers:** `Authorization: Bearer <token>`
+- **Query Parameters:** `tenantId=uuid-tenant`
+- **Success Response:**
+  - **Code:** 200
+  - **Content:** Returns `isConnected`, `detailsSubmitted`, and `payoutsEnabled`.
 
 ## 🧾 Invoice Module
 
 ### 1. Get My Invoices (DJ)
 - **URL:** `/invoices/v1/my-invoices`
 - **Method:** `GET`
+- **Description:** Returns both **Booking Invoices** and **Subscription Invoices** for the DJ. Subscription invoices are automatically generated when subscribing to a plan.
 - **Headers:** `Authorization: Bearer <token>`
 - **Success Response:**
   - **Code:** 200

@@ -8,6 +8,9 @@ export const createBookingSchema = {
     clientEmail: z.string().email("Invalid email address"),
     eventType: z.string().min(2, "Event type is required"),
     eventDetails: z.string().optional(),
+    clientPhone: z.string().optional(),
+    eventDate: z.string().datetime("Invalid event date format"),
+    address: z.string().min(5, "Address must be at least 5 characters"),
   }),
 };
 

@@ -70,6 +70,13 @@ export const config = {
     level: process.env.LOG_LEVEL || "info",
     path: process.env.LOG_FILE_PATH || "logs/app.log",
   },
+  stripe: {
+    secretKey: process.env.STRIPE_SECRET_KEY,
+    publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
+    clientId: process.env.STRIPE_CLIENT_ID,
+    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+  },
+  clientUrl: process.env.CLIENT_URL || "http://localhost:3000",
 };
 
 export default config;

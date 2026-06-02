@@ -18,6 +18,12 @@ export class SubscriptionController extends BaseController {
     this.sendResponse(req, res, 'Plans retrieved successfully', undefined, plans);
   }
 
+  public async getMySubscription(req: Request, res: Response): Promise<void> {
+    const userId = req.user!.id;
+    const subscription = await this.subscriptionService.getMySubscription(userId);
+    this.sendResponse(req, res, 'Active subscription retrieved successfully', undefined, subscription);
+  }
+
   public async updatePlan(req: Request, res: Response): Promise<void> {
     const id = parseInt(String(req.params.id), 10);
     const plan = await this.subscriptionService.updatePlan(id, req.body);

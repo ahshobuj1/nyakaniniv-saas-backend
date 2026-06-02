@@ -96,22 +96,25 @@ model Theme {
 }
 
 model Tenant {
-  id          String    @id @default(uuid()) @db.Uuid
-  userId      String?   @unique @map("user_id") @db.Uuid
-  subdomain   String?   @unique @db.VarChar(255)
-  stageName   String?   @map("stage_name") @db.VarChar(255)
-  country     String?   @db.VarChar(255)
-  city        String?   @db.VarChar(255)
-  genres      Json?
-  themeId     Int?      @map("theme_id")
-  logoUrl     String?   @map("logo_url") @db.VarChar(255)
-  bio         String?   @db.Text
-  timezone    String?   @db.VarChar(255)
-  isActive    Boolean?  @map("is_active")
-  socialLinks Json?     @map("social_links")
-  config      Json?
-  createdAt   DateTime? @default(now()) @map("created_at")
-  updatedAt   DateTime? @default(now()) @updatedAt @map("updated_at")
+  id                 String              @id @default(uuid()) @db.Uuid
+  userId             String?             @unique @map("user_id") @db.Uuid
+  subdomain          String?             @unique @db.VarChar(255)
+  stageName          String?             @map("stage_name") @db.VarChar(255)
+  country            String?             @db.VarChar(255)
+  city               String?             @db.VarChar(255)
+  genres             Json?
+  themeId            Int?                @map("theme_id")
+  logoUrl            String?             @map("logo_url") @db.VarChar(255)
+  bio                String?             @db.Text
+  timezone           String?             @db.VarChar(255)
+  isActive           Boolean?            @map("is_active")
+  socialLinks        Json?               @map("social_links")
+  config             Json?
+  stripeAccountId    String?             @map("stripe_account_id") @db.VarChar(255)
+  activePlanId       Int?                @map("active_plan_id")
+  subscriptionStatus SubscriptionStatus? @map("subscription_status")
+  createdAt          DateTime?           @default(now()) @map("created_at")
+  updatedAt          DateTime?           @default(now()) @updatedAt @map("updated_at")
 
   user  User?  @relation(fields: [userId], references: [id])
   theme Theme? @relation(fields: [themeId], references: [id])
@@ -198,6 +201,9 @@ model Booking {
   clientEmail  String?        @map("client_email") @db.VarChar(255)
   eventType    String?        @map("event_type") @db.VarChar(255)
   eventDetails String?        @map("event_details") @db.Text
+  clientPhone  String?        @map("client_phone") @db.VarChar(50)
+  eventDate    DateTime?      @map("event_date")
+  address      String?        @db.Text
   status       BookingStatus?
   totalAmount  Decimal?       @map("total_amount") @db.Decimal(10, 2)
   createdAt    DateTime?      @default(now()) @map("created_at")

@@ -1,10 +1,16 @@
-import { PrismaClient, BookingStatus, InvoiceType, InvoiceMethod, InvoicePaymentStatus } from '@/prisma/generated/client';
+import { PrismaClient, BookingStatus, InvoiceType, InvoiceMethod, InvoicePaymentStatus, NotificationType } from '@/prisma/generated/client';
+import Stripe from 'stripe';
+import { config } from '@/core/config';
+
+const stripe = new Stripe(config.stripe.secretKey || process.env.STRIPE_SECRET_KEY || "", {
+  apiVersion: "2024-04-10" as any,
+});
 import { NotFoundError, BadRequestError, AuthorizationError } from '@/core/errors/AppError';
 import { CreateBookingDTO, UpdateBookingStatusDTO } from './BookingDTO';
 import { QueryBuilder } from '@/utils/QueryBuilder';
 
 export class BookingServices {
-  constructor(private prisma: PrismaClient) {}
+  constructor(private prisma: PrismaClient) { }
 
   private async getTenantIdByUserId(userId: string): Promise<string> {
     const tenant = await this.prisma.tenant.findUnique({ where: { userId } });
@@ -20,16 +26,32 @@ export class BookingServices {
       throw new NotFoundError();
     }
 
-    return this.prisma.booking.create({
+    const booking = await this.prisma.booking.create({
       data: {
         tenantId: data.tenantId,
         clientName: data.clientName,
         clientEmail: data.clientEmail,
         eventType: data.eventType,
         eventDetails: data.eventDetails,
+        clientPhone: data.clientPhone,
+        eventDate: data.eventDate ? new Date(data.eventDate) : undefined,
+        address: data.address,
         status: BookingStatus.pending,
       },
     });
+
+    if (tenant.userId) {
+      await this.prisma.notification.create({
+        data: {
+          userId: tenant.userId,
+          title: "New Booking Request",
+          message: `You have a new booking request from ${data.clientName} for ${data.eventType}.`,
+          type: NotificationType.booking_request,
+        }
+      });
+    }
+
+    return booking;
   }
 
   async getMyBookings(userId: string, query: Record<string, unknown> = {}) {
@@ -99,7 +121,7 @@ export class BookingServices {
         });
 
         // Create Invoice
-        await tx.invoice.create({
+        const invoice = await tx.invoice.create({
           data: {
             tenantId,
             bookingId: id,
@@ -110,7 +132,47 @@ export class BookingServices {
           }
         });
 
-        return updatedBooking;
+        // Generate Stripe Checkout Session if the DJ has Stripe Connect set up
+        const tenantInfo = await tx.tenant.findUnique({ where: { id: tenantId } });
+        let checkoutUrl = null;
+
+        if (tenantInfo?.stripeAccountId) {
+          const session = await stripe.checkout.sessions.create({
+            payment_method_types: ['card'],
+            line_items: [
+              {
+                price_data: {
+                  currency: 'usd',
+                  product_data: {
+                    name: `Booking: ${updatedBooking.eventType}`,
+                    description: updatedBooking.eventDetails || "DJ Services",
+                  },
+                  unit_amount: Math.round(Number(data.totalAmount) * 100), // Stripe takes cents
+                },
+                quantity: 1,
+              },
+            ],
+            mode: 'payment',
+            success_url: `${config.clientUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `${config.clientUrl}/payment-cancel`,
+            payment_intent_data: {
+              application_fee_amount: Math.round(Number(data.totalAmount) * 100 * 0.05), // 5% Application Fee
+              transfer_data: {
+                destination: tenantInfo.stripeAccountId,
+              },
+            },
+            metadata: {
+              invoiceId: invoice.id,
+              bookingId: id,
+            }
+          });
+          checkoutUrl = session.url;
+        }
+
+        // TODO: Send Email to client with checkoutUrl
+        // e.g. emailService.sendBookingAcceptedEmail(updatedBooking.clientEmail, checkoutUrl);
+
+        return { ...updatedBooking, checkoutUrl };
       });
     }
 
