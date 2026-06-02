@@ -8,6 +8,15 @@ Important: This document contains the complete list of tasks required to build t
 - [x] Implement generic upload endpoint `POST /uploads/v1/`
 > **Note:** Right now we are exclusively using **Cloudinary** for file uploads. In the final step before deployment, we will replace it with **AWS S3** by simply changing the `FILE_UPLOADER` environment variable. The API layer will remain completely untouched.
 
+### User Module
+
+- [x] Implement Get All Users (Admin).
+- [x] Implement Get Current User Profile (Me).
+- [x] Implement Update Current User Profile.
+- [x] Implement Update User Status (Admin).
+- [x] Implement Update User Role (Admin).
+- [x] Implement Delete User (Admin).
+
 ### Auth Module
 
 - [x] Implement Login endpoint (JWT generation).
@@ -37,18 +46,22 @@ Important: This document contains the complete list of tasks required to build t
 
 ### Subscription Module
 
-- [ ] Create/Manage Plans (Admin).
-- [ ] Subscribe to Plan (Stripe Integration).
-- [ ] Cancel Subscription.
-- [ ] Handle Stripe Webhooks for subscription status.
+- [x] Subscription History Tracking (Auto-Invoicing).
+- [x] Webhook integration for Stripe Events.
+- [x] Subscribe to Plan (Stripe Integration).
+- [x] Cancel Subscription.
+- [x] Handle Stripe Webhooks for subscription status.
+- [x] Create Database Seeder for Subscription Plans (Starter, Pro, Elite).
+- [x] Implement AccessControlService for plan features.
+- [x] Implement checkSubscription middleware for route protection.
 
 ### MixTape Module
 
-- [ ] Upload MixTape (Integrate AWS S3).
-- [ ] Get Tenant MixTapes.
-- [ ] Update MixTape details.
-- [ ] Delete MixTape.
-- [ ] Reorder MixTapes.
+- [x] Upload MixTape (Integrate AWS S3).
+- [x] Get Tenant MixTapes.
+- [x] Update MixTape details.
+- [x] Delete MixTape.
+- [x] Reorder MixTapes.
 
 ### Event Module
 
@@ -61,34 +74,46 @@ Important: This document contains the complete list of tasks required to build t
 
 ### Booking Module
 
-- [ ] Create Booking Request (Public client).
-- [ ] Get Tenant Bookings (For DJ dashboard).
-- [ ] Accept/Reject Booking.
+- [x] Create Booking Request (Public client).
+- [x] Get Tenant Bookings (For DJ dashboard).
+- [x] Accept/Reject Booking (Integrates Stripe Checkout).
 
 ### Invoice Module
 
-- [ ] Generate Invoice for Booking.
-- [ ] Generate Invoice for Subscription.
-- [ ] Pay Invoice (Stripe).
+- [x] Generate Invoice for Booking.
+- [x] Generate Invoice for Subscription.
+- [x] Pay Invoice (Stripe).
+
+### Webhook Module (Payment & Invoice)
+- [x] Implement Stripe Webhook (`checkout.session.completed`).
+- [x] Extract `invoiceId` and update Invoice to `paid`.
+- [x] Update Booking status to `completed` upon payment.
+- [x] Automate DJ Notification on payment receipt.
+
+### Analytics Module
+- [x] Implement Admin Dashboard Analytics (Users, Revenue, Subscriptions, Bookings).
+- [x] Implement Tenant Dashboard Analytics (Earnings, Invoices, Bookings stats, Requests).
+- [x] Implement Admin Dashboard Charts (Revenue, User Growth over 12 months).
+- [x] Implement Tenant Dashboard Charts (Earnings, Bookings over 12 months).
 
 ## 📣 Phase 5: Support & Communication
 
 ### Support Ticket Module
 
-- [ ] Create Support Ticket (Public or User).
-- [ ] Get Support Tickets (Admin).
-- [ ] Update Ticket Status.
+- [x] Create Support Ticket (Public or User).
+- [x] Get Support Tickets (Admin).
+- [x] Update Ticket Status.
 
 ### Notification Module
 
-- [ ] Create Notification (Triggered by events).
-- [ ] Get User Notifications.
-- [ ] Mark Notification as Read.
+- [x] Create Notification (Triggered by events).
+- [x] Get User Notifications.
+- [x] Mark Notification as Read.
 
 ## 🌐 Phase 6: Admin Content (Landing Page)
 
-- [ ] Manage Landing Page Heroes.
-- [ ] Manage Landing Page Steps.
-- [ ] Manage Landing Page Services.
-- [ ] Manage Landing Page FAQs.
-- [ ] Manage Landing Page Marquees.
+- [x] Manage Landing Page Heroes.
+- [x] Manage Landing Page Steps.
+- [x] Manage Landing Page Services.
+- [x] Manage Landing Page FAQs.
+- [x] Manage Landing Page Marquees.

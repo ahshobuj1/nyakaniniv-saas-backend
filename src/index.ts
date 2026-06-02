@@ -19,6 +19,9 @@ import { InvoiceModule } from "./Modules/Invoice/InvoiceModule";
 import { SupportTicketModule } from "./Modules/SupportTicket/SupportTicketModule";
 import { NotificationModule } from "./Modules/Notification/NotificationModule";
 import { LandingPageModule } from "./Modules/LandingPage/LandingPageModule";
+import { UserModule } from "./Modules/User/UserModule";
+import { WebhookModule } from "./Modules/Webhook/WebhookModule";
+import { AnalyticsModule } from "./Modules/Analytics/AnalyticsModule";
 
 // Modules (Business Logic)
 
@@ -47,6 +50,9 @@ async function bootstrap() {
     app.registerModule(new SupportTicketModule());
     app.registerModule(new NotificationModule());
     app.registerModule(new LandingPageModule());
+    app.registerModule(new UserModule());
+    app.registerModule(new WebhookModule());
+    app.registerModule(new AnalyticsModule());
     AppLogger.info("✔ All modules registered successfully");
 
     // 4. Spark the server!

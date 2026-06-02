@@ -24,6 +24,13 @@
  *                 type: string
  *               eventDetails:
  *                 type: string
+ *               clientPhone:
+ *                 type: string
+ *               eventDate:
+ *                 type: string
+ *                 format: date-time
+ *               address:
+ *                 type: string
  *     responses:
  *       201:
  *         description: Booking request submitted successfully

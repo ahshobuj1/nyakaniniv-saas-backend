@@ -31,7 +31,15 @@ export function setupGlobalMiddlewares(app: Express) {
   );
 
   app.use(cookieParser());
-  app.use(express.json({ limit: "10mb" }));
+  app.use(
+    express.json({
+      limit: "10mb",
+      verify: (req, res, buf) => {
+        // Save the raw buffer to req.rawBody for Stripe Webhook signature validation
+        (req as any).rawBody = buf;
+      },
+    })
+  );
   app.use(express.urlencoded({ extended: true, limit: "10mb" }));
   app.use(requestLogger());
 

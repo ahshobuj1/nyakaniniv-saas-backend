@@ -36,6 +36,20 @@ export class SubscriptionServices {
     });
   }
 
+  async getMySubscription(userId: string) {
+    const subscription = await this.prisma.subscription.findFirst({
+      where: { userId, status: SubscriptionStatus.active },
+      include: { plan: true },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    if (!subscription) {
+      throw new NotFoundError('No active subscription found');
+    }
+
+    return subscription;
+  }
+
   async updatePlan(id: number, data: UpdateSubscriptionPlanDTO) {
     const existing = await this.prisma.subscriptionPlan.findUnique({ where: { id } });
     if (!existing) {
@@ -81,9 +95,10 @@ export class SubscriptionServices {
       throw new NotFoundError();
     }
 
-    const priceId = data.billingCycle === 'monthly' ? plan.stripeMonthlyPriceId : plan.stripeAnnualPriceId;
+    const amountStr = data.billingCycle === 'monthly' ? plan.priceMonthly : plan.priceAnnually;
+    const amount = Number(amountStr) || 0;
 
-    if (!this.stripe || !priceId) {
+    if (!this.stripe) {
       // Mock logic if no Stripe keys are available yet
       const subscription = await this.prisma.subscription.create({
         data: {
@@ -94,14 +109,38 @@ export class SubscriptionServices {
           periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // +30 days
         }
       });
+      
+      // Auto-generate invoice for mock payment
+      await this.prisma.invoice.create({
+        data: {
+          userId,
+          amount,
+          type: 'SUBSCRIPTION',
+          method: 'CASH', // Mock treated as cash/offline
+          status: 'paid'
+        }
+      });
+
       return { url: 'http://localhost:3000/dashboard', subscription };
     }
 
-    // Actual Stripe Logic
+    // Actual Stripe Logic using inline dynamic pricing (price_data)
+    const unitAmount = Math.round(amount * 100); // Stripe requires cents
+
     const session = await this.stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [{
-        price: priceId,
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: `${plan.name} Plan (${data.billingCycle})`,
+            description: `Subscription to the ${plan.name} plan.`,
+          },
+          unit_amount: unitAmount,
+          recurring: {
+            interval: data.billingCycle === 'monthly' ? 'month' : 'year',
+          },
+        },
         quantity: 1,
       }],
       mode: 'subscription',
@@ -169,6 +208,7 @@ export class SubscriptionServices {
       const userId = session.metadata?.userId;
       const planId = session.metadata?.planId;
       const stripeSubId = session.subscription as string;
+      const amountPaid = (session.amount_total || 0) / 100;
 
       if (userId && planId) {
         await this.prisma.subscription.create({
@@ -178,6 +218,17 @@ export class SubscriptionServices {
             stripeSubId,
             status: SubscriptionStatus.active,
             periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // approx, will be updated via invoice.payment_succeeded
+          }
+        });
+
+        // Auto-generate invoice for actual Stripe payment
+        await this.prisma.invoice.create({
+          data: {
+            userId,
+            amount: amountPaid,
+            type: 'SUBSCRIPTION',
+            method: 'STRIPE',
+            status: 'paid'
           }
         });
       }
