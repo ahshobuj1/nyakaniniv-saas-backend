@@ -145,6 +145,7 @@ export class InvoiceServices {
       cancel_url: data.cancelUrl || `${process.env.FRONTEND_URL}/payment/cancel`,
       metadata: {
         invoiceId: invoice.id,
+        ...(invoice.bookingId && { bookingId: invoice.bookingId }),
       }
     });
 
