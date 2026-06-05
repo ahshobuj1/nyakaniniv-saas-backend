@@ -10,7 +10,7 @@ import {
   updateTenantSchema,
   assignThemeSchema,
 } from './TenantDTO';
-import {UserRole} from '@/prisma/generated';
+import {UserRole} from '@/prisma/generated/client';
 
 export class TenantModule extends BaseModule {
   public name: string = 'TenantModule';
