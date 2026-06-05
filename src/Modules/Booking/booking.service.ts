@@ -46,7 +46,7 @@ export class BookingServices {
           userId: tenant.userId,
           title: "New Booking Request",
           message: `You have a new booking request from ${data.clientName} for ${data.eventType}.`,
-          type: NotificationType.booking_request,
+          type: NotificationType.booking_request, 
         }
       });
     }
