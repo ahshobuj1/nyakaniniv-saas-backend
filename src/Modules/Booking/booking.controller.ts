@@ -31,4 +31,17 @@ export class BookingController extends BaseController {
     const booking = await this.bookingService.updateBookingStatus(userId, id, req.body);
     this.sendResponse(req, res, 'Booking status updated successfully', undefined, booking);
   }
+
+  public async getPaymentLink(req: Request, res: Response): Promise<void> {
+    const id = String(req.params.id);
+    const result = await this.bookingService.getBookingPaymentLink(id);
+    this.sendResponse(req, res, 'Payment link generated successfully', undefined, result);
+  }
+
+  public async resendPaymentReminder(req: Request, res: Response): Promise<void> {
+    const userId = req.user!.id;
+    const id = String(req.params.id);
+    const result = await this.bookingService.resendPaymentReminder(userId, id);
+    this.sendResponse(req, res, 'Payment reminder sent successfully', undefined, result);
+  }
 }

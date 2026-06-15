@@ -49,9 +49,9 @@ export class EmailTemplates {
     return `
       <h2>Booking Request Accepted! 🎉</h2>
       <p>Great news! <strong>${djName}</strong> has accepted your booking request for a ${eventType}.</p>
-      <p>To finalize the booking and secure the date, please complete your payment using the link below:</p>
+      <p>To finalize the booking and secure the date, please view your invoice and complete your payment using the link below:</p>
       <br/>
-      <a href="${paymentUrl}" style="display:inline-block; padding:12px 24px; background-color:#28a745; color:#fff; text-decoration:none; border-radius:5px;">Pay Securely via Stripe</a>
+      <a href="${paymentUrl}" style="display:inline-block; padding:12px 24px; background-color:#28a745; color:#fff; text-decoration:none; border-radius:5px;">View Invoice & Pay</a>
     `;
   }
 
@@ -189,6 +189,17 @@ export class EmailTemplates {
       <p>This is a reminder that your ${eventType} is scheduled for tomorrow.</p>
       <p><strong>Date & Time:</strong> ${new Date(date).toLocaleString()}</p>
       <p>${isDJ ? 'Good luck with the gig!' : 'We hope you enjoy the event!'}</p>
+    `;
+  }
+
+  static getPaymentReminderTemplate(djName: string, eventType: string, paymentUrl: string): string {
+    return `
+      <h2>Payment Reminder ⚠️</h2>
+      <p>This is a friendly reminder from <strong>${djName}</strong> regarding your ${eventType} booking.</p>
+      <p>Your payment is still pending. Please complete the payment to fully secure your event date.</p>
+      <br/>
+      <a href="${paymentUrl}" style="display:inline-block; padding:12px 24px; background-color:#ffc107; color:#000; text-decoration:none; border-radius:5px;">View Invoice & Pay</a>
+      <p>If you have any questions, please contact the DJ.</p>
     `;
   }
 }

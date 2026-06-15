@@ -168,56 +168,23 @@ export class BookingServices {
           }
         });
 
-        // Generate Stripe Checkout Session if the DJ has Stripe Connect set up
         const tenantInfo = await tx.tenant.findUnique({ where: { id: tenantId } });
-        let checkoutUrl = null;
 
-        if (tenantInfo?.stripeAccountId) {
-          const session = await stripe.checkout.sessions.create({
-            payment_method_types: ['card'],
-            line_items: [
-              {
-                price_data: {
-                  currency: 'usd',
-                  product_data: {
-                    name: `Booking: ${updatedBooking.eventType}`,
-                    description: updatedBooking.eventDetails || "DJ Services",
-                  },
-                  unit_amount: Math.round(Number(data.totalAmount) * 100), // Stripe takes cents
-                },
-                quantity: 1,
-              },
-            ],
-            mode: 'payment',
-            success_url: `${config.clientUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `${config.clientUrl}/payment-cancel`,
-            payment_intent_data: {
-              application_fee_amount: Math.round(Number(data.totalAmount) * 100 * 0.05), // 5% Application Fee
-              transfer_data: {
-                destination: tenantInfo.stripeAccountId,
-              },
-            },
-            metadata: {
-              invoiceId: payment.id,
-              bookingId: id,
-            }
-          });
-          checkoutUrl = session.url;
-        }
+        const platformInvoiceUrl = `https://${tenantInfo?.subdomain}.upbeatafrica.com/booking/${id}`;
 
-        if (booking.client?.email && checkoutUrl) {
+        if (booking.client?.email) {
           await this.emailProvider.sendEmail(
             booking.client.email,
             "Booking Request Accepted! - UpbeatAfrica",
             EmailTemplates.getBookingAcceptedTemplate(
               booking.tenant?.stageName || booking.tenant?.user?.firstName || "DJ",
               updatedBooking.eventType || "Event",
-              checkoutUrl
+              platformInvoiceUrl
             )
           );
         }
 
-        return { ...updatedBooking, checkoutUrl };
+        return { ...updatedBooking, paymentId: payment.id };
       });
     }
 
@@ -253,5 +220,85 @@ export class BookingServices {
     }
 
     return updatedBooking;
+  }
+
+  async getBookingPaymentLink(id: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id },
+      include: { tenant: true, payment: true }
+    });
+
+    if (!booking || booking.status !== BookingStatus.accepted || !booking.totalAmount) {
+      throw new BadRequestError('Booking is not ready for payment or already paid');
+    }
+
+    if (booking.payment && booking.payment.status === BookingPaymentStatus.paid) {
+      throw new BadRequestError('Booking is already paid');
+    }
+
+    if (!booking.tenant?.stripeAccountId) {
+      throw new BadRequestError('DJ has not configured Stripe payments yet');
+    }
+
+    const paymentId = booking.payment ? booking.payment.id : id; // fallback to booking id if no payment record
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: `Booking: ${booking.eventType}`,
+              description: booking.eventDetails || "DJ Services",
+            },
+            unit_amount: Math.round(Number(booking.totalAmount) * 100), // Stripe takes cents
+          },
+          quantity: 1,
+        },
+      ],
+      mode: 'payment',
+      success_url: `https://${booking.tenant.subdomain}.upbeatafrica.com/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `https://${booking.tenant.subdomain}.upbeatafrica.com/booking/${id}`,
+      payment_intent_data: {
+        application_fee_amount: Math.round(Number(booking.totalAmount) * 100 * 0.05), // 5% Application Fee
+        transfer_data: {
+          destination: booking.tenant.stripeAccountId,
+        },
+      },
+      metadata: {
+        invoiceId: paymentId,
+        bookingId: id,
+      }
+    });
+
+    return { checkoutUrl: session.url };
+  }
+
+  async resendPaymentReminder(userId: string, id: string) {
+    const tenantId = await this.getTenantIdByUserId(userId);
+    const booking = await this.prisma.booking.findFirst({
+      where: { id, tenantId },
+      include: { client: true, tenant: { include: { user: true } } }
+    });
+
+    if (!booking || booking.status !== BookingStatus.accepted) {
+      throw new BadRequestError('Booking is not in a state waiting for payment');
+    }
+
+    if (booking.client?.email) {
+      const platformInvoiceUrl = `https://${booking.tenant?.subdomain}.upbeatafrica.com/booking/${id}`;
+      await this.emailProvider.sendEmail(
+        booking.client.email,
+        "Reminder: Payment Required for your Booking - UpbeatAfrica",
+        EmailTemplates.getPaymentReminderTemplate(
+          booking.tenant?.stageName || booking.tenant?.user?.firstName || "DJ",
+          booking.eventType || "Event",
+          platformInvoiceUrl
+        )
+      );
+    }
+
+    return { success: true, message: 'Payment reminder sent successfully' };
   }
 }

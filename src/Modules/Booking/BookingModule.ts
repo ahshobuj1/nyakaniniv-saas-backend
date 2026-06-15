@@ -61,5 +61,18 @@ export class BookingModule extends BaseModule {
       validateRequest(updateBookingStatusSchema),
       controller.updateBookingStatus.bind(controller),
     );
+
+    this.router.post(
+      "/:id/remind-payment",
+      authenticateUser,
+      authorizeRole([UserRole.DJ]),
+      controller.resendPaymentReminder.bind(controller),
+    );
+
+    // Client/Public route to generate fresh checkout session
+    this.router.get(
+      "/:id/payment-link",
+      controller.getPaymentLink.bind(controller),
+    );
   }
 }
