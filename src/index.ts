@@ -22,6 +22,7 @@ import { LandingPageModule } from "./Modules/LandingPage/LandingPageModule";
 import { UserModule } from "./Modules/User/UserModule";
 import { WebhookModule } from "./Modules/Webhook/WebhookModule";
 import { AnalyticsModule } from "./Modules/Analytics/AnalyticsModule";
+import { ClientModule } from "./Modules/Client/ClientModule";
 
 // Modules (Business Logic)
 
@@ -53,6 +54,7 @@ async function bootstrap() {
     app.registerModule(new UserModule());
     app.registerModule(new WebhookModule());
     app.registerModule(new AnalyticsModule());
+    app.registerModule(new ClientModule());
     AppLogger.info("✔ All modules registered successfully");
 
     // 4. Spark the server!
