@@ -4,11 +4,16 @@ import { AppLogger } from '@/core/logging/logger';
 import { ConflictError, NotFoundError } from '@/core/errors/AppError';
 import { CreateTenantDTO, UpdateTenantDTO } from './TenantDTO';
 import { QueryBuilder } from '@/utils/QueryBuilder';
+import { IEmailProvider } from '@/providers/EmailProvider';
+import { EmailTemplates } from '@/utils/EmailTemplates';
 
 export class TenantServices {
   private logger = new AppLogger('TenantServices');
 
-  constructor(private readonly prisma: PrismaClient) { }
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly emailProvider: IEmailProvider
+  ) { }
 
   public async createTenant(userId: string, data: CreateTenantDTO) {
     this.logger.info('Attempting to onboard tenant', {
@@ -34,7 +39,6 @@ export class TenantServices {
       throw new ConflictError('Subdomain is already taken');
     }
 
-    // 3. Create Tenant
     const newTenant = await this.prisma.tenant.create({
       data: {
         userId,
@@ -45,7 +49,17 @@ export class TenantServices {
         genres: data.genres ?? [],
         isActive: true, // Assuming active by default, or depends on subscription later
       },
+      include: { user: true }
     });
+
+    if (newTenant.user && newTenant.user.email) {
+      const url = `https://${newTenant.subdomain}.upbeatafrica.com`;
+      await this.emailProvider.sendEmail(
+        newTenant.user.email,
+        "Your Portfolio is Live! 🌐 - UpbeatAfrica",
+        EmailTemplates.getPortfolioLiveTemplate(url)
+      );
+    }
 
     return newTenant;
   }

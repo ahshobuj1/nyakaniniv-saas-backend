@@ -5,11 +5,16 @@ import { ConflictError, NotFoundError, AuthenticationError } from "@/core/errors
 import { hashPassword, comparePassword } from "@/utils/password";
 import { generateToken } from "@/utils/jwt";
 import { generateOtp } from "@/utils/otp";
+import { IEmailProvider } from "@/providers/EmailProvider";
+import { EmailTemplates } from "@/utils/EmailTemplates";
 
 export class AuthServices {
   private logger = new AppLogger("AuthServices");
 
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly emailProvider: IEmailProvider
+  ) {}
 
   public async register(
     email: string,
@@ -46,8 +51,12 @@ export class AuthServices {
       },
     });
 
-    // Mock Email Send
-    this.logger.info(`[MOCK EMAIL] Sent OTP ${otp} to ${email}`);
+    // Send Email
+    await this.emailProvider.sendEmail(
+      email,
+      "Verify Your Email - UpbeatAfrica",
+      EmailTemplates.getOtpTemplate(otp)
+    );
 
     this.logger.info("User registered successfully", { userId: newUser.id });
     return newUser;
@@ -80,6 +89,14 @@ export class AuthServices {
     });
 
     const token = generateToken({ id: updatedUser.id, email: updatedUser.email, role: updatedUser.role });
+
+    // Send Welcome Email
+    await this.emailProvider.sendEmail(
+      updatedUser.email,
+      "Welcome to Nyakaniniv!",
+      EmailTemplates.getWelcomeTemplate(updatedUser.firstName || "DJ")
+    );
+
     return { user: updatedUser, token };
   }
 
@@ -107,8 +124,12 @@ export class AuthServices {
       },
     });
 
-    // Mock Email Send
-    this.logger.info(`[MOCK EMAIL] Sent NEW Verification OTP ${otp} to ${email}`);
+    // Send Email
+    await this.emailProvider.sendEmail(
+      email,
+      "Your New Verification Code - UpbeatAfrica",
+      EmailTemplates.getOtpTemplate(otp)
+    );
 
     return { otp };
   }
@@ -151,8 +172,13 @@ export class AuthServices {
       data: { otp, otpExpiry },
     });
 
-    // Mock Email Send
-    this.logger.info(`[MOCK EMAIL] Sent Password Reset OTP ${otp} to ${email}`);
+    // Send Email
+    await this.emailProvider.sendEmail(
+      email,
+      "Password Reset Request - UpbeatAfrica",
+      EmailTemplates.getPasswordResetTemplate(`http://localhost:3000/auth/reset-password?otp=${otp}&email=${encodeURIComponent(email)}`)
+    );
+
     return { otp };
   }
 

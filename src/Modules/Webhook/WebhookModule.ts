@@ -13,8 +13,9 @@ export class WebhookModule extends BaseModule {
   private logger = new AppLogger('WebhookModule');
 
   protected async setupUseCases(): Promise<void> {
-    const prisma = this.context.getService('prisma');
-    this.registerService('WebhookService', new WebhookServices(prisma));
+    const prisma = this.context.getService("prisma");
+    const emailProvider = this.context.getService("email");
+    this.registerService("WebhookService", new WebhookServices(prisma, emailProvider));
   }
 
   protected async setupControllers(): Promise<void> {

@@ -21,8 +21,9 @@ export class TenantModule extends BaseModule {
   private logger = new AppLogger('TenantModule');
 
   protected async setupUseCases(): Promise<void> {
-    const prisma = this.context.getService('prisma');
-    this.registerService('TenantService', new TenantServices(prisma));
+    const prisma = this.context.getService("prisma");
+    const emailProvider = this.context.getService("email");
+    this.registerService("TenantService", new TenantServices(prisma, emailProvider));
   }
 
   protected async setupControllers(): Promise<void> {

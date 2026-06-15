@@ -20,7 +20,8 @@ export class BookingModule extends BaseModule {
 
   protected async setupUseCases(): Promise<void> {
     const prisma = this.context.getService("prisma");
-    this.registerService("BookingService", new BookingServices(prisma));
+    const emailProvider = this.context.getService("email");
+    this.registerService("BookingService", new BookingServices(prisma, emailProvider));
   }
 
   protected async setupControllers(): Promise<void> {

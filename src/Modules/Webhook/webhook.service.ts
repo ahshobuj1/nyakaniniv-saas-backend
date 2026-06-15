@@ -1,11 +1,18 @@
 import { PrismaClient, BookingPaymentStatus, BookingStatus, SubscriptionInvoiceStatus, NotificationType } from '@/prisma/generated/client';
 import { BadRequestError } from '@/core/errors/AppError';
 import Stripe from 'stripe';
+import { IEmailProvider } from '@/providers/EmailProvider';
+import { EmailTemplates } from '@/utils/EmailTemplates';
+import { config } from '@/core/config';
+import { AppLogger } from '@/core/logging/logger';
 
 export class WebhookServices {
   private stripe: any = null;
 
-  constructor(private prisma: PrismaClient) {
+  constructor(
+    private prisma: PrismaClient,
+    private emailProvider: IEmailProvider
+  ) {
     if (process.env.STRIPE_SECRET_KEY) {
       this.stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
         apiVersion: '2024-04-10' as any,
@@ -82,19 +89,36 @@ export class WebhookServices {
                 data: { status: BookingStatus.completed }
               });
 
-              // Notify DJ
+              // Notify DJ via Email & DB Notification
               if (booking.tenantId) {
-                const tenant = await tx.tenant.findUnique({ where: { id: booking.tenantId } });
-                if (tenant && tenant.userId) {
+                const tenant = await tx.tenant.findUnique({ where: { id: booking.tenantId }, include: { user: true } });
+                if (tenant && tenant.user) {
                   await tx.notification.create({
                     data: {
-                      userId: tenant.userId as string,
+                      userId: tenant.user.id,
                       title: 'Payment Received',
                       message: `Payment received for booking ${booking.eventType} from ${booking.client?.name || 'Client'}.`,
                       type: NotificationType.payment
                     }
                   });
+
+                  if (tenant.user.email) {
+                    await this.emailProvider.sendEmail(
+                      tenant.user.email,
+                      "Payment Received! 💰 - UpbeatAfrica",
+                      EmailTemplates.getPaymentReceivedAlertTemplate(booking.client?.name || "Client", amountPaid)
+                    );
+                  }
                 }
+              }
+
+              // Send Receipt to Client
+              if (booking.client && booking.client.email) {
+                await this.emailProvider.sendEmail(
+                  booking.client.email,
+                  "Payment Receipt - UpbeatAfrica",
+                  EmailTemplates.getPaymentReceiptTemplate(amountPaid, booking.eventType || "Event")
+                );
               }
             }
           }
@@ -124,13 +148,61 @@ export class WebhookServices {
             }
           });
         });
+
+        // Send Emails for Subscription
+        const user = await this.prisma.user.findUnique({ where: { id: userId } });
+        if (user && user.email) {
+          const nextBilling = new Date(Date.now() + (session.metadata?.billingCycle === 'monthly' ? 30 : 365) * 24 * 60 * 60 * 1000).toISOString();
+          
+          await this.emailProvider.sendEmail(
+            user.email,
+            "Subscription Activated 🚀 - UpbeatAfrica",
+            EmailTemplates.getSubscriptionActivatedTemplate(`Plan ${planId}`, nextBilling)
+          );
+
+          await this.emailProvider.sendEmail(
+            config.defaultAdmin?.email || "admin@upbeatafrica.com",
+            "New Subscription Alert 💸 - UpbeatAfrica",
+            EmailTemplates.getNewSubscriptionAdminAlertTemplate(user.email, parseInt(planId, 10))
+          );
+        }
       }
     } else if (event.type === 'customer.subscription.deleted') {
       const stripeSub = event.data.object as any;
-      await this.prisma.subscription.updateMany({
+      const sub = await this.prisma.subscription.findFirst({
         where: { stripeSubId: stripeSub.id },
-        data: { status: 'canceled' }
+        include: { user: true }
       });
+
+      if (sub) {
+        await this.prisma.subscription.update({
+          where: { id: sub.id },
+          data: { status: 'canceled' }
+        });
+
+        if (sub.user && sub.user.email) {
+          await this.emailProvider.sendEmail(
+            sub.user.email,
+            "Subscription Canceled - UpbeatAfrica",
+            EmailTemplates.getSubscriptionCanceledTemplate()
+          );
+        }
+      }
+    } else if (event.type === 'invoice.payment_failed') {
+      const invoice = event.data.object as any;
+      const stripeSubId = invoice.subscription as string;
+      const sub = await this.prisma.subscription.findFirst({
+        where: { stripeSubId },
+        include: { user: true }
+      });
+
+      if (sub && sub.user && sub.user.email) {
+        await this.emailProvider.sendEmail(
+          sub.user.email,
+          "Payment Failed ⚠️ - UpbeatAfrica",
+          EmailTemplates.getPaymentFailedTemplate()
+        );
+      }
     }
 
     await this.prisma.webhookEvent.update({

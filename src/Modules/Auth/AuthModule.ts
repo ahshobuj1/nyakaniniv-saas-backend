@@ -24,7 +24,8 @@ export class AuthModule extends BaseModule {
 
   protected async setupUseCases(): Promise<void> {
     const prisma = this.context.getService("prisma");
-    this.registerService("AuthService", new AuthServices(prisma));
+    const emailProvider = this.context.getService("email");
+    this.registerService("AuthService", new AuthServices(prisma, emailProvider));
   }
   protected async setupControllers(): Promise<void> {
     const authService = this.getService<AuthServices>("AuthService");

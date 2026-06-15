@@ -8,9 +8,14 @@ const stripe = new Stripe(config.stripe.secretKey || process.env.STRIPE_SECRET_K
 import { NotFoundError, BadRequestError, AuthorizationError } from '@/core/errors/AppError';
 import { CreateBookingDTO, UpdateBookingStatusDTO } from './BookingDTO';
 import { QueryBuilder } from '@/utils/QueryBuilder';
+import { IEmailProvider } from '@/providers/EmailProvider';
+import { EmailTemplates } from '@/utils/EmailTemplates';
 
 export class BookingServices {
-  constructor(private prisma: PrismaClient) { }
+  constructor(
+    private prisma: PrismaClient,
+    private emailProvider: IEmailProvider
+  ) { }
 
   private async getTenantIdByUserId(userId: string): Promise<string> {
     const tenant = await this.prisma.tenant.findUnique({ where: { userId } });
@@ -21,7 +26,10 @@ export class BookingServices {
   }
 
   async createBooking(data: CreateBookingDTO) {
-    const tenant = await this.prisma.tenant.findUnique({ where: { id: data.tenantId } });
+    const tenant = await this.prisma.tenant.findUnique({ 
+      where: { id: data.tenantId },
+      include: { user: true }
+    });
     if (!tenant) {
       throw new NotFoundError();
     }
@@ -61,7 +69,22 @@ export class BookingServices {
           type: NotificationType.booking_request, 
         }
       });
+
+      if (tenant.user && tenant.user.email) {
+        await this.emailProvider.sendEmail(
+          tenant.user.email,
+          "New Booking Request Alert - UpbeatAfrica",
+          EmailTemplates.getNewBookingAlertTemplate(data.clientName, data.eventType || "Event", data.eventDate || new Date().toISOString())
+        );
+      }
     }
+
+    // Auto-reply to Client
+    await this.emailProvider.sendEmail(
+      data.clientEmail,
+      "Booking Request Received - UpbeatAfrica",
+      EmailTemplates.getBookingAutoReplyTemplate(tenant.stageName || tenant.user?.firstName || "DJ", data.eventType || "Event")
+    );
 
     return booking;
   }
@@ -111,9 +134,10 @@ export class BookingServices {
     const tenantId = await this.getTenantIdByUserId(userId);
     const booking = await this.prisma.booking.findFirst({
       where: { id, tenantId },
+      include: { client: true, tenant: { include: { user: true } } }
     });
 
-    if (!booking) {
+    if (!booking || !booking.client) {
       throw new NotFoundError();
     }
 
@@ -181,20 +205,53 @@ export class BookingServices {
           checkoutUrl = session.url;
         }
 
-        // TODO: Send Email to client with checkoutUrl
-        // e.g. emailService.sendBookingAcceptedEmail(updatedBooking.clientEmail, checkoutUrl);
+        if (booking.client?.email && checkoutUrl) {
+          await this.emailProvider.sendEmail(
+            booking.client.email,
+            "Booking Request Accepted! - UpbeatAfrica",
+            EmailTemplates.getBookingAcceptedTemplate(
+              booking.tenant?.stageName || booking.tenant?.user?.firstName || "DJ",
+              updatedBooking.eventType || "Event",
+              checkoutUrl
+            )
+          );
+        }
 
         return { ...updatedBooking, checkoutUrl };
       });
     }
 
     // Otherwise just update status
-    return this.prisma.booking.update({
+    const updatedBooking = await this.prisma.booking.update({
       where: { id },
       data: {
         status: data.status,
         ...(data.totalAmount && { totalAmount: data.totalAmount }),
       },
     });
+
+    if ((data.status as any) === 'canceled' && booking.client?.email) {
+      await this.emailProvider.sendEmail(
+        booking.client.email,
+        "Booking Canceled - UpbeatAfrica",
+        EmailTemplates.getBookingRejectedTemplate(
+          booking.tenant?.stageName || booking.tenant?.user?.firstName || "DJ",
+          booking.eventType || "Event"
+        )
+      );
+    } else if (booking.client?.email) {
+      // If just a regular update (not canceled, not accepted), consider it an update email
+      await this.emailProvider.sendEmail(
+        booking.client.email,
+        "Booking Details Updated - UpbeatAfrica",
+        EmailTemplates.getBookingUpdatedTemplate(
+          booking.tenant?.stageName || booking.tenant?.user?.firstName || "DJ",
+          updatedBooking.eventType || "Event",
+          updatedBooking.eventDate?.toISOString() || new Date().toISOString()
+        )
+      );
+    }
+
+    return updatedBooking;
   }
 }

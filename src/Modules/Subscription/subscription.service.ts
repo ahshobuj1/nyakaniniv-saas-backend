@@ -3,11 +3,16 @@ import { NotFoundError, BadRequestError, AuthorizationError } from '@/core/error
 import Stripe from 'stripe';
 import { CreateSubscriptionPlanDTO, SubscribeDTO, UpdateSubscriptionPlanDTO } from './SubscriptionDTO';
 import { SubscriptionStatus, SubscriptionInvoiceStatus } from '@/prisma/generated/client';
+import { IEmailProvider } from '@/providers/EmailProvider';
+import { EmailTemplates } from '@/utils/EmailTemplates';
 
 export class SubscriptionServices {
   private stripe: any = null;
 
-  constructor(private prisma: PrismaClient) {
+  constructor(
+    private prisma: PrismaClient,
+    private emailProvider: IEmailProvider
+  ) {
     if (process.env.STRIPE_SECRET_KEY) {
       this.stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
         apiVersion: "2024-04-10" as any,
@@ -174,6 +179,15 @@ export class SubscriptionServices {
       where: { id: subscription.id },
       data: { status: SubscriptionStatus.canceled }
     });
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (user && user.email) {
+      await this.emailProvider.sendEmail(
+        user.email,
+        "Subscription Canceled - UpbeatAfrica",
+        EmailTemplates.getSubscriptionCanceledTemplate()
+      );
+    }
 
     return { success: true, message: 'Subscription canceled' };
   }
