@@ -2,7 +2,7 @@ import { PrismaClient } from '@/prisma/generated/client';
 import { NotFoundError, BadRequestError, AuthorizationError } from '@/core/errors/AppError';
 import Stripe from 'stripe';
 import { CreateSubscriptionPlanDTO, SubscribeDTO, UpdateSubscriptionPlanDTO } from './SubscriptionDTO';
-import { SubscriptionStatus } from '@/prisma/generated/client';
+import { SubscriptionStatus, SubscriptionInvoiceStatus } from '@/prisma/generated/client';
 
 export class SubscriptionServices {
   private stripe: any = null;
@@ -106,18 +106,18 @@ export class SubscriptionServices {
           planId: data.planId,
           status: SubscriptionStatus.active,
           stripeSubId: 'mock_sub_' + Date.now(),
-          periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // +30 days
+          periodEnd: new Date(Date.now() + (data.billingCycle === 'monthly' ? 30 : 365) * 24 * 60 * 60 * 1000), // approx
         }
       });
       
       // Auto-generate invoice for mock payment
-      await this.prisma.invoice.create({
+      await this.prisma.subscriptionInvoice.create({
         data: {
           userId,
+          planId: data.planId,
           amount,
-          type: 'SUBSCRIPTION',
-          method: 'CASH', // Mock treated as cash/offline
-          status: 'paid'
+          status: SubscriptionInvoiceStatus.paid,
+          stripeInvoiceId: 'mock_invoice_' + Date.now()
         }
       });
 
@@ -150,6 +150,7 @@ export class SubscriptionServices {
       metadata: {
         userId,
         planId: plan.id.toString(),
+        billingCycle: data.billingCycle,
       }
     });
 
@@ -217,18 +218,18 @@ export class SubscriptionServices {
             planId: parseInt(planId, 10),
             stripeSubId,
             status: SubscriptionStatus.active,
-            periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // approx, will be updated via invoice.payment_succeeded
+            periodEnd: new Date(Date.now() + (session.metadata?.billingCycle === 'monthly' ? 30 : 365) * 24 * 60 * 60 * 1000)
           }
         });
 
         // Auto-generate invoice for actual Stripe payment
-        await this.prisma.invoice.create({
+        await this.prisma.subscriptionInvoice.create({
           data: {
             userId,
+            planId: parseInt(planId, 10),
             amount: amountPaid,
-            type: 'SUBSCRIPTION',
-            method: 'STRIPE',
-            status: 'paid'
+            status: SubscriptionInvoiceStatus.paid,
+            stripeInvoiceId: session.invoice ? (session.invoice as string) : 'stripe_mock'
           }
         });
       }

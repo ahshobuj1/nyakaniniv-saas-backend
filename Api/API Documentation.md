@@ -600,7 +600,7 @@ This document contains the API endpoints for the project. You can use this to ma
     "totalAmount": 500.00
   }
   ```
-- **Description:** Accepts booking, generates an invoice, and returns a `checkoutUrl` for Stripe.
+- **Description:** Accepts booking, generates a booking payment, and returns a `checkoutUrl` for Stripe.
 - **Success Response:**
   - **Code:** 200
 
@@ -633,35 +633,63 @@ This document contains the API endpoints for the project. You can use this to ma
   - **Code:** 200
   - **Content:** Returns `isConnected`, `detailsSubmitted`, and `payoutsEnabled`.
 
-## 🧾 Invoice Module
+## 👥 Client Module
 
-### 1. Get My Invoices (DJ)
-- **URL:** `/invoices/v1/my-invoices`
+### 1. Get My Clients (DJ)
+- **URL:** `/clients/v1/`
 - **Method:** `GET`
-- **Description:** Returns both **Booking Invoices** and **Subscription Invoices** for the DJ. Subscription invoices are automatically generated when subscribing to a plan.
+- **Description:** Returns all clients that have booked the DJ (Mini-CRM).
 - **Headers:** `Authorization: Bearer <token>`
 - **Success Response:**
   - **Code:** 200
 
-### 2. Get All Invoices (Admin)
-- **URL:** `/invoices/v1/`
+### 2. Get Client Details (DJ)
+- **URL:** `/clients/v1/:id`
+- **Method:** `GET`
+- **Description:** Returns a specific client and their booking history.
+- **Headers:** `Authorization: Bearer <token>`
+- **Success Response:**
+  - **Code:** 200
+
+## 🧾 Subscription Invoice Module
+
+### 1. Get My Subscription Invoices (DJ)
+- **URL:** `/subscription-invoices/v1/my-invoices`
+- **Method:** `GET`
+- **Description:** Returns **Subscription Invoices** for the DJ. Subscription invoices are automatically generated when subscribing to a plan.
+- **Headers:** `Authorization: Bearer <token>`
+- **Success Response:**
+  - **Code:** 200
+
+### 2. Get All Subscription Invoices (Admin)
+- **URL:** `/subscription-invoices/v1/`
 - **Method:** `GET`
 - **Headers:** `Authorization: Bearer <token>`
 - **Success Response:**
   - **Code:** 200
 
-### 3. Pay Invoice (Public)
-- **URL:** `/invoices/v1/:id/pay`
+## 💳 Booking Payment Module
+
+### 1. Get My Booking Payments (DJ)
+- **URL:** `/booking-payments/v1/my-payments`
+- **Method:** `GET`
+- **Description:** Returns all **Booking Payments** requested or received by the DJ from their clients.
+- **Headers:** `Authorization: Bearer <token>`
+- **Success Response:**
+  - **Code:** 200
+
+### 2. Pay Booking (Public)
+- **URL:** `/booking-payments/v1/:id/pay`
 - **Method:** `POST`
-- **Description:** Returns Stripe Checkout URL to pay for the invoice.
+- **Description:** Returns Stripe Checkout URL to pay for the booking.
 - **Success Response:**
   - **Code:** 200
 
-### 4. Mark Invoice Paid (Cash)
-- **URL:** `/invoices/v1/:id/mark-paid`
+### 3. Mark Booking Paid (Cash)
+- **URL:** `/booking-payments/v1/:id/mark-paid`
 - **Method:** `PATCH`
 - **Headers:** `Authorization: Bearer <token>`
-- **Description:** DJ can mark an invoice as paid if paid in cash.
+- **Description:** DJ can mark a booking payment as paid if paid in cash.
 - **Success Response:**
   - **Code:** 200
 

@@ -1,4 +1,4 @@
-import { PrismaClient, BookingStatus, InvoiceType, InvoiceMethod, InvoicePaymentStatus, NotificationType } from '@/prisma/generated/client';
+import { PrismaClient, BookingStatus, BookingPaymentMethod, BookingPaymentStatus, NotificationType } from '@/prisma/generated/client';
 import Stripe from 'stripe';
 import { config } from '@/core/config';
 
@@ -26,14 +26,26 @@ export class BookingServices {
       throw new NotFoundError();
     }
 
+    let client = await this.prisma.client.findFirst({
+      where: { email: data.clientEmail, tenantId: data.tenantId }
+    });
+    if (!client) {
+      client = await this.prisma.client.create({
+        data: {
+          tenantId: data.tenantId,
+          name: data.clientName,
+          email: data.clientEmail,
+          phone: data.clientPhone
+        }
+      });
+    }
+
     const booking = await this.prisma.booking.create({
       data: {
         tenantId: data.tenantId,
-        clientName: data.clientName,
-        clientEmail: data.clientEmail,
+        clientId: client.id,
         eventType: data.eventType,
         eventDetails: data.eventDetails,
-        clientPhone: data.clientPhone,
         eventDate: data.eventDate ? new Date(data.eventDate) : undefined,
         address: data.address,
         status: BookingStatus.pending,
@@ -71,7 +83,8 @@ export class BookingServices {
 
     if (!bookingQuery.prismaArgs.select) {
       bookingQuery.prismaArgs.include = {
-        invoice: true,
+        payment: true,
+        client: true,
       };
     }
 
@@ -85,7 +98,7 @@ export class BookingServices {
     const tenantId = await this.getTenantIdByUserId(userId);
     const booking = await this.prisma.booking.findFirst({
       where: { id, tenantId },
-      include: { invoice: true },
+      include: { payment: true, client: true },
     });
 
     if (!booking) {
@@ -120,15 +133,14 @@ export class BookingServices {
           },
         });
 
-        // Create Invoice
-        const invoice = await tx.invoice.create({
+        // Create Payment
+        const payment = await tx.bookingPayment.create({
           data: {
             tenantId,
             bookingId: id,
             amount: data.totalAmount,
-            type: InvoiceType.BOOKING,
-            method: InvoiceMethod.STRIPE, // default to stripe, client pays online
-            status: InvoicePaymentStatus.unpaid,
+            method: BookingPaymentMethod.STRIPE, // default to stripe, client pays online
+            status: BookingPaymentStatus.unpaid,
           }
         });
 
@@ -162,7 +174,7 @@ export class BookingServices {
               },
             },
             metadata: {
-              invoiceId: invoice.id,
+              invoiceId: payment.id,
               bookingId: id,
             }
           });

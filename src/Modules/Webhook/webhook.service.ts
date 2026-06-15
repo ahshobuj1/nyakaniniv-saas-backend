@@ -1,4 +1,4 @@
-import { PrismaClient, InvoicePaymentStatus, BookingStatus, NotificationType } from '@/prisma/generated/client';
+import { PrismaClient, BookingPaymentStatus, BookingStatus, SubscriptionInvoiceStatus, NotificationType } from '@/prisma/generated/client';
 import { BadRequestError } from '@/core/errors/AppError';
 import Stripe from 'stripe';
 
@@ -63,19 +63,19 @@ export class WebhookServices {
       if (invoiceId) {
         // Run in transaction
         await this.prisma.$transaction(async (tx) => {
-          // Update Invoice Status
-          const invoice = await tx.invoice.update({
+          // Update Payment Status
+          const payment = await tx.bookingPayment.update({
             where: { id: invoiceId },
-            data: { status: InvoicePaymentStatus.paid },
-            include: { booking: true }
+            data: { status: BookingPaymentStatus.paid },
+            include: { booking: { include: { client: true } } }
           });
 
-          // Use bookingId from metadata OR fallback to the one attached to the invoice
-          const resolvedBookingId = bookingId || invoice.bookingId;
+          // Use bookingId from metadata OR fallback to the one attached to the payment
+          const resolvedBookingId = bookingId || payment.bookingId;
 
           // Update Booking Status
           if (resolvedBookingId) {
-            const booking = await tx.booking.findUnique({ where: { id: resolvedBookingId } });
+            const booking = await tx.booking.findUnique({ where: { id: resolvedBookingId }, include: { client: true } });
             if (booking && booking.status !== BookingStatus.completed) {
               await tx.booking.update({
                 where: { id: resolvedBookingId },
@@ -90,7 +90,7 @@ export class WebhookServices {
                     data: {
                       userId: tenant.userId as string,
                       title: 'Payment Received',
-                      message: `Payment received for booking ${booking.eventType} from ${booking.clientName}.`,
+                      message: `Payment received for booking ${booking.eventType} from ${booking.client?.name || 'Client'}.`,
                       type: NotificationType.payment
                     }
                   });
@@ -110,17 +110,17 @@ export class WebhookServices {
               planId: parseInt(planId, 10),
               stripeSubId: stripeSubId || 'one_time_sub', // If mode is not subscription
               status: 'active',
-              periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // approx
+              periodEnd: new Date(Date.now() + (session.metadata?.billingCycle === 'monthly' ? 30 : 365) * 24 * 60 * 60 * 1000)
             }
           });
 
-          await tx.invoice.create({
+          await tx.subscriptionInvoice.create({
             data: {
               userId,
+              planId: parseInt(planId, 10),
               amount: amountPaid,
-              type: 'SUBSCRIPTION',
-              method: 'STRIPE',
-              status: 'paid'
+              status: SubscriptionInvoiceStatus.paid,
+              stripeInvoiceId: session.invoice ? (session.invoice as string) : 'stripe_mock'
             }
           });
         });

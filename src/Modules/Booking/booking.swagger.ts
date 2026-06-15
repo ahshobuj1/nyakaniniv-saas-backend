@@ -16,15 +16,12 @@
  *               tenantId:
  *                 type: string
  *                 format: uuid
- *               clientName:
+ *               clientId:
  *                 type: string
- *               clientEmail:
- *                 type: string
+ *                 format: uuid
  *               eventType:
  *                 type: string
  *               eventDetails:
- *                 type: string
- *               clientPhone:
  *                 type: string
  *               eventDate:
  *                 type: string

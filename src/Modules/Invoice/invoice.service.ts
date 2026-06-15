@@ -1,4 +1,4 @@
-import { PrismaClient, InvoicePaymentStatus, InvoiceType } from '@/prisma/generated/client';
+import { PrismaClient, BookingPaymentStatus, SubscriptionInvoiceStatus } from '@/prisma/generated/client';
 import { NotFoundError, BadRequestError, AuthorizationError } from '@/core/errors/AppError';
 import Stripe from 'stripe';
 import { PayInvoiceDTO } from './InvoiceDTO';
@@ -25,106 +25,76 @@ export class InvoiceServices {
 
 
   async getMyInvoices(userId: string, query: Record<string, unknown> = {}) {
-    // DJ can see their subscription invoices and booking invoices for their tenant
     const tenantId = await this.getTenantIdByUserId(userId).catch(() => null);
 
-    const baseWhere = {
-      OR: [
-        { userId },
-        ...(tenantId ? [{ tenantId }] : [])
-      ]
-    };
+    const subscriptionInvoices = await this.prisma.subscriptionInvoice.findMany({
+      where: { userId }
+    });
 
-    const invoiceQuery = new QueryBuilder(this.prisma.invoice, query)
-      .search(['status', 'type'])
-      .filter()
-      .sort()
-      .pagination()
-      .fields();
+    const bookingPayments = tenantId ? await this.prisma.bookingPayment.findMany({
+      where: { tenantId },
+      include: { booking: { include: { client: true } } }
+    }) : [];
 
-    // Merge our base conditions with whatever QueryBuilder found
-    invoiceQuery.prismaArgs.where = {
-      ...invoiceQuery.prismaArgs.where,
-      ...baseWhere,
-    };
+    const invoices = [
+      ...subscriptionInvoices.map(s => ({ ...s, type: 'SUBSCRIPTION' })),
+      ...bookingPayments.map(b => ({ ...b, type: 'BOOKING' }))
+    ].sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
 
-    if (!invoiceQuery.prismaArgs.select) {
-      invoiceQuery.prismaArgs.include = {
-        booking: true,
-      };
-    }
-
-    const invoices = await invoiceQuery.model.findMany(invoiceQuery.prismaArgs);
-    const meta = await invoiceQuery.countTotal();
-
-    return { invoices, meta };
+    return { invoices, meta: { total: invoices.length, page: 1, limit: invoices.length, totalPages: 1, hasNext: false, hasPrevious: false } };
   }
 
   async getAllInvoices(query: Record<string, unknown> = {}) {
-    const invoiceQuery = new QueryBuilder(this.prisma.invoice, query)
-      .search(['status', 'type'])
-      .filter()
-      .sort()
-      .pagination()
-      .fields();
+    const subscriptionInvoices = await this.prisma.subscriptionInvoice.findMany({
+      include: { user: { select: { email: true, firstName: true, lastName: true } } }
+    });
 
-    if (!invoiceQuery.prismaArgs.select) {
-      invoiceQuery.prismaArgs.include = {
-        booking: true,
-        tenant: {
-          select: {
-            subdomain: true,
-            stageName: true,
-          }
-        },
-        user: {
-          select: {
-            email: true,
-            firstName: true,
-            lastName: true,
-          }
-        }
-      };
-    }
+    const bookingPayments = await this.prisma.bookingPayment.findMany({
+      include: { 
+        booking: { include: { client: true } }, 
+        tenant: { select: { subdomain: true, stageName: true } } 
+      }
+    });
 
-    const invoices = await invoiceQuery.model.findMany(invoiceQuery.prismaArgs);
-    const meta = await invoiceQuery.countTotal();
+    const invoices = [
+      ...subscriptionInvoices.map(s => ({ ...s, type: 'SUBSCRIPTION' })),
+      ...bookingPayments.map(b => ({ ...b, type: 'BOOKING' }))
+    ].sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
 
-    return { invoices, meta };
+    return { invoices, meta: { total: invoices.length, page: 1, limit: invoices.length, totalPages: 1, hasNext: false, hasPrevious: false } };
   }
 
   async markAsPaid(userId: string, id: string) {
     const tenantId = await this.getTenantIdByUserId(userId);
-    const invoice = await this.prisma.invoice.findFirst({
+    const payment = await this.prisma.bookingPayment.findFirst({
       where: { id, tenantId },
     });
 
-    if (!invoice) {
+    if (!payment) {
       throw new NotFoundError();
     }
 
-    return this.prisma.invoice.update({
+    return this.prisma.bookingPayment.update({
       where: { id },
-      data: { status: InvoicePaymentStatus.paid },
+      data: { status: BookingPaymentStatus.paid },
     });
   }
 
   async payInvoice(id: string, data: PayInvoiceDTO) {
-    const invoice = await this.prisma.invoice.findUnique({
+    const payment = await this.prisma.bookingPayment.findUnique({
       where: { id },
-      include: { booking: true }
+      include: { booking: { include: { client: true } } }
     });
 
-    if (!invoice) {
+    if (!payment) {
       throw new NotFoundError();
     }
 
-    if (invoice.status === InvoicePaymentStatus.paid) {
+    if (payment.status === BookingPaymentStatus.paid) {
       throw new BadRequestError();
     }
 
-    if (!this.stripe || !invoice.amount) {
-      // Mock logic
+    if (!this.stripe || !payment.amount) {
       return { url: 'http://localhost:3000/payment-mock' };
     }
 
@@ -134,9 +104,9 @@ export class InvoiceServices {
         price_data: {
           currency: 'usd',
           product_data: {
-            name: invoice.type === InvoiceType.BOOKING ? `Booking for ${invoice.booking?.clientName}` : 'Subscription',
+            name: `Booking for ${payment.booking?.client?.name || 'Client'}`,
           },
-          unit_amount: Math.round(Number(invoice.amount) * 100), // Stripe expects cents
+          unit_amount: Math.round(Number(payment.amount) * 100), // Stripe expects cents
         },
         quantity: 1,
       }],
@@ -144,8 +114,8 @@ export class InvoiceServices {
       success_url: data.successUrl || `${process.env.FRONTEND_URL}/payment/success?invoice_id=${id}`,
       cancel_url: data.cancelUrl || `${process.env.FRONTEND_URL}/payment/cancel`,
       metadata: {
-        invoiceId: invoice.id,
-        ...(invoice.bookingId && { bookingId: invoice.bookingId }),
+        invoiceId: payment.id,
+        ...(payment.bookingId && { bookingId: payment.bookingId }),
       }
     });
 
