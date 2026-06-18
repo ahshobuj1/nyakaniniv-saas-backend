@@ -71,7 +71,7 @@ export class BookingServices {
       });
 
       if (tenant.user && tenant.user.email) {
-        await this.emailProvider.sendEmail(
+        this.emailProvider.sendEmail(
           tenant.user.email,
           "New Booking Request Alert - UpbeatAfrica",
           EmailTemplates.getNewBookingAlertTemplate(data.clientName, data.eventType || "Event", data.eventDate || new Date().toISOString())
@@ -80,7 +80,7 @@ export class BookingServices {
     }
 
     // Auto-reply to Client
-    await this.emailProvider.sendEmail(
+    this.emailProvider.sendEmail(
       data.clientEmail,
       "Booking Request Received - UpbeatAfrica",
       EmailTemplates.getBookingAutoReplyTemplate(tenant.stageName || tenant.user?.firstName || "DJ", data.eventType || "Event")
@@ -175,7 +175,7 @@ export class BookingServices {
       const requestCashUrl = `${config.apiUrl}/bookings/v1/${id}/request-cash-redirect`;
 
       if (booking.client?.email) {
-        await this.emailProvider.sendEmail(
+        this.emailProvider.sendEmail(
           booking.client.email,
           "Booking Request Accepted! - UpbeatAfrica",
           EmailTemplates.getBookingAcceptedTemplate(
@@ -200,7 +200,7 @@ export class BookingServices {
     });
 
     if ((data.status as any) === 'canceled' && booking.client?.email) {
-      await this.emailProvider.sendEmail(
+      this.emailProvider.sendEmail(
         booking.client.email,
         "Booking Canceled - UpbeatAfrica",
         EmailTemplates.getBookingRejectedTemplate(
@@ -210,7 +210,7 @@ export class BookingServices {
       );
     } else if (booking.client?.email) {
       // If just a regular update (not canceled, not accepted), consider it an update email
-      await this.emailProvider.sendEmail(
+      this.emailProvider.sendEmail(
         booking.client.email,
         "Booking Details Updated - UpbeatAfrica",
         EmailTemplates.getBookingUpdatedTemplate(
@@ -313,7 +313,7 @@ export class BookingServices {
       });
 
       if (booking.tenant.user?.email) {
-        await this.emailProvider.sendEmail(
+        this.emailProvider.sendEmail(
           booking.tenant.user.email,
           "Cash Payment Requested - UpbeatAfrica",
           `
@@ -343,7 +343,7 @@ export class BookingServices {
 
     if (booking.client?.email) {
       const checkoutRedirectUrl = `${config.apiUrl}/bookings/v1/${id}/checkout-redirect`;
-      await this.emailProvider.sendEmail(
+      this.emailProvider.sendEmail(
         booking.client.email,
         "Reminder: Payment Required for your Booking - UpbeatAfrica",
         EmailTemplates.getPaymentReminderTemplate(
