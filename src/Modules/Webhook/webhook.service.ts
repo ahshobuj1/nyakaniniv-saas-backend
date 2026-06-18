@@ -67,20 +67,26 @@ export class WebhookServices {
       const amountPaid = (session.amount_total || 0) / 100;
 
       // 1. Handle Booking Payments
-      if (invoiceId) {
-        // Run in transaction
-        await this.prisma.$transaction(async (tx) => {
-          // Update Payment Status
-          const payment = await tx.bookingPayment.update({
-            where: { id: invoiceId },
-            data: { status: BookingPaymentStatus.paid },
-            include: { booking: { include: { client: true } } }
-          });
+      if (invoiceId || bookingId) {
+        const txResult = await this.prisma.$transaction(async (tx) => {
+          let djEmail = null;
+          let clientEmail = null;
+          let djName = "DJ";
+          let eventType = "Event";
+          let clientName = "Client";
+          let eventDate = new Date().toISOString();
+          let resolvedBookingId = bookingId;
 
-          // Use bookingId from metadata OR fallback to the one attached to the payment
-          const resolvedBookingId = bookingId || payment.bookingId;
+          const payment = await tx.bookingPayment.findUnique({ where: { id: invoiceId || '' } });
+          if (payment) {
+            await tx.bookingPayment.update({
+              where: { id: payment.id },
+              data: { status: BookingPaymentStatus.paid }
+            });
+          }
 
-          // Update Booking Status
+          resolvedBookingId = resolvedBookingId || payment?.bookingId;
+
           if (resolvedBookingId) {
             const booking = await tx.booking.findUnique({ where: { id: resolvedBookingId }, include: { client: true } });
             if (booking && booking.status !== BookingStatus.completed) {
@@ -89,40 +95,56 @@ export class WebhookServices {
                 data: { status: BookingStatus.completed }
               });
 
-              // Notify DJ via Email & DB Notification
+              eventType = booking.eventType || "Event";
+              clientName = booking.client?.name || "Client";
+              clientEmail = booking.client?.email || null;
+              eventDate = booking.eventDate?.toISOString() || new Date().toISOString();
+
               if (booking.tenantId) {
                 const tenant = await tx.tenant.findUnique({ where: { id: booking.tenantId }, include: { user: true } });
-                if (tenant && tenant.user) {
-                  await tx.notification.create({
-                    data: {
-                      userId: tenant.user.id,
-                      title: 'Payment Received',
-                      message: `Payment received for booking ${booking.eventType} from ${booking.client?.name || 'Client'}.`,
-                      type: NotificationType.payment
-                    }
-                  });
-
-                  if (tenant.user.email) {
-                    await this.emailProvider.sendEmail(
-                      tenant.user.email,
-                      "Payment Received! 💰 - UpbeatAfrica",
-                      EmailTemplates.getPaymentReceivedAlertTemplate(booking.client?.name || "Client", amountPaid)
-                    );
+                if (tenant) {
+                  djName = tenant.stageName || tenant.user?.firstName || "DJ";
+                  if (tenant.user) {
+                    djEmail = tenant.user.email;
+                    await tx.notification.create({
+                      data: {
+                        userId: tenant.user.id,
+                        title: 'Payment Received',
+                        message: `Payment received for booking ${eventType} from ${clientName}.`,
+                        type: NotificationType.payment
+                      }
+                    });
                   }
                 }
               }
-
-              // Send Receipt to Client
-              if (booking.client && booking.client.email) {
-                await this.emailProvider.sendEmail(
-                  booking.client.email,
-                  "Payment Receipt - UpbeatAfrica",
-                  EmailTemplates.getPaymentReceiptTemplate(amountPaid, booking.eventType || "Event")
-                );
-              }
             }
           }
+          return { djEmail, clientEmail, djName, eventType, clientName, eventDate, resolvedBookingId };
         });
+
+        // Send Emails outside transaction
+        if (txResult.djEmail) {
+          await this.emailProvider.sendEmail(
+            txResult.djEmail,
+            "Payment Received! 💰 - UpbeatAfrica",
+            EmailTemplates.getPaymentReceivedAlertTemplate(txResult.clientName, amountPaid)
+          );
+        }
+
+        if (txResult.clientEmail && txResult.resolvedBookingId) {
+          await this.emailProvider.sendEmail(
+            txResult.clientEmail,
+            "Payment Receipt - UpbeatAfrica",
+            EmailTemplates.getPaymentReceiptTemplate(
+              amountPaid, 
+              txResult.eventType,
+              txResult.djName,
+              txResult.eventDate,
+              "Stripe / Credit Card",
+              txResult.resolvedBookingId
+            )
+          );
+        }
       }
 
       // 2. Handle Subscription Payments

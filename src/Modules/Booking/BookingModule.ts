@@ -74,5 +74,23 @@ export class BookingModule extends BaseModule {
       "/:id/payment-link",
       controller.getPaymentLink.bind(controller),
     );
+
+    // Client/Public route to automatically redirect to checkout
+    this.router.get(
+      "/:id/checkout-redirect",
+      controller.checkoutRedirect.bind(controller),
+    );
+
+    // Client/Public route to request cash payment
+    this.router.patch(
+      "/:id/request-cash",
+      controller.requestCashPayment.bind(controller),
+    );
+
+    // Client/Public route to request cash payment via email button (redirects to success page)
+    this.router.get(
+      "/:id/request-cash-redirect",
+      controller.requestCashRedirect.bind(controller),
+    );
   }
 }

@@ -142,3 +142,23 @@
  *       400:
  *         description: Booking is not in a state waiting for payment
  */
+
+/**
+ * @swagger
+ * /bookings/v1/{id}/request-cash:
+ *   patch:
+ *     summary: Request to pay a booking with Cash (Public)
+ *     tags: [Booking]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Cash payment requested successfully
+ *       400:
+ *         description: Booking is not ready for payment or already paid
+ */

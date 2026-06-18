@@ -77,6 +77,7 @@ export const config = {
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
   },
   clientUrl: process.env.CLIENT_URL || "http://localhost:3000",
+  apiUrl: process.env.API_URL || `http://localhost:${process.env.PORT || 3030}`,
   smtp: {
     host: process.env.SMTP_HOST || "sandbox.smtp.mailtrap.io",
     port: parseInt(process.env.SMTP_PORT || "2525"),

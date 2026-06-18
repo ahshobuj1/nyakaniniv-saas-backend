@@ -1,13 +1,18 @@
-import { PrismaClient, BookingPaymentStatus, SubscriptionInvoiceStatus } from '@/prisma/generated/client';
+import { PrismaClient, BookingPaymentStatus, SubscriptionInvoiceStatus, BookingStatus, NotificationType, BookingPaymentMethod } from '@/prisma/generated/client';
 import { NotFoundError, BadRequestError, AuthorizationError } from '@/core/errors/AppError';
 import Stripe from 'stripe';
 import { PayInvoiceDTO } from './InvoiceDTO';
 import { QueryBuilder } from '@/utils/QueryBuilder';
+import { IEmailProvider } from '@/providers/EmailProvider';
+import { EmailTemplates } from '@/utils/EmailTemplates';
 
 export class InvoiceServices {
   private stripe: any = null;
 
-  constructor(private prisma: PrismaClient) {
+  constructor(
+    private prisma: PrismaClient,
+    private emailProvider: IEmailProvider
+  ) {
     if (process.env.STRIPE_SECRET_KEY) {
       this.stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
         apiVersion: "2024-04-10" as any,
@@ -68,16 +73,51 @@ export class InvoiceServices {
     const tenantId = await this.getTenantIdByUserId(userId);
     const payment = await this.prisma.bookingPayment.findFirst({
       where: { id, tenantId },
+      include: { booking: { include: { client: true } }, tenant: { include: { user: true } } }
     });
 
     if (!payment) {
       throw new NotFoundError();
     }
 
-    return this.prisma.bookingPayment.update({
-      where: { id },
-      data: { status: BookingPaymentStatus.paid },
+    if (payment.status === BookingPaymentStatus.paid) {
+      return payment;
+    }
+
+    const txResult = await this.prisma.$transaction(async (tx) => {
+      const updatedPayment = await tx.bookingPayment.update({
+        where: { id },
+        data: { status: BookingPaymentStatus.paid },
+      });
+
+      if (payment.bookingId) {
+        await tx.booking.update({
+          where: { id: payment.bookingId },
+          data: { status: BookingStatus.completed }
+        });
+      }
+
+      return updatedPayment;
     });
+
+    // Send Email Receipt to Client
+    if (payment.bookingId && payment.booking?.client?.email && payment.amount) {
+      const djName = payment.tenant?.stageName || payment.tenant?.user?.firstName || "DJ";
+      await this.emailProvider.sendEmail(
+        payment.booking.client.email,
+        "Payment Receipt - UpbeatAfrica",
+        EmailTemplates.getPaymentReceiptTemplate(
+          Number(payment.amount), 
+          payment.booking.eventType || "Event",
+          djName,
+          payment.booking.eventDate?.toISOString() || new Date().toISOString(),
+          payment.method === BookingPaymentMethod.CASH ? "Cash" : "Stripe / Credit Card",
+          payment.bookingId
+        )
+      );
+    }
+
+    return txResult;
   }
 
   async payInvoice(id: string, data: PayInvoiceDTO) {

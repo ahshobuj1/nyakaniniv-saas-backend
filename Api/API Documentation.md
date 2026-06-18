@@ -604,6 +604,13 @@ This document contains the API endpoints for the project. You can use this to ma
 - **Success Response:**
   - **Code:** 200
 
+### 4. Request Cash Payment (Public)
+- **URL:** `/bookings/v1/:id/request-cash`
+- **Method:** `PATCH`
+- **Description:** Client can request to pay a booking with Cash if they do not have a card. Sets the payment method to CASH and notifies the DJ.
+- **Success Response:**
+  - **Code:** 200
+
 ---
 
 ## 🔗 Stripe Connect Module
@@ -668,28 +675,28 @@ This document contains the API endpoints for the project. You can use this to ma
 - **Success Response:**
   - **Code:** 200
 
-## 💳 Booking Payment Module
+## 💳 Invoice Module (Payments)
 
-### 1. Get My Booking Payments (DJ)
-- **URL:** `/booking-payments/v1/my-payments`
+### 1. Get My Booking Payments/Invoices (DJ)
+- **URL:** `/invoices/v1/my-invoices`
 - **Method:** `GET`
-- **Description:** Returns all **Booking Payments** requested or received by the DJ from their clients.
+- **Description:** Returns all **Invoices & Booking Payments** requested or received by the DJ from their clients.
 - **Headers:** `Authorization: Bearer <token>`
 - **Success Response:**
   - **Code:** 200
 
 ### 2. Pay Booking (Public)
-- **URL:** `/booking-payments/v1/:id/pay`
+- **URL:** `/invoices/v1/:id/pay`
 - **Method:** `POST`
 - **Description:** Returns Stripe Checkout URL to pay for the booking.
 - **Success Response:**
   - **Code:** 200
 
 ### 3. Mark Booking Paid (Cash)
-- **URL:** `/booking-payments/v1/:id/mark-paid`
+- **URL:** `/invoices/v1/:id/mark-paid`
 - **Method:** `PATCH`
 - **Headers:** `Authorization: Bearer <token>`
-- **Description:** DJ can mark a booking payment as paid if paid in cash.
+- **Description:** DJ can mark a booking payment as paid if paid in cash. This completes the booking and emails the payment receipt to the client.
 - **Success Response:**
   - **Code:** 200
 

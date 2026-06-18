@@ -148,7 +148,7 @@ export class BookingServices {
       }
 
       // Perform in transaction
-      return this.prisma.$transaction(async (tx) => {
+      const txResult = await this.prisma.$transaction(async (tx) => {
         const updatedBooking = await tx.booking.update({
           where: { id },
           data: {
@@ -168,24 +168,26 @@ export class BookingServices {
           }
         });
 
-        const tenantInfo = await tx.tenant.findUnique({ where: { id: tenantId } });
-
-        const platformInvoiceUrl = `https://${tenantInfo?.subdomain}.upbeatafrica.com/booking/${id}`;
-
-        if (booking.client?.email) {
-          await this.emailProvider.sendEmail(
-            booking.client.email,
-            "Booking Request Accepted! - UpbeatAfrica",
-            EmailTemplates.getBookingAcceptedTemplate(
-              booking.tenant?.stageName || booking.tenant?.user?.firstName || "DJ",
-              updatedBooking.eventType || "Event",
-              platformInvoiceUrl
-            )
-          );
-        }
-
-        return { ...updatedBooking, paymentId: payment.id };
+        return { updatedBooking, paymentId: payment.id };
       });
+
+      const checkoutRedirectUrl = `${config.apiUrl}/bookings/v1/${id}/checkout-redirect`;
+      const requestCashUrl = `${config.apiUrl}/bookings/v1/${id}/request-cash-redirect`;
+
+      if (booking.client?.email) {
+        await this.emailProvider.sendEmail(
+          booking.client.email,
+          "Booking Request Accepted! - UpbeatAfrica",
+          EmailTemplates.getBookingAcceptedTemplate(
+            booking.tenant?.stageName || booking.tenant?.user?.firstName || "DJ",
+            txResult.updatedBooking.eventType || "Event",
+            checkoutRedirectUrl,
+            requestCashUrl
+          )
+        );
+      }
+
+      return { ...txResult.updatedBooking, paymentId: txResult.paymentId };
     }
 
     // Otherwise just update status
@@ -275,6 +277,59 @@ export class BookingServices {
     return { checkoutUrl: session.url };
   }
 
+  async requestCashPayment(id: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id },
+      include: { payment: true, tenant: { include: { user: true } }, client: true }
+    });
+
+    if (!booking || booking.status !== BookingStatus.accepted) {
+      throw new BadRequestError('Booking is not ready for payment');
+    }
+
+    if (booking.payment && booking.payment.status === BookingPaymentStatus.paid) {
+      throw new BadRequestError('Booking is already paid');
+    }
+
+    if (!booking.payment) {
+      throw new BadRequestError('Payment record not found');
+    }
+
+    // Update payment method to CASH
+    await this.prisma.bookingPayment.update({
+      where: { id: booking.payment.id },
+      data: { method: BookingPaymentMethod.CASH }
+    });
+
+    // Notify DJ that client requested cash payment
+    if (booking.tenant?.userId) {
+      await this.prisma.notification.create({
+        data: {
+          userId: booking.tenant.userId,
+          title: 'Cash Payment Requested',
+          message: `${booking.client?.name || 'Client'} has requested to pay by cash for the ${booking.eventType} booking.`,
+          type: NotificationType.system
+        }
+      });
+
+      if (booking.tenant.user?.email) {
+        await this.emailProvider.sendEmail(
+          booking.tenant.user.email,
+          "Cash Payment Requested - UpbeatAfrica",
+          `
+            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+              <h2 style="color: #ffc107; border-bottom: 2px solid #eee; padding-bottom: 10px;">Cash Payment Requested</h2>
+              <p><strong>${booking.client?.name || 'Client'}</strong> has requested to pay by cash for their <strong>${booking.eventType}</strong> booking.</p>
+              <p>You can mark this booking as paid from your dashboard once you receive the cash payment.</p>
+            </div>
+          `
+        );
+      }
+    }
+
+    return { success: true, message: 'Cash payment requested successfully' };
+  }
+
   async resendPaymentReminder(userId: string, id: string) {
     const tenantId = await this.getTenantIdByUserId(userId);
     const booking = await this.prisma.booking.findFirst({
@@ -287,14 +342,14 @@ export class BookingServices {
     }
 
     if (booking.client?.email) {
-      const platformInvoiceUrl = `https://${booking.tenant?.subdomain}.upbeatafrica.com/booking/${id}`;
+      const checkoutRedirectUrl = `${config.apiUrl}/bookings/v1/${id}/checkout-redirect`;
       await this.emailProvider.sendEmail(
         booking.client.email,
         "Reminder: Payment Required for your Booking - UpbeatAfrica",
         EmailTemplates.getPaymentReminderTemplate(
           booking.tenant?.stageName || booking.tenant?.user?.firstName || "DJ",
           booking.eventType || "Event",
-          platformInvoiceUrl
+          checkoutRedirectUrl
         )
       );
     }

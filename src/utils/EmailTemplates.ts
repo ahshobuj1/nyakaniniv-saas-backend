@@ -45,13 +45,17 @@ export class EmailTemplates {
     `;
   }
 
-  static getBookingAcceptedTemplate(djName: string, eventType: string, paymentUrl: string): string {
+  static getBookingAcceptedTemplate(djName: string, eventType: string, paymentUrl: string, requestCashUrl: string): string {
     return `
-      <h2>Booking Request Accepted! 🎉</h2>
-      <p>Great news! <strong>${djName}</strong> has accepted your booking request for a ${eventType}.</p>
-      <p>To finalize the booking and secure the date, please view your invoice and complete your payment using the link below:</p>
-      <br/>
-      <a href="${paymentUrl}" style="display:inline-block; padding:12px 24px; background-color:#28a745; color:#fff; text-decoration:none; border-radius:5px;">View Invoice & Pay</a>
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+        <h2 style="color: #28a745; border-bottom: 2px solid #eee; padding-bottom: 10px;">Booking Request Accepted! 🎉</h2>
+        <p>Great news! <strong>${djName}</strong> has accepted your booking request for a ${eventType}.</p>
+        <p>To finalize the booking and secure the date, please complete your payment using the link below:</p>
+        <div style="margin-top: 20px;">
+          <a href="${paymentUrl}" style="display:inline-block; padding:12px 24px; background-color:#28a745; color:#fff; text-decoration:none; border-radius:5px; margin-right: 10px;">Pay Now</a>
+          <a href="${requestCashUrl}" style="display:inline-block; padding:12px 24px; background-color:#ffc107; color:#000; text-decoration:none; border-radius:5px;">Request Cash on Payment</a>
+        </div>
+      </div>
     `;
   }
 
@@ -71,11 +75,49 @@ export class EmailTemplates {
     `;
   }
 
-  static getPaymentReceiptTemplate(amount: number, eventType: string): string {
+  static getPaymentReceiptTemplate(
+    amount: number,
+    eventType: string,
+    djName: string,
+    date: string,
+    paymentMethod: string,
+    bookingId: string
+  ): string {
     return `
-      <h2>Payment Receipt</h2>
-      <p>Thank you! Your payment of <strong>$${amount}</strong> for the ${eventType} has been successfully processed.</p>
-      <p>Your booking is completely secured.</p>
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+        <h2 style="color: #28a745; border-bottom: 2px solid #eee; padding-bottom: 10px;">Payment Receipt</h2>
+        <p>Thank you! Your payment for the booking has been successfully processed.</p>
+        <p>Your booking is completely secured. Below are the details of your payment and event.</p>
+        
+        <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>Amount Paid:</strong></td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;">$${amount.toFixed(2)}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>Payment Method:</strong></td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;">${paymentMethod}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>DJ Name:</strong></td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;">${djName}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>Event Type:</strong></td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;">${eventType}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>Event Date:</strong></td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;">${new Date(date).toLocaleString()}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>Booking ID:</strong></td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;"><span style="font-size: 0.9em; color: #666;">${bookingId}</span></td>
+          </tr>
+        </table>
+        
+        <p style="margin-top: 30px; font-size: 0.9em; color: #777;">Please keep this email as proof of your payment.</p>
+      </div>
     `;
   }
 
@@ -198,7 +240,7 @@ export class EmailTemplates {
       <p>This is a friendly reminder from <strong>${djName}</strong> regarding your ${eventType} booking.</p>
       <p>Your payment is still pending. Please complete the payment to fully secure your event date.</p>
       <br/>
-      <a href="${paymentUrl}" style="display:inline-block; padding:12px 24px; background-color:#ffc107; color:#000; text-decoration:none; border-radius:5px;">View Invoice & Pay</a>
+      <a href="${paymentUrl}" style="display:inline-block; padding:12px 24px; background-color:#ffc107; color:#000; text-decoration:none; border-radius:5px;">Pay Now</a>
       <p>If you have any questions, please contact the DJ.</p>
     `;
   }
