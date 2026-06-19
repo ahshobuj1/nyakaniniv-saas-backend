@@ -103,7 +103,7 @@ export class InvoiceServices {
     // Send Email Receipt to Client
     if (payment.bookingId && payment.booking?.client?.email && payment.amount) {
       const djName = payment.tenant?.stageName || payment.tenant?.user?.firstName || "DJ";
-      await this.emailProvider.sendEmail(
+      this.emailProvider.sendEmail(
         payment.booking.client.email,
         "Payment Receipt - UpbeatAfrica",
         EmailTemplates.getPaymentReceiptTemplate(

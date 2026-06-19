@@ -52,7 +52,8 @@ export class AuthServices {
     });
 
     // Send Email
-    await this.emailProvider.sendEmail(
+    //  this.emailProvider.sendEmail
+    this.emailProvider.sendEmail(
       email,
       "Verify Your Email - UpbeatAfrica",
       EmailTemplates.getOtpTemplate(otp)
@@ -91,7 +92,7 @@ export class AuthServices {
     const token = generateToken({ id: updatedUser.id, email: updatedUser.email, role: updatedUser.role });
 
     // Send Welcome Email
-    await this.emailProvider.sendEmail(
+    this.emailProvider.sendEmail(
       updatedUser.email,
       "Welcome to Nyakaniniv!",
       EmailTemplates.getWelcomeTemplate(updatedUser.firstName || "DJ")
@@ -125,7 +126,7 @@ export class AuthServices {
     });
 
     // Send Email
-    await this.emailProvider.sendEmail(
+    this.emailProvider.sendEmail(
       email,
       "Your New Verification Code - UpbeatAfrica",
       EmailTemplates.getOtpTemplate(otp)
@@ -173,7 +174,7 @@ export class AuthServices {
     });
 
     // Send Email
-    await this.emailProvider.sendEmail(
+    this.emailProvider.sendEmail(
       email,
       "Password Reset Request - UpbeatAfrica",
       EmailTemplates.getPasswordResetTemplate(`http://localhost:3000/auth/reset-password?otp=${otp}&email=${encodeURIComponent(email)}`)

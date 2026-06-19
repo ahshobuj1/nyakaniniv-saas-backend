@@ -124,7 +124,7 @@ export class WebhookServices {
 
         // Send Emails outside transaction
         if (txResult.djEmail) {
-          await this.emailProvider.sendEmail(
+          this.emailProvider.sendEmail(
             txResult.djEmail,
             "Payment Received! 💰 - UpbeatAfrica",
             EmailTemplates.getPaymentReceivedAlertTemplate(txResult.clientName, amountPaid)
@@ -132,7 +132,7 @@ export class WebhookServices {
         }
 
         if (txResult.clientEmail && txResult.resolvedBookingId) {
-          await this.emailProvider.sendEmail(
+          this.emailProvider.sendEmail(
             txResult.clientEmail,
             "Payment Receipt - UpbeatAfrica",
             EmailTemplates.getPaymentReceiptTemplate(
@@ -176,13 +176,13 @@ export class WebhookServices {
         if (user && user.email) {
           const nextBilling = new Date(Date.now() + (session.metadata?.billingCycle === 'monthly' ? 30 : 365) * 24 * 60 * 60 * 1000).toISOString();
           
-          await this.emailProvider.sendEmail(
+          this.emailProvider.sendEmail(
             user.email,
             "Subscription Activated 🚀 - UpbeatAfrica",
             EmailTemplates.getSubscriptionActivatedTemplate(`Plan ${planId}`, nextBilling)
           );
 
-          await this.emailProvider.sendEmail(
+          this.emailProvider.sendEmail(
             config.defaultAdmin?.email || "admin@upbeatafrica.com",
             "New Subscription Alert 💸 - UpbeatAfrica",
             EmailTemplates.getNewSubscriptionAdminAlertTemplate(user.email, parseInt(planId, 10))
@@ -203,7 +203,7 @@ export class WebhookServices {
         });
 
         if (sub.user && sub.user.email) {
-          await this.emailProvider.sendEmail(
+          this.emailProvider.sendEmail(
             sub.user.email,
             "Subscription Canceled - UpbeatAfrica",
             EmailTemplates.getSubscriptionCanceledTemplate()
@@ -219,7 +219,7 @@ export class WebhookServices {
       });
 
       if (sub && sub.user && sub.user.email) {
-        await this.emailProvider.sendEmail(
+        this.emailProvider.sendEmail(
           sub.user.email,
           "Payment Failed ⚠️ - UpbeatAfrica",
           EmailTemplates.getPaymentFailedTemplate()

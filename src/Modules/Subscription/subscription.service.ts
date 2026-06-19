@@ -182,7 +182,7 @@ export class SubscriptionServices {
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (user && user.email) {
-      await this.emailProvider.sendEmail(
+      this.emailProvider.sendEmail(
         user.email,
         "Subscription Canceled - UpbeatAfrica",
         EmailTemplates.getSubscriptionCanceledTemplate()

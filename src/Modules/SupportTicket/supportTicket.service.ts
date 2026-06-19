@@ -25,7 +25,7 @@ export class SupportTicketServices {
     });
 
     // Alert Admin
-    await this.emailProvider.sendEmail(
+    this.emailProvider.sendEmail(
       config.defaultAdmin.email || "admin@upbeatafrica.com",
       `New Support Ticket: ${data.subject}`,
       EmailTemplates.getNewSupportTicketAdminAlertTemplate(data.fullName, data.subject, data.issue)
@@ -33,7 +33,7 @@ export class SupportTicketServices {
 
     // Auto-reply to User
     if (data.email) {
-      await this.emailProvider.sendEmail(
+      this.emailProvider.sendEmail(
         data.email,
         "Support Ticket Received - UpbeatAfrica",
         EmailTemplates.getSupportTicketReceivedTemplate(data.subject)
@@ -97,7 +97,7 @@ export class SupportTicketServices {
     });
 
     if (data.status === TicketStatus.resolved && updated.email) {
-      await this.emailProvider.sendEmail(
+      this.emailProvider.sendEmail(
         updated.email,
         "Support Ticket Resolved ✅ - UpbeatAfrica",
         EmailTemplates.getSupportTicketResolvedTemplate(updated.subject || "Your Ticket")

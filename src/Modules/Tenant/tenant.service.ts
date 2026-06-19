@@ -54,7 +54,7 @@ export class TenantServices {
 
     if (newTenant.user && newTenant.user.email) {
       const url = `https://${newTenant.subdomain}.upbeatafrica.com`;
-      await this.emailProvider.sendEmail(
+      this.emailProvider.sendEmail(
         newTenant.user.email,
         "Your Portfolio is Live! 🌐 - UpbeatAfrica",
         EmailTemplates.getPortfolioLiveTemplate(url)

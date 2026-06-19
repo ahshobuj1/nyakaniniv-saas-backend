@@ -54,7 +54,7 @@ export class EmailCronJobs {
 
     for (const booking of upcomingBookings) {
       if (booking.client?.email) {
-        await this.emailProvider.sendEmail(
+        this.emailProvider.sendEmail(
           booking.client.email,
           "Upcoming Event Reminder 📅 - UpbeatAfrica",
           EmailTemplates.getUpcomingEventReminderTemplate(
@@ -66,7 +66,7 @@ export class EmailCronJobs {
       }
 
       if (booking.tenant?.user?.email) {
-        await this.emailProvider.sendEmail(
+        this.emailProvider.sendEmail(
           booking.tenant.user.email,
           "Upcoming Event Reminder 📅 - UpbeatAfrica",
           EmailTemplates.getUpcomingEventReminderTemplate(
@@ -102,7 +102,7 @@ export class EmailCronJobs {
 
     for (const sub of expiringSubscriptions) {
       if (sub.user?.email) {
-        await this.emailProvider.sendEmail(
+        this.emailProvider.sendEmail(
           sub.user.email,
           "Subscription Expiring Soon! ⚠️ - UpbeatAfrica",
           EmailTemplates.getSubscriptionExpiryWarningTemplate(3)
