@@ -658,29 +658,20 @@ This document contains the API endpoints for the project. You can use this to ma
 - **Success Response:**
   - **Code:** 200
 
-## 🧾 Subscription Invoice Module
+## 💳 Unified Invoice Module (Payments & Subscriptions)
 
-### 1. Get My Subscription Invoices (DJ)
-- **URL:** `/subscription-invoices/v1/my-invoices`
+### 1. Get All Invoices (Admin)
+- **URL:** `/invoices/v1/all`
 - **Method:** `GET`
-- **Description:** Returns **Subscription Invoices** for the DJ. Subscription invoices are automatically generated when subscribing to a plan.
+- **Description:** Returns all Subscription Invoices and Booking Payments across the platform.
 - **Headers:** `Authorization: Bearer <token>`
 - **Success Response:**
   - **Code:** 200
 
-### 2. Get All Subscription Invoices (Admin)
-- **URL:** `/subscription-invoices/v1/`
-- **Method:** `GET`
-- **Headers:** `Authorization: Bearer <token>`
-- **Success Response:**
-  - **Code:** 200
-
-## 💳 Invoice Module (Payments)
-
-### 1. Get My Booking Payments/Invoices (DJ)
+### 2. Get My Invoices (DJ)
 - **URL:** `/invoices/v1/my-invoices`
 - **Method:** `GET`
-- **Description:** Returns all **Invoices & Booking Payments** requested or received by the DJ from their clients.
+- **Description:** Returns both Subscription Invoices (from the platform) and Booking Payments (from clients) for the authenticated DJ.
 - **Headers:** `Authorization: Bearer <token>`
 - **Success Response:**
   - **Code:** 200

@@ -2,7 +2,7 @@
 
 /**
  * @swagger
- * /subscription-invoices/v1/all:
+ * /invoices/v1/all:
  *   get:
  *     summary: Get all subscription invoices (Admin only)
  *     tags: [SubscriptionInvoice]
@@ -15,7 +15,7 @@
 
 /**
  * @swagger
- * /subscription-invoices/v1/my-invoices:
+ * /invoices/v1/my-invoices:
  *   get:
  *     summary: Get all subscription invoices for the authenticated DJ
  *     tags: [SubscriptionInvoice]
@@ -28,7 +28,7 @@
 
 /**
  * @swagger
- * /booking-payments/v1/{id}/pay:
+ * /invoices/v1/{id}/pay:
  *   post:
  *     summary: Pay a booking payment (Stripe Checkout)
  *     tags: [BookingPayment]
@@ -57,7 +57,7 @@
 
 /**
  * @swagger
- * /booking-payments/v1/{id}/mark-paid:
+ * /invoices/v1/{id}/mark-paid:
  *   patch:
  *     summary: Mark a booking payment as paid (DJ only, for cash bookings)
  *     tags: [BookingPayment]
