@@ -107,8 +107,12 @@ export class SubscriptionServices {
       where: { userId, status: SubscriptionStatus.active }
     });
 
-    if (activeSub && activeSub.planId === data.planId) {
-      throw new BadRequestError('You are already subscribed to this plan.');
+    if (activeSub) {
+      if (activeSub.planId === data.planId) {
+        throw new BadRequestError('You are already subscribed to this plan.');
+      } else {
+        throw new BadRequestError('You already have an active subscription. Please cancel your current plan before switching to a new one.');
+      }
     }
 
     if (!this.stripe) {
