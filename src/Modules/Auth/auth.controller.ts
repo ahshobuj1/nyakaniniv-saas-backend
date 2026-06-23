@@ -2,7 +2,7 @@
 import { Request, Response } from "express";
 import { BaseController } from "@/core/BaseController";
 import { AppLogger } from "@/core/logging/logger";
-import { CreateUserDTO, VerifyOtpDTO, LoginDTO, ForgotPasswordDTO, ResetPasswordDTO } from "./AuthDTO";
+import { CreateUserDTO, VerifyOtpDTO, LoginDTO, ForgotPasswordDTO, ResetPasswordDTO, ChangePasswordDTO } from "./AuthDTO";
 import { AuthServices } from "./auth.service";
 
 export class AuthController extends BaseController {
@@ -72,5 +72,18 @@ export class AuthController extends BaseController {
     await this.authService.resetPassword(email, otp, newPassword);
     
     return this.sendResponse(req, res, "Password has been reset successfully", 200, null);
+  }
+
+  public async changePassword(req: Request, res: Response) {
+    const { currentPassword, newPassword } = req.validatedBody as ChangePasswordDTO;
+    const userId = req.user?.id; // Assuming authenticateUser middleware sets req.user
+
+    if (!userId) {
+      return this.sendResponse(req, res, "Unauthorized", 401, null);
+    }
+
+    await this.authService.changePassword(userId, currentPassword, newPassword);
+
+    return this.sendResponse(req, res, "Password has been changed successfully", 200, null);
   }
 }

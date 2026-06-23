@@ -33,7 +33,8 @@ export class InvoiceServices {
     const tenantId = await this.getTenantIdByUserId(userId).catch(() => null);
 
     const subscriptionInvoices = await this.prisma.subscriptionInvoice.findMany({
-      where: { userId }
+      where: { userId },
+      include: { plan: true }
     });
 
     const bookingPayments = tenantId ? await this.prisma.bookingPayment.findMany({
@@ -48,10 +49,12 @@ export class InvoiceServices {
 
     return { invoices, meta: { total: invoices.length, page: 1, limit: invoices.length, totalPages: 1, hasNext: false, hasPrevious: false } };
   }
-
   async getAllInvoices(query: Record<string, unknown> = {}) {
     const subscriptionInvoices = await this.prisma.subscriptionInvoice.findMany({
-      include: { user: { select: { email: true, firstName: true, lastName: true } } }
+      include: { 
+        user: { select: { email: true, firstName: true, lastName: true } },
+        plan: true
+      }
     });
 
     const bookingPayments = await this.prisma.bookingPayment.findMany({

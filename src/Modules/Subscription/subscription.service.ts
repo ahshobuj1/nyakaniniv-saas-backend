@@ -49,7 +49,7 @@ export class SubscriptionServices {
     });
 
     if (!subscription) {
-      throw new NotFoundError('No active subscription found');
+      return null;
     }
 
     return subscription;
@@ -103,6 +103,14 @@ export class SubscriptionServices {
     const amountStr = data.billingCycle === 'monthly' ? plan.priceMonthly : plan.priceAnnually;
     const amount = Number(amountStr) || 0;
 
+    const activeSub = await this.prisma.subscription.findFirst({
+      where: { userId, status: SubscriptionStatus.active }
+    });
+
+    if (activeSub && activeSub.planId === data.planId) {
+      throw new BadRequestError('You are already subscribed to this plan.');
+    }
+
     if (!this.stripe) {
       // Mock logic if no Stripe keys are available yet
       const subscription = await this.prisma.subscription.create({
@@ -132,6 +140,7 @@ export class SubscriptionServices {
     // Actual Stripe Logic using inline dynamic pricing (price_data)
     const unitAmount = Math.round(amount * 100); // Stripe requires cents
 
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     const session = await this.stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [{
@@ -149,8 +158,8 @@ export class SubscriptionServices {
         quantity: 1,
       }],
       mode: 'subscription',
-      success_url: data.successUrl || `${process.env.FRONTEND_URL}/dashboard?success=true`,
-      cancel_url: data.cancelUrl || `${process.env.FRONTEND_URL}/pricing?canceled=true`,
+      success_url: data.successUrl || `${baseUrl}/dashboard?success=true`,
+      cancel_url: data.cancelUrl || `${baseUrl}/pricing?canceled=true`,
       client_reference_id: userId,
       metadata: {
         userId,

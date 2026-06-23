@@ -141,6 +141,7 @@ model SubscriptionPlan {
   updatedAt            DateTime? @default(now()) @updatedAt @map("updated_at")
 
   subscriptions Subscription[]
+  subscriptionInvoices SubscriptionInvoice[]
 
   @@map("subscription_plans")
 }
@@ -244,6 +245,7 @@ model SubscriptionInvoice {
   updatedAt       DateTime?                  @default(now()) @updatedAt @map("updated_at")
 
   user User? @relation(fields: [userId], references: [id])
+  plan SubscriptionPlan? @relation(fields: [planId], references: [id])
 
   @@map("subscription_invoices")
 }

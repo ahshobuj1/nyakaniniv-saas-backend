@@ -188,4 +188,37 @@
  *         description: Password reset successfully
  *       401:
  *         description: Invalid or expired OTP
+ *       404:
+ *         description: User not found
+ */
+
+/**
+ * @swagger
+ * /auth/v1/change-password:
+ *   post:
+ *     summary: Change logged-in user's password
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - currentPassword
+ *               - newPassword
+ *             properties:
+ *               currentPassword:
+ *                 type: string
+ *                 example: "oldPassword123"
+ *               newPassword:
+ *                 type: string
+ *                 example: "newStrongPassword123"
+ *     responses:
+ *       200:
+ *         description: Password changed successfully
+ *       401:
+ *         description: Unauthorized or Incorrect current password
  */
