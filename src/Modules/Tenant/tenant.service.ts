@@ -149,8 +149,8 @@ export class TenantServices {
     return updatedTenant;
   }
 
-  public async assignTheme(userId: string, themeId: number) {
-    this.logger.info('Assigning theme to tenant', { userId, themeId });
+  public async assignTheme(userId: string, themeSlug: string, config?: any) {
+    this.logger.info('Assigning theme to tenant', { userId, themeSlug });
 
     const tenant = await this.prisma.tenant.findUnique({
       where: { userId },
@@ -160,8 +160,8 @@ export class TenantServices {
       throw new NotFoundError('Tenant profile not found');
     }
 
-    const theme = await this.prisma.theme.findUnique({
-      where: { id: themeId },
+    const theme = await this.prisma.theme.findFirst({
+      where: { slug: themeSlug },
     });
 
     if (!theme) {
@@ -173,8 +173,8 @@ export class TenantServices {
     const updatedTenant = await this.prisma.tenant.update({
       where: { id: tenant.id },
       data: {
-        themeId,
-        config: theme.defaultConfig || {},
+        themeId: theme.id,
+        config: config ? config : (theme.defaultConfig || {}),
       },
       include: {
         theme: true,

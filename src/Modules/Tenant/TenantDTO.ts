@@ -43,7 +43,8 @@ export const updateTenantSchema = {
 
 export const assignThemeSchema = {
   body: z.object({
-    themeId: z.number(),
+    themeSlug: z.string(),
+    config: z.any().optional(),
   }),
 };
 

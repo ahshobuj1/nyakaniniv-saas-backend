@@ -11,6 +11,8 @@ import {
   assignThemeSchema,
 } from './TenantDTO';
 import {UserRole} from '@/prisma/generated/client';
+import { IFileUploader } from '@/utils/IFileUploader';
+import multer from 'multer';
 
 export class TenantModule extends BaseModule {
   public name: string = 'TenantModule';
@@ -28,14 +30,24 @@ export class TenantModule extends BaseModule {
 
   protected async setupControllers(): Promise<void> {
     const tenantService = this.getService<TenantServices>('TenantService');
+    const fileUploader = this.context.getService('fileUploader') as IFileUploader;
     this.registerController(
       'TenantController',
-      new TenantController(tenantService),
+      new TenantController(tenantService, fileUploader),
     );
   }
 
   protected async setupRoutes(): Promise<void> {
     const controller = this.getController<TenantController>('TenantController');
+    const upload = multer({ dest: 'tmp/' });
+
+    // Upload Media for Themes
+    this.router.post(
+      '/upload-media',
+      authenticateUser,
+      upload.single('file'),
+      controller.uploadMedia.bind(controller),
+    );
 
     // DJ Onboarding (Create Tenant)
     this.router.post(

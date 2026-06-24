@@ -62,7 +62,13 @@ export class UserServices {
         profileImg: true,
         isVerified: true,
         createdAt: true,
-        tenant: true,
+        tenant: {
+          include: {
+            mixTapes: { orderBy: { order: 'asc' } },
+            events: { orderBy: { eventDate: 'asc' } },
+            theme: true,
+          }
+        },
       }
     });
 
