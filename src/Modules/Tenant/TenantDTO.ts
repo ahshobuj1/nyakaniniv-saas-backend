@@ -30,12 +30,12 @@ export const updateTenantSchema = {
     timezone: z.string().optional(),
     socialLinks: z
       .object({
-        facebook: z.string().url().optional().or(z.literal("")),
-        instagram: z.string().url().optional().or(z.literal("")),
-        linkedin: z.string().url().optional().or(z.literal("")),
-        twitter: z.string().url().optional().or(z.literal("")),
-        soundcloud: z.string().url().optional().or(z.literal("")),
-        mixcloud: z.string().url().optional().or(z.literal("")),
+        facebook: z.string().optional().or(z.literal("")),
+        instagram: z.string().optional().or(z.literal("")),
+        linkedin: z.string().optional().or(z.literal("")),
+        twitter: z.string().optional().or(z.literal("")),
+        soundcloud: z.string().optional().or(z.literal("")),
+        mixcloud: z.string().optional().or(z.literal("")),
       })
       .optional(),
   }),
