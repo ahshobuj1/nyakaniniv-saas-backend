@@ -6,6 +6,7 @@ import { CreateTenantDTO, UpdateTenantDTO } from './TenantDTO';
 import { QueryBuilder } from '@/utils/QueryBuilder';
 import { IEmailProvider } from '@/providers/EmailProvider';
 import { EmailTemplates } from '@/utils/EmailTemplates';
+import { UpdateTenantStatusDTO } from './TenantDTO';
 
 export class TenantServices {
   private logger = new AppLogger('TenantServices');
@@ -180,6 +181,35 @@ export class TenantServices {
         theme: true,
       },
     });
+
+    return updatedTenant;
+  }
+
+  public async updateTenantStatus(tenantId: string, data: UpdateTenantStatusDTO) {
+    this.logger.info('Updating tenant status', { tenantId, isActive: data.isActive });
+
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      include: { user: true }
+    });
+
+    if (!tenant) {
+      throw new NotFoundError('Tenant profile not found');
+    }
+
+    const updatedTenant = await this.prisma.tenant.update({
+      where: { id: tenantId },
+      data: { isActive: data.isActive }
+    });
+
+    // Send Account Suspended email if isActive changes to false
+    if (!data.isActive && tenant.isActive && tenant.user?.email) {
+      this.emailProvider.sendEmail(
+        tenant.user.email,
+        "Account Suspended 🚫 - UpbeatAfrica",
+        EmailTemplates.getAccountSuspendedTemplate()
+      );
+    }
 
     return updatedTenant;
   }

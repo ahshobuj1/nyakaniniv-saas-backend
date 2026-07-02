@@ -9,6 +9,7 @@ import {
   createTenantSchema,
   updateTenantSchema,
   assignThemeSchema,
+  updateTenantStatusSchema,
 } from './TenantDTO';
 import {UserRole} from '@/prisma/generated/client';
 import { IFileUploader } from '@/utils/IFileUploader';
@@ -85,6 +86,15 @@ export class TenantModule extends BaseModule {
       authenticateUser,
       validateRequest(assignThemeSchema),
       controller.assignTheme.bind(controller),
+    );
+
+    // Update Tenant Status (Admin Only)
+    this.router.patch(
+      '/:id/status',
+      authenticateUser,
+      authorizeRole([UserRole.SUPER_ADMIN]),
+      validateRequest(updateTenantStatusSchema),
+      controller.updateTenantStatus.bind(controller),
     );
   }
 }

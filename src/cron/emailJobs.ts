@@ -26,6 +26,12 @@ export class EmailCronJobs {
       this.logger.info('[CRON] Running Subscription Expiry Warnings...');
       await this.runSubscriptionExpiryWarnings();
     });
+
+    // 3. Subscription Expired processing: Runs every day at 10:00 AM
+    cron.schedule('0 10 * * *', async () => {
+      this.logger.info('[CRON] Running Subscription Expiry check...');
+      await this.runSubscriptionExpiry();
+    });
   }
 
   private async runUpcomingEventReminders() {
@@ -111,5 +117,36 @@ export class EmailCronJobs {
     }
 
     this.logger.info(`[CRON] Processed ${expiringSubscriptions.length} subscription expiry warnings.`);
+  }
+
+  private async runSubscriptionExpiry() {
+    const now = new Date();
+
+    const expiredSubscriptions = await this.prisma.subscription.findMany({
+      where: {
+        status: SubscriptionStatus.active,
+        periodEnd: {
+          lt: now
+        }
+      },
+      include: { user: true }
+    });
+
+    for (const sub of expiredSubscriptions) {
+      await this.prisma.subscription.update({
+        where: { id: sub.id },
+        data: { status: SubscriptionStatus.past_due }
+      });
+
+      if (sub.user?.email) {
+        this.emailProvider.sendEmail(
+          sub.user.email,
+          "Subscription Expired - Portfolio Offline ⚠️ - UpbeatAfrica",
+          EmailTemplates.getSubscriptionExpiredTemplate()
+        );
+      }
+    }
+
+    this.logger.info(`[CRON] Processed ${expiredSubscriptions.length} expired subscriptions.`);
   }
 }

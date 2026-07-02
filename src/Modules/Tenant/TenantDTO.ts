@@ -48,6 +48,13 @@ export const assignThemeSchema = {
   }),
 };
 
+export const updateTenantStatusSchema = {
+  body: z.object({
+    isActive: z.boolean(),
+  }),
+};
+
 export type CreateTenantDTO = z.infer<typeof createTenantSchema.body>;
 export type UpdateTenantDTO = z.infer<typeof updateTenantSchema.body>;
 export type AssignThemeDTO = z.infer<typeof assignThemeSchema.body>;
+export type UpdateTenantStatusDTO = z.infer<typeof updateTenantStatusSchema.body>;

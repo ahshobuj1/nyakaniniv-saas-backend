@@ -210,6 +210,32 @@ export class WebhookServices {
           );
         }
       }
+    } else if (event.type === 'customer.subscription.updated') {
+      const stripeSub = event.data.object as any;
+      const planIdStr = stripeSub.metadata?.planId;
+      
+      if (planIdStr) {
+        const newPlanId = parseInt(planIdStr, 10);
+        const sub = await this.prisma.subscription.findFirst({
+          where: { stripeSubId: stripeSub.id },
+          include: { user: true }
+        });
+
+        if (sub && sub.planId !== newPlanId) {
+          await this.prisma.subscription.update({
+            where: { id: sub.id },
+            data: { planId: newPlanId }
+          });
+
+          if (sub.user && sub.user.email) {
+            this.emailProvider.sendEmail(
+              sub.user.email,
+              "Subscription Updated - UpbeatAfrica",
+              EmailTemplates.getSubscriptionChangedTemplate(newPlanId)
+            );
+          }
+        }
+      }
     } else if (event.type === 'invoice.payment_failed') {
       const invoice = event.data.object as any;
       const stripeSubId = invoice.subscription as string;
