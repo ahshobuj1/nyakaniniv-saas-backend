@@ -1,9 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import { UserServices } from './user.service';
 import { BaseController } from '@/core/BaseController';
+import { IFileUploader } from '@/utils/IFileUploader';
 
 export class UserController extends BaseController {
-  constructor(private userServices: UserServices) {
+  constructor(
+    private userServices: UserServices,
+    private readonly fileUploader?: IFileUploader
+  ) {
     super();
   }
 
@@ -33,6 +37,12 @@ export class UserController extends BaseController {
   updateMe = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const userId = (req as any).user.id;
+
+      if (req.file && this.fileUploader) {
+        const url = await this.fileUploader.upload(req.file);
+        req.body.profileImg = url;
+      }
+
       const updatedUser = await this.userServices.updateProfile(userId, req.body);
       return this.sendResponse(req, res, 'Profile updated successfully', 200, updatedUser);
     } catch (error) {
