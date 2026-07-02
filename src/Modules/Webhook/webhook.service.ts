@@ -197,9 +197,16 @@ export class WebhookServices {
       });
 
       if (sub) {
-        await this.prisma.subscription.update({
-          where: { id: sub.id },
-          data: { status: 'canceled' }
+        await this.prisma.$transaction(async (tx) => {
+          await tx.subscription.update({
+            where: { id: sub.id },
+            data: { status: 'canceled' }
+          });
+          
+          await tx.tenant.updateMany({
+            where: { userId: sub.userId },
+            data: { subscriptionStatus: 'canceled' }
+          });
         });
 
         if (sub.user && sub.user.email) {

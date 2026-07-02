@@ -188,9 +188,16 @@ export class SubscriptionServices {
       await this.stripe.subscriptions.cancel(subscription.stripeSubId);
     }
 
-    await this.prisma.subscription.update({
-      where: { id: subscription.id },
-      data: { status: SubscriptionStatus.canceled }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.subscription.update({
+        where: { id: subscription.id },
+        data: { status: SubscriptionStatus.canceled }
+      });
+      
+      await tx.tenant.updateMany({
+        where: { userId },
+        data: { subscriptionStatus: 'canceled' }
+      });
     });
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });

@@ -72,7 +72,8 @@ export class AnalyticsServices {
       this.prisma.booking.findMany({
         where: { tenantId: tenant.id },
         take: 10,
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'desc' },
+        include: { client: true, payment: true }
       })
     ]);
 
