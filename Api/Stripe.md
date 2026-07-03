@@ -105,7 +105,7 @@ Here is exactly how to test the DJ Booking Payment flow from start to finish usi
     "address": "Miami Beach"
   }
   ```
-- **Action**: Grab the returned `bookingId`.
+- **Action**: Grab the returned `id` (booking ID).
 
 **Step 2: DJ Accepts Booking & Quotes Price**
 - **Endpoint**: `PATCH /bookings/v1/:bookingId/status`
@@ -117,18 +117,26 @@ Here is exactly how to test the DJ Booking Payment flow from start to finish usi
     "totalAmount": 1000.00
   }
   ```
-- **Action**: The system updates the booking, generates an `Invoice`, and talks to Stripe to generate a Checkout Session specifically routed to the DJ.
-- **Output**: The API returns the booking details along with a `checkoutUrl`.
+- **Action**: The system updates the booking status, creates an unpaid `BookingPayment` record, and sends an email to the client containing links to pay via Stripe or request a cash payment.
+- **Output**: The API returns the updated booking details and the `paymentId`.
 
-**Step 3: Client Pays**
-- **Action**: Copy the `checkoutUrl` returned in Step 2 and paste it into your browser.
+**Step 3: Client Chooses Payment Method & Pays**
+
+*Option A: Online Payment (Stripe Connect)*
+- **Action**: The client clicks the Checkout link in their email which hits the `GET /bookings/v1/:bookingId/checkout-redirect` endpoint.
+- **Backend Flow**: The backend dynamically generates a Stripe Checkout Session routed to the DJ (Destination Charge) and redirects the client.
 - **Test**: You will see a Stripe Checkout page asking for $1,000.00. Use Stripe's test credit card:
   - Card Number: `4242 4242 4242 4242`
   - MM/YY: Any future date (e.g., `12/30`)
   - CVC: Any 3 digits (e.g., `123`)
-- **Result**: Upon successful payment, you will be redirected to the `payment-success` page.
+- **Result**: Upon successful payment, the client is redirected to the `payment-success` page. A webhook will automatically mark the booking and payment as `completed` and `paid`.
 
-**Step 4: Verification in Stripe Dashboard**
+*Option B: Request Cash Payment*
+- **Action**: The client clicks the Request Cash link in their email which hits the `GET /bookings/v1/:bookingId/request-cash-redirect` endpoint.
+- **Backend Flow**: The backend updates the payment method to `CASH` and notifies the DJ via email and in-app notification.
+- **Result**: The client sees a success page. The DJ will later manually mark the invoice as paid when they receive the cash.
+
+**Step 4: Verification in Stripe Dashboard (If Paid Online)**
 1. Go to your Stripe Dashboard.
 2. Go to **Payments**. You should see the $1,000 payment.
 3. Click on the payment. You will see that a **5% Application Fee ($50)** was kept by the platform, and **$950** was transferred to the DJ's connected account!

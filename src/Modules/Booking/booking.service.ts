@@ -10,6 +10,7 @@ import { CreateBookingDTO, UpdateBookingStatusDTO } from './BookingDTO';
 import { QueryBuilder } from '@/utils/QueryBuilder';
 import { IEmailProvider } from '@/providers/EmailProvider';
 import { EmailTemplates } from '@/utils/EmailTemplates';
+import { PaymentProviderFactory } from '@/providers/PaymentProvider/PaymentProviderFactory';
 
 export class BookingServices {
   constructor(
@@ -227,7 +228,7 @@ export class BookingServices {
   async getBookingPaymentLink(id: string) {
     const booking = await this.prisma.booking.findUnique({
       where: { id },
-      include: { tenant: true, payment: true }
+      include: { tenant: true, payment: true, client: true }
     });
 
     if (!booking || booking.status !== BookingStatus.accepted || !booking.totalAmount) {
@@ -238,43 +239,12 @@ export class BookingServices {
       throw new BadRequestError('Booking is already paid');
     }
 
-    if (!booking.tenant?.stripeAccountId) {
-      throw new BadRequestError('DJ has not configured Stripe payments yet');
-    }
-
     const paymentId = booking.payment ? booking.payment.id : id; // fallback to booking id if no payment record
 
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: [
-        {
-          price_data: {
-            currency: 'usd',
-            product_data: {
-              name: `Booking: ${booking.eventType}`,
-              description: booking.eventDetails || "DJ Services",
-            },
-            unit_amount: Math.round(Number(booking.totalAmount) * 100), // Stripe takes cents
-          },
-          quantity: 1,
-        },
-      ],
-      mode: 'payment',
-      success_url: `https://${booking.tenant.subdomain}.upbeatafrica.com/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `https://${booking.tenant.subdomain}.upbeatafrica.com/booking/${id}`,
-      payment_intent_data: {
-        application_fee_amount: Math.round(Number(booking.totalAmount) * 100 * 0.05), // 5% Application Fee
-        transfer_data: {
-          destination: booking.tenant.stripeAccountId,
-        },
-      },
-      metadata: {
-        invoiceId: paymentId,
-        bookingId: id,
-      }
-    });
+    // Determine the correct payment provider based on the DJ's country
+    const paymentProvider = PaymentProviderFactory.getProvider(booking.tenant?.country);
 
-    return { checkoutUrl: session.url };
+    return paymentProvider.getPaymentLink(booking as any, paymentId);
   }
 
   async requestCashPayment(id: string) {

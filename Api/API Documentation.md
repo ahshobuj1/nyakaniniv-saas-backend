@@ -52,6 +52,14 @@ This document contains the API endpoints for the project. You can use this to ma
 - **Body:** Raw Body
 - **Success Response:** `200 OK`
 
+### 2. Paystack Webhook (Payments & Invoices)
+- **URL:** `/webhooks/v1/paystack`
+- **Method:** `POST`
+- **Description:** Centralized endpoint to listen for Paystack events (e.g. `charge.success`). Updates Invoices to `paid` and Bookings to `completed`.
+- **Headers:** `x-paystack-signature: <signature>`
+- **Body:** Raw Body
+- **Success Response:** `200 OK`
+
 ---
 
 ## 👤 User Module
@@ -639,6 +647,34 @@ This document contains the API endpoints for the project. You can use this to ma
 - **Success Response:**
   - **Code:** 200
   - **Content:** Returns `isConnected`, `detailsSubmitted`, and `payoutsEnabled`.
+
+## 🔗 Paystack Connect Module
+
+### 1. Onboard Paystack Account (DJ)
+- **URL:** `/paystack-connect/v1/onboard`
+- **Method:** `POST`
+- **Headers:** `Authorization: Bearer <token>`
+- **Request Body:**
+  ```json
+  {
+    "tenantId": "uuid-tenant",
+    "bankCode": "058",
+    "accountNumber": "0123456789",
+    "businessName": "DJ Vibes Entertainment"
+  }
+  ```
+- **Success Response:**
+  - **Code:** 200
+  - **Content:** Returns `subaccountCode` after successfully creating a Paystack subaccount.
+
+### 2. Check Account Status (DJ)
+- **URL:** `/paystack-connect/v1/status`
+- **Method:** `GET`
+- **Headers:** `Authorization: Bearer <token>`
+- **Query Parameters:** `tenantId=uuid-tenant`
+- **Success Response:**
+  - **Code:** 200
+  - **Content:** Returns `isConnected` and `subaccountCode`.
 
 ## 👥 Client Module
 

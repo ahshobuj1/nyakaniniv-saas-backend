@@ -27,5 +27,6 @@ export class WebhookModule extends BaseModule {
     const controller = this.getController<WebhookController>('WebhookController');
 
     this.router.post('/stripe', express.raw({ type: 'application/json' }), controller.stripeWebhook.bind(controller));
+    this.router.post('/paystack', express.raw({ type: 'application/json' }), controller.paystackWebhook.bind(controller));
   }
 }

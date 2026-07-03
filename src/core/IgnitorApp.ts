@@ -7,6 +7,7 @@ import { BaseModule } from "./BaseModule";
 import { AuthModule } from "@/Modules/Auth/AuthModule";
 import { TenantModule } from "@/Modules/Tenant/TenantModule";
 import { StripeConnectModule } from "@/Modules/StripeConnect/StripeConnectModule";
+import { PaystackConnectModule } from "@/Modules/PaystackConnect/PaystackConnectModule";
 import { AppError } from "./errors/AppError";
 import { HTTPStatusCode } from "@/types/HTTPStatusCode";
 import { AppLogger } from "./logging/logger";
@@ -52,6 +53,7 @@ export class IgnitorApp {
       new AuthModule(),
       new TenantModule(),
       new StripeConnectModule(),
+      new PaystackConnectModule(),
     ];
     for (const module of modules) {
       this.registerModule(module);

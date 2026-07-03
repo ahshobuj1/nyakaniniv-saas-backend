@@ -31,4 +31,19 @@ export class WebhookController {
       res.status(400).send(`Webhook Error: ${(error as Error).message}`);
     }
   };
+
+  paystackWebhook = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      console.log('🔔 [WEBHOOK] Received Paystack webhook request');
+      const signature = req.headers['x-paystack-signature'] as string;
+      const rawBody = (req as any).rawBody || req.body;
+      
+      const result = await this.webhookServices.handlePaystackWebhook(signature, rawBody);
+      console.log('✅ [WEBHOOK] Paystack processed successfully', result);
+      res.status(200).json(result);
+    } catch (error) {
+      console.error('❌ [WEBHOOK] Paystack Controller Error Details:', (error as Error).message);
+      res.status(400).send(`Webhook Error: ${(error as Error).message}`);
+    }
+  };
 }

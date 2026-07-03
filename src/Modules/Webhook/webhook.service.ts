@@ -5,6 +5,7 @@ import { IEmailProvider } from '@/providers/EmailProvider';
 import { EmailTemplates } from '@/utils/EmailTemplates';
 import { config } from '@/core/config';
 import { AppLogger } from '@/core/logging/logger';
+import crypto from 'crypto';
 
 export class WebhookServices {
   private stripe: any = null;
@@ -264,6 +265,120 @@ export class WebhookServices {
       where: { stripeEventId: event.id },
       data: { status: 'processed' }
     });
+
+    return { received: true };
+  }
+
+  async handlePaystackWebhook(signature: string, rawBody: Buffer | string | any) {
+    const secret = process.env.PAYSTACK_SECRET_KEY;
+    if (!secret) {
+      console.error('❌ [WEBHOOK] Paystack not configured');
+      throw new BadRequestError('Paystack not configured');
+    }
+
+    const payload = typeof rawBody === 'string' || Buffer.isBuffer(rawBody) 
+      ? rawBody 
+      : JSON.stringify(rawBody);
+
+    const hash = crypto.createHmac('sha512', secret).update(payload).digest('hex');
+
+    if (hash !== signature) {
+      console.error('❌ [WEBHOOK] Invalid Paystack Signature');
+      throw new BadRequestError('Invalid Paystack Signature');
+    }
+
+    const event = typeof rawBody === 'string' || Buffer.isBuffer(rawBody) 
+      ? JSON.parse(rawBody.toString()) 
+      : rawBody;
+
+    console.log(`✅ [WEBHOOK] Verified Paystack event: ${event.event} [ID: ${event.data?.id}]`);
+
+    if (event.event === 'charge.success') {
+      const data = event.data;
+      const invoiceId = data.metadata?.invoiceId;
+      const bookingId = data.metadata?.bookingId;
+      const amountPaid = (data.amount || 0) / 100;
+
+      if (invoiceId || bookingId) {
+        const txResult = await this.prisma.$transaction(async (tx) => {
+          let djEmail = null;
+          let clientEmail = null;
+          let djName = "DJ";
+          let eventType = "Event";
+          let clientName = "Client";
+          let eventDate = new Date().toISOString();
+          let resolvedBookingId = bookingId;
+
+          const payment = await tx.bookingPayment.findUnique({ where: { id: invoiceId || '' } });
+          if (payment && payment.status !== BookingPaymentStatus.paid) {
+            await tx.bookingPayment.update({
+              where: { id: payment.id },
+              data: { status: BookingPaymentStatus.paid }
+            });
+          }
+
+          resolvedBookingId = resolvedBookingId || payment?.bookingId;
+
+          if (resolvedBookingId) {
+            const booking = await tx.booking.findUnique({ where: { id: resolvedBookingId }, include: { client: true } });
+            if (booking && booking.status !== BookingStatus.completed) {
+              await tx.booking.update({
+                where: { id: resolvedBookingId },
+                data: { status: BookingStatus.completed }
+              });
+
+              eventType = booking.eventType || "Event";
+              clientName = booking.client?.name || "Client";
+              clientEmail = booking.client?.email || null;
+              eventDate = booking.eventDate?.toISOString() || new Date().toISOString();
+
+              if (booking.tenantId) {
+                const tenant = await tx.tenant.findUnique({ where: { id: booking.tenantId }, include: { user: true } });
+                if (tenant) {
+                  djName = tenant.stageName || tenant.user?.firstName || "DJ";
+                  if (tenant.user) {
+                    djEmail = tenant.user.email;
+                    await tx.notification.create({
+                      data: {
+                        userId: tenant.user.id,
+                        title: 'Payment Received via Paystack',
+                        message: `Payment received for booking ${eventType} from ${clientName}.`,
+                        type: NotificationType.payment
+                      }
+                    });
+                  }
+                }
+              }
+            }
+          }
+          return { djEmail, clientEmail, djName, eventType, clientName, eventDate, resolvedBookingId };
+        });
+
+        // Send Emails outside transaction
+        if (txResult.djEmail) {
+          this.emailProvider.sendEmail(
+            txResult.djEmail,
+            "Payment Received! 💰 - UpbeatAfrica",
+            EmailTemplates.getPaymentReceivedAlertTemplate(txResult.clientName, amountPaid)
+          );
+        }
+
+        if (txResult.clientEmail && txResult.resolvedBookingId) {
+          this.emailProvider.sendEmail(
+            txResult.clientEmail,
+            "Payment Receipt - UpbeatAfrica",
+            EmailTemplates.getPaymentReceiptTemplate(
+              amountPaid, 
+              txResult.eventType,
+              txResult.djName,
+              txResult.eventDate,
+              "Paystack",
+              txResult.resolvedBookingId
+            )
+          );
+        }
+      }
+    }
 
     return { received: true };
   }

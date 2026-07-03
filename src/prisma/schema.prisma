@@ -37,6 +37,9 @@ enum SubscriptionInvoiceStatus {
 
 enum BookingPaymentMethod {
   STRIPE
+  PAYSTACK
+  PESAPAL
+  FLUTTERWAVE
   CASH
 }
 
@@ -111,6 +114,9 @@ model Tenant {
   socialLinks        Json?               @map("social_links")
   config             Json?
   stripeAccountId    String?             @map("stripe_account_id") @db.VarChar(255)
+  paystackSubaccountId String?           @map("paystack_subaccount_id") @db.VarChar(255)
+  flutterwaveSubaccountId String?        @map("flutterwave_subaccount_id") @db.VarChar(255)
+  pesapalAccountId   String?             @map("pesapal_account_id") @db.VarChar(255)
   activePlanId       Int?                @map("active_plan_id")
   subscriptionStatus SubscriptionStatus? @map("subscription_status")
   createdAt          DateTime?           @default(now()) @map("created_at")
