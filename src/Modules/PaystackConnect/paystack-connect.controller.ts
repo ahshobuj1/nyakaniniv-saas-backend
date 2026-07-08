@@ -28,4 +28,10 @@ export class PaystackConnectController extends BaseController {
     const result = await this.paystackConnectService.checkAccountStatus(tenantId);
     this.sendResponse(req, res, 'Paystack connection status retrieved', 200, result);
   }
+
+  public async getBanks(req: Request, res: Response): Promise<void> {
+    const country = req.query.country as string || 'nigeria';
+    const banks = await this.paystackConnectService.getBanks(country);
+    this.sendResponse(req, res, 'Banks retrieved successfully', 200, banks);
+  }
 }

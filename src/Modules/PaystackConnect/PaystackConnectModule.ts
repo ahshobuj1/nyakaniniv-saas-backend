@@ -36,5 +36,11 @@ export class PaystackConnectModule extends BaseModule {
       authenticateUser,
       controller.getStatus.bind(controller)
     );
+
+    this.router.get(
+      "/banks",
+      authenticateUser,
+      controller.getBanks.bind(controller)
+    );
   }
 }

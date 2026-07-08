@@ -70,4 +70,24 @@ export class PaystackConnectService {
       subaccountCode: tenant.paystackSubaccountId
     };
   }
+
+  public async getBanks(country: string = 'nigeria') {
+    const secretKey = process.env.PAYSTACK_SECRET_KEY;
+    if (!secretKey) throw new Error("Paystack secret key is not configured.");
+
+    try {
+      const response = await axios.get(
+        `https://api.paystack.co/bank?country=${country}`,
+        {
+          headers: {
+            Authorization: `Bearer ${secretKey}`,
+          },
+        }
+      );
+      return response.data.data;
+    } catch (error: any) {
+      console.error("Paystack Get Banks Error:", error.response?.data || error.message);
+      throw new Error(error.response?.data?.message || "Failed to fetch banks from Paystack");
+    }
+  }
 }
