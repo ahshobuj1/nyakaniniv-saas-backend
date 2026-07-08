@@ -64,11 +64,50 @@ export class PaystackConnectService {
       return { isConnected: false };
     }
 
-    // In a real scenario, you could verify the subaccount via Paystack API
-    return {
-      isConnected: true,
-      subaccountCode: tenant.paystackSubaccountId
-    };
+    const secretKey = process.env.PAYSTACK_SECRET_KEY;
+    if (!secretKey) throw new Error("Paystack secret key is not configured.");
+
+    try {
+      const paystackRes = await axios.get(
+        `https://api.paystack.co/subaccount/${tenant.paystackSubaccountId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${secretKey}`,
+          },
+        }
+      );
+      
+      const subaccount = paystackRes.data.data;
+      
+      return {
+        isConnected: true,
+        subaccountCode: tenant.paystackSubaccountId,
+        bankName: subaccount.settlement_bank,
+        accountNumber: subaccount.account_number
+      };
+    } catch (error: any) {
+      console.error("Failed to verify subaccount with Paystack:", error.response?.data || error.message);
+      // Fallback if the API fails, but we have the ID
+      return {
+        isConnected: true,
+        subaccountCode: tenant.paystackSubaccountId
+      };
+    }
+  }
+
+  public async disconnectAccount(tenantId: string) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+    });
+
+    if (!tenant) throw new Error("Tenant not found");
+
+    await this.prisma.tenant.update({
+      where: { id: tenantId },
+      data: { paystackSubaccountId: null },
+    });
+
+    return { success: true };
   }
 
   public async getBanks(country: string = 'nigeria') {

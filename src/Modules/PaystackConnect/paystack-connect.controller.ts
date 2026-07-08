@@ -34,4 +34,15 @@ export class PaystackConnectController extends BaseController {
     const banks = await this.paystackConnectService.getBanks(country);
     this.sendResponse(req, res, 'Banks retrieved successfully', 200, banks);
   }
+
+  public async disconnect(req: Request, res: Response): Promise<void> {
+    const { tenantId } = req.body;
+    
+    if (!tenantId) {
+      throw new Error('tenantId is required');
+    }
+
+    const result = await this.paystackConnectService.disconnectAccount(tenantId);
+    this.sendResponse(req, res, 'Paystack account disconnected', 200, result);
+  }
 }

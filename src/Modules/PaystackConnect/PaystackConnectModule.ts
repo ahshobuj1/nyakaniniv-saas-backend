@@ -42,5 +42,11 @@ export class PaystackConnectModule extends BaseModule {
       authenticateUser,
       controller.getBanks.bind(controller)
     );
+
+    this.router.delete(
+      "/disconnect",
+      authenticateUser,
+      controller.disconnect.bind(controller)
+    );
   }
 }
