@@ -108,7 +108,7 @@ export class InvoiceServices {
       const djName = payment.tenant?.stageName || payment.tenant?.user?.firstName || "DJ";
       this.emailProvider.sendEmail(
         payment.booking.client.email,
-        "Payment Receipt - UpbeatAfrica",
+        "Payment Receipt - UpBeat Africa",
         EmailTemplates.getPaymentReceiptTemplate(
           Number(payment.amount), 
           payment.booking.eventType || "Event",

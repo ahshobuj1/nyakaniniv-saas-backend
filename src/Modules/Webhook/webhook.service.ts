@@ -127,7 +127,7 @@ export class WebhookServices {
         if (txResult.djEmail) {
           this.emailProvider.sendEmail(
             txResult.djEmail,
-            "Payment Received! 💰 - UpbeatAfrica",
+            "Payment Received! 💰 - UpBeat Africa",
             EmailTemplates.getPaymentReceivedAlertTemplate(txResult.clientName, amountPaid)
           );
         }
@@ -135,7 +135,7 @@ export class WebhookServices {
         if (txResult.clientEmail && txResult.resolvedBookingId) {
           this.emailProvider.sendEmail(
             txResult.clientEmail,
-            "Payment Receipt - UpbeatAfrica",
+            "Payment Receipt - UpBeat Africa",
             EmailTemplates.getPaymentReceiptTemplate(
               amountPaid, 
               txResult.eventType,
@@ -179,13 +179,13 @@ export class WebhookServices {
           
           this.emailProvider.sendEmail(
             user.email,
-            "Subscription Activated 🚀 - UpbeatAfrica",
+            "Subscription Activated 🚀 - UpBeat Africa",
             EmailTemplates.getSubscriptionActivatedTemplate(`Plan ${planId}`, nextBilling)
           );
 
           this.emailProvider.sendEmail(
             config.defaultAdmin?.email || "admin@upbeatafrica.com",
-            "New Subscription Alert 💸 - UpbeatAfrica",
+            "New Subscription Alert 💸 - UpBeat Africa",
             EmailTemplates.getNewSubscriptionAdminAlertTemplate(user.email, parseInt(planId, 10))
           );
         }
@@ -213,7 +213,7 @@ export class WebhookServices {
         if (sub.user && sub.user.email) {
           this.emailProvider.sendEmail(
             sub.user.email,
-            "Subscription Canceled - UpbeatAfrica",
+            "Subscription Canceled - UpBeat Africa",
             EmailTemplates.getSubscriptionCanceledTemplate()
           );
         }
@@ -238,7 +238,7 @@ export class WebhookServices {
           if (sub.user && sub.user.email) {
             this.emailProvider.sendEmail(
               sub.user.email,
-              "Subscription Updated - UpbeatAfrica",
+              "Subscription Updated - UpBeat Africa",
               EmailTemplates.getSubscriptionChangedTemplate(newPlanId)
             );
           }
@@ -255,7 +255,7 @@ export class WebhookServices {
       if (sub && sub.user && sub.user.email) {
         this.emailProvider.sendEmail(
           sub.user.email,
-          "Payment Failed ⚠️ - UpbeatAfrica",
+          "Payment Failed ⚠️ - UpBeat Africa",
           EmailTemplates.getPaymentFailedTemplate()
         );
       }
@@ -358,7 +358,7 @@ export class WebhookServices {
         if (txResult.djEmail) {
           this.emailProvider.sendEmail(
             txResult.djEmail,
-            "Payment Received! 💰 - UpbeatAfrica",
+            "Payment Received! 💰 - UpBeat Africa",
             EmailTemplates.getPaymentReceivedAlertTemplate(txResult.clientName, amountPaid)
           );
         }
@@ -366,7 +366,7 @@ export class WebhookServices {
         if (txResult.clientEmail && txResult.resolvedBookingId) {
           this.emailProvider.sendEmail(
             txResult.clientEmail,
-            "Payment Receipt - UpbeatAfrica",
+            "Payment Receipt - UpBeat Africa",
             EmailTemplates.getPaymentReceiptTemplate(
               amountPaid, 
               txResult.eventType,

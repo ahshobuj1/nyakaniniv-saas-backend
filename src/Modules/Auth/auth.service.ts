@@ -46,7 +46,6 @@ export class AuthServices {
         password: hashed,
         role: "DJ" as UserRole, // Default
         isVerified: false,
-        otp,
         otpExpiry,
       },
     });
@@ -55,7 +54,7 @@ export class AuthServices {
     //  this.emailProvider.sendEmail
     this.emailProvider.sendEmail(
       email,
-      "Verify Your Email - UpbeatAfrica",
+      "Verify Email - UpBeat Africa",
       EmailTemplates.getOtpTemplate(otp)
     );
 
@@ -128,7 +127,7 @@ export class AuthServices {
     // Send Email
     this.emailProvider.sendEmail(
       email,
-      "Your New Verification Code - UpbeatAfrica",
+      "New Verification Code - UpBeat Africa",
       EmailTemplates.getOtpTemplate(otp)
     );
 
@@ -176,7 +175,7 @@ export class AuthServices {
     // Send Email
     this.emailProvider.sendEmail(
       email,
-      "Password Reset Request - UpbeatAfrica",
+      "Password Reset Request - UpBeat Africa",
       EmailTemplates.getPasswordResetTemplate(`http://localhost:3000/auth/reset-password?otp=${otp}&email=${encodeURIComponent(email)}`)
     );
 

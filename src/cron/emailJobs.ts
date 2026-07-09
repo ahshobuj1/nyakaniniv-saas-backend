@@ -62,7 +62,7 @@ export class EmailCronJobs {
       if (booking.client?.email) {
         this.emailProvider.sendEmail(
           booking.client.email,
-          "Upcoming Event Reminder 📅 - UpbeatAfrica",
+          "Upcoming Event Reminder 📅 - UpBeat Africa",
           EmailTemplates.getUpcomingEventReminderTemplate(
             booking.eventType || "Event",
             booking.eventDate?.toISOString() || new Date().toISOString(),
@@ -74,7 +74,7 @@ export class EmailCronJobs {
       if (booking.tenant?.user?.email) {
         this.emailProvider.sendEmail(
           booking.tenant.user.email,
-          "Upcoming Event Reminder 📅 - UpbeatAfrica",
+          "Upcoming Event Reminder 📅 - UpBeat Africa",
           EmailTemplates.getUpcomingEventReminderTemplate(
             booking.eventType || "Event",
             booking.eventDate?.toISOString() || new Date().toISOString(),
@@ -110,7 +110,7 @@ export class EmailCronJobs {
       if (sub.user?.email) {
         this.emailProvider.sendEmail(
           sub.user.email,
-          "Subscription Expiring Soon! ⚠️ - UpbeatAfrica",
+          "Subscription Expiring Soon! - UpBeat Africa",
           EmailTemplates.getSubscriptionExpiryWarningTemplate(3)
         );
       }
@@ -141,7 +141,7 @@ export class EmailCronJobs {
       if (sub.user?.email) {
         this.emailProvider.sendEmail(
           sub.user.email,
-          "Subscription Expired - Portfolio Offline ⚠️ - UpbeatAfrica",
+          "Subscription Expired - Portfolio Offline ⚠️ - UpBeat Africa",
           EmailTemplates.getSubscriptionExpiredTemplate()
         );
       }

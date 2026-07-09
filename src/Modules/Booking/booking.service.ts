@@ -74,7 +74,7 @@ export class BookingServices {
       if (tenant.user && tenant.user.email) {
         this.emailProvider.sendEmail(
           tenant.user.email,
-          "New Booking Request Alert - UpbeatAfrica",
+          "New Booking Request - UpBeat Africa",
           EmailTemplates.getNewBookingAlertTemplate(data.clientName, data.eventType || "Event", data.eventDate || new Date().toISOString())
         );
       }
@@ -83,7 +83,7 @@ export class BookingServices {
     // Auto-reply to Client
     this.emailProvider.sendEmail(
       data.clientEmail,
-      "Booking Request Received - UpbeatAfrica",
+      "Booking Request Received - UpBeat Africa",
       EmailTemplates.getBookingAutoReplyTemplate(tenant.stageName || tenant.user?.firstName || "DJ", data.eventType || "Event")
     );
 
@@ -178,7 +178,7 @@ export class BookingServices {
       if (booking.client?.email) {
         this.emailProvider.sendEmail(
           booking.client.email,
-          "Booking Request Accepted! - UpbeatAfrica",
+          "Booking Request Accepted! - UpBeat Africa",
           EmailTemplates.getBookingAcceptedTemplate(
             booking.tenant?.stageName || booking.tenant?.user?.firstName || "DJ",
             txResult.updatedBooking.eventType || "Event",
@@ -203,7 +203,7 @@ export class BookingServices {
     if ((data.status as any) === 'canceled' && booking.client?.email) {
       this.emailProvider.sendEmail(
         booking.client.email,
-        "Booking Canceled - UpbeatAfrica",
+        "Booking Canceled - UpBeat Africa",
         EmailTemplates.getBookingRejectedTemplate(
           booking.tenant?.stageName || booking.tenant?.user?.firstName || "DJ",
           booking.eventType || "Event"
@@ -213,7 +213,7 @@ export class BookingServices {
       // If just a regular update (not canceled, not accepted), consider it an update email
       this.emailProvider.sendEmail(
         booking.client.email,
-        "Booking Details Updated - UpbeatAfrica",
+        "Booking Details Updated - UpBeat Africa",
         EmailTemplates.getBookingUpdatedTemplate(
           booking.tenant?.stageName || booking.tenant?.user?.firstName || "DJ",
           updatedBooking.eventType || "Event",
@@ -230,6 +230,10 @@ export class BookingServices {
       where: { id },
       include: { tenant: true, payment: true, client: true }
     });
+
+    if (booking && booking.status === BookingStatus.completed) {
+      throw new BadRequestError('Booking is already paid');
+    }
 
     if (!booking || booking.status !== BookingStatus.accepted || !booking.totalAmount) {
       throw new BadRequestError('Booking is not ready for payment or already paid');
@@ -285,14 +289,11 @@ export class BookingServices {
       if (booking.tenant.user?.email) {
         this.emailProvider.sendEmail(
           booking.tenant.user.email,
-          "Cash Payment Requested - UpbeatAfrica",
-          `
-            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
-              <h2 style="color: #ffc107; border-bottom: 2px solid #eee; padding-bottom: 10px;">Cash Payment Requested</h2>
-              <p><strong>${booking.client?.name || 'Client'}</strong> has requested to pay by cash for their <strong>${booking.eventType}</strong> booking.</p>
-              <p>You can mark this booking as paid from your dashboard once you receive the cash payment.</p>
-            </div>
-          `
+          "Cash Payment Requested - UpBeat Africa",
+          EmailTemplates.getCashPaymentRequestedTemplate(
+            booking.client?.name || 'Client',
+            booking.eventType || 'Event'
+          )
         );
       }
     }
@@ -315,7 +316,7 @@ export class BookingServices {
       const checkoutRedirectUrl = `${config.apiUrl}/bookings/v1/${id}/checkout-redirect`;
       this.emailProvider.sendEmail(
         booking.client.email,
-        "Reminder: Payment Required for your Booking - UpbeatAfrica",
+        "Payment Reminder for DJ Booking - UpBeat Africa",
         EmailTemplates.getPaymentReminderTemplate(
           booking.tenant?.stageName || booking.tenant?.user?.firstName || "DJ",
           booking.eventType || "Event",

@@ -57,7 +57,7 @@ export class TenantServices {
       const url = `https://${newTenant.subdomain}.upbeatafrica.com`;
       this.emailProvider.sendEmail(
         newTenant.user.email,
-        "Your Portfolio is Live! 🌐 - UpbeatAfrica",
+        "Your Portfolio is Live! 🌐 - UpBeat Africa",
         EmailTemplates.getPortfolioLiveTemplate(url)
       );
     }
@@ -206,7 +206,7 @@ export class TenantServices {
     if (!data.isActive && tenant.isActive && tenant.user?.email) {
       this.emailProvider.sendEmail(
         tenant.user.email,
-        "Account Suspended 🚫 - UpbeatAfrica",
+        "Account Suspended - UpBeat Africa",
         EmailTemplates.getAccountSuspendedTemplate()
       );
     }

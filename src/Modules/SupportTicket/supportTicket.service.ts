@@ -27,7 +27,7 @@ export class SupportTicketServices {
     // Alert Admin
     this.emailProvider.sendEmail(
       config.defaultAdmin.email || "admin@upbeatafrica.com",
-      `New Support Ticket: ${data.subject}`,
+      `New Support Ticket: ${ticket.id}`,
       EmailTemplates.getNewSupportTicketAdminAlertTemplate(data.fullName, data.subject, data.issue)
     );
 
@@ -35,7 +35,7 @@ export class SupportTicketServices {
     if (data.email) {
       this.emailProvider.sendEmail(
         data.email,
-        "Support Ticket Received - UpbeatAfrica",
+        "Support Ticket Received - UpBeat Africa",
         EmailTemplates.getSupportTicketReceivedTemplate(data.subject)
       );
     }
@@ -99,7 +99,7 @@ export class SupportTicketServices {
     if (data.status === TicketStatus.resolved && updated.email) {
       this.emailProvider.sendEmail(
         updated.email,
-        "Support Ticket Resolved ✅ - UpbeatAfrica",
+        "Support Ticket Resolved ✅ - UpBeat Africa",
         EmailTemplates.getSupportTicketResolvedTemplate(updated.subject || "Your Ticket")
       );
     }
