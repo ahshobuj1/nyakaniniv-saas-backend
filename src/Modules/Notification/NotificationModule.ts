@@ -46,6 +46,12 @@ export class NotificationModule extends BaseModule {
       controller.getMyNotifications.bind(controller),
     );
 
+    this.router.get(
+      "/unread-count",
+      authenticateUser,
+      controller.getUnreadCount.bind(controller),
+    );
+
     this.router.patch(
       "/:id/read",
       authenticateUser,

@@ -30,17 +30,20 @@ enum BookingStatus {
   completed
 }
 
-enum InvoiceType {
-  SUBSCRIPTION
-  BOOKING
+enum SubscriptionInvoiceStatus {
+  paid
+  unpaid
 }
 
-enum InvoiceMethod {
+enum BookingPaymentMethod {
   STRIPE
+  PAYSTACK
+  PESAPAL
+  FLUTTERWAVE
   CASH
 }
 
-enum InvoicePaymentStatus {
+enum BookingPaymentStatus {
   paid
   unpaid
 }
@@ -71,12 +74,12 @@ model User {
   createdAt  DateTime? @default(now()) @map("created_at")
   updatedAt  DateTime? @default(now()) @updatedAt @map("updated_at")
 
-  tenant         Tenant?
-  subscriptions  Subscription[]
-  invoices       Invoice[]
-  auditLogs      AuditLog[]
-  supportTickets SupportTicket[]
-  notifications  Notification[]
+  tenant               Tenant?
+  subscriptions        Subscription[]
+  subscriptionInvoices SubscriptionInvoice[]
+  auditLogs            AuditLog[]
+  supportTickets       SupportTicket[]
+  notifications        Notification[]
 
   @@map("users")
 }
@@ -111,6 +114,9 @@ model Tenant {
   socialLinks        Json?               @map("social_links")
   config             Json?
   stripeAccountId    String?             @map("stripe_account_id") @db.VarChar(255)
+  paystackSubaccountId String?           @map("paystack_subaccount_id") @db.VarChar(255)
+  flutterwaveSubaccountId String?        @map("flutterwave_subaccount_id") @db.VarChar(255)
+  pesapalAccountId   String?             @map("pesapal_account_id") @db.VarChar(255)
   activePlanId       Int?                @map("active_plan_id")
   subscriptionStatus SubscriptionStatus? @map("subscription_status")
   createdAt          DateTime?           @default(now()) @map("created_at")
@@ -119,10 +125,11 @@ model Tenant {
   user  User?  @relation(fields: [userId], references: [id])
   theme Theme? @relation(fields: [themeId], references: [id])
 
-  mixTapes MixTape[]
-  events   Event[]
-  bookings Booking[]
-  invoices Invoice[]
+  mixTapes        MixTape[]
+  events          Event[]
+  bookings        Booking[]
+  clients         Client[]
+  bookingPayments BookingPayment[]
 
   @@map("tenants")
 }
@@ -140,6 +147,7 @@ model SubscriptionPlan {
   updatedAt            DateTime? @default(now()) @updatedAt @map("updated_at")
 
   subscriptions Subscription[]
+  subscriptionInvoices SubscriptionInvoice[]
 
   @@map("subscription_plans")
 }
@@ -169,6 +177,7 @@ model MixTape {
   order     Int?
   createdAt DateTime? @default(now()) @map("created_at")
   updatedAt DateTime? @default(now()) @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
 
   tenant Tenant? @relation(fields: [tenantId], references: [id])
 
@@ -180,7 +189,7 @@ model Event {
   tenantId     String?      @map("tenant_id") @db.Uuid
   title        String?      @db.VarChar(255)
   description  String?      @db.Text
-  eventDate    DateTime?    @map("event_date") @db.Date
+  eventDate    DateTime?    @map("event_date")
   venueName    String?      @map("venue_name") @db.VarChar(255)
   venueAddress String?      @map("venue_address") @db.VarChar(255)
   capacity     Int?
@@ -188,6 +197,7 @@ model Event {
   status       EventStatus?
   createdAt    DateTime?    @default(now()) @map("created_at")
   updatedAt    DateTime?    @default(now()) @updatedAt @map("updated_at")
+  deletedAt    DateTime?    @map("deleted_at")
 
   tenant Tenant? @relation(fields: [tenantId], references: [id])
 
@@ -197,41 +207,69 @@ model Event {
 model Booking {
   id           String         @id @default(uuid()) @db.Uuid
   tenantId     String?        @map("tenant_id") @db.Uuid
-  clientName   String?        @map("client_name") @db.VarChar(255)
-  clientEmail  String?        @map("client_email") @db.VarChar(255)
+  clientId     String?        @map("client_id") @db.Uuid
   eventType    String?        @map("event_type") @db.VarChar(255)
   eventDetails String?        @map("event_details") @db.Text
-  clientPhone  String?        @map("client_phone") @db.VarChar(50)
   eventDate    DateTime?      @map("event_date")
   address      String?        @db.Text
   status       BookingStatus?
   totalAmount  Decimal?       @map("total_amount") @db.Decimal(10, 2)
   createdAt    DateTime?      @default(now()) @map("created_at")
   updatedAt    DateTime?      @default(now()) @updatedAt @map("updated_at")
+  deletedAt    DateTime?      @map("deleted_at")
 
-  tenant  Tenant?  @relation(fields: [tenantId], references: [id])
-  invoice Invoice?
+  tenant  Tenant?         @relation(fields: [tenantId], references: [id])
+  client  Client?         @relation(fields: [clientId], references: [id])
+  payment BookingPayment?
 
   @@map("bookings")
 }
 
-model Invoice {
+model Client {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String?   @map("tenant_id") @db.Uuid
+  name      String?   @db.VarChar(255)
+  email     String?   @db.VarChar(255)
+  phone     String?   @db.VarChar(50)
+  createdAt DateTime? @default(now()) @map("created_at")
+  updatedAt DateTime? @default(now()) @updatedAt @map("updated_at")
+
+  tenant   Tenant?   @relation(fields: [tenantId], references: [id])
+  bookings Booking[]
+
+  @@map("clients")
+}
+
+model SubscriptionInvoice {
+  id              String                     @id @default(uuid()) @db.Uuid
+  userId          String?                    @map("user_id") @db.Uuid
+  planId          Int?                       @map("plan_id")
+  amount          Decimal?                   @db.Decimal(10, 2)
+  status          SubscriptionInvoiceStatus?
+  stripeInvoiceId String?                    @map("stripe_invoice_id") @db.VarChar(255)
+  createdAt       DateTime?                  @default(now()) @map("created_at")
+  updatedAt       DateTime?                  @default(now()) @updatedAt @map("updated_at")
+
+  user User? @relation(fields: [userId], references: [id])
+  plan SubscriptionPlan? @relation(fields: [planId], references: [id])
+
+  @@map("subscription_invoices")
+}
+
+model BookingPayment {
   id        String                @id @default(uuid()) @db.Uuid
   tenantId  String?               @map("tenant_id") @db.Uuid
   bookingId String?               @unique @map("booking_id") @db.Uuid
-  userId    String?               @map("user_id") @db.Uuid
   amount    Decimal?              @db.Decimal(10, 2)
-  type      InvoiceType?
-  method    InvoiceMethod?
-  status    InvoicePaymentStatus?
+  method    BookingPaymentMethod?
+  status    BookingPaymentStatus?
   createdAt DateTime?             @default(now()) @map("created_at")
   updatedAt DateTime?             @default(now()) @updatedAt @map("updated_at")
 
   tenant  Tenant?  @relation(fields: [tenantId], references: [id])
   booking Booking? @relation(fields: [bookingId], references: [id])
-  user    User?    @relation(fields: [userId], references: [id])
 
-  @@map("invoices")
+  @@map("booking_payments")
 }
 
 model WebhookEvent {

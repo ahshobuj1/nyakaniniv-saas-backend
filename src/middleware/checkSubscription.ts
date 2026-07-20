@@ -31,8 +31,33 @@ export const checkSubscription = (requiredFeatures: string[] = []) => {
         throw new NotFoundError('Tenant profile not found for this user.');
       }
 
-      if (tenant.subscriptionStatus !== 'active') {
+      // 1. First, check if there is an actual active subscription
+      const activeSub = await prisma.subscription.findFirst({
+        where: { userId: user.id, status: 'active' },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      // 2. If no active sub exists, but tenant says active, heal it to canceled
+      if (!activeSub) {
+        if (tenant.subscriptionStatus === 'active') {
+          await prisma.tenant.update({
+            where: { id: tenant.id },
+            data: { subscriptionStatus: 'canceled' }
+          });
+        }
         throw new AuthorizationError('Subscription is inactive or expired. Please renew your subscription to access this feature.');
+      }
+
+      // 3. If active sub exists, but tenant says otherwise, heal it to active
+      if (tenant.subscriptionStatus !== 'active') {
+        await prisma.tenant.update({
+          where: { id: tenant.id },
+          data: { 
+            subscriptionStatus: 'active', 
+            activePlanId: activeSub.planId 
+          }
+        });
+        tenant.subscriptionStatus = 'active';
       }
 
       // If required features are specified, verify them

@@ -2,12 +2,17 @@ import { PrismaClient } from '@/prisma/generated/client';
 import { NotFoundError, BadRequestError, AuthorizationError } from '@/core/errors/AppError';
 import Stripe from 'stripe';
 import { CreateSubscriptionPlanDTO, SubscribeDTO, UpdateSubscriptionPlanDTO } from './SubscriptionDTO';
-import { SubscriptionStatus } from '@/prisma/generated/client';
+import { SubscriptionStatus, SubscriptionInvoiceStatus } from '@/prisma/generated/client';
+import { IEmailProvider } from '@/providers/EmailProvider';
+import { EmailTemplates } from '@/utils/EmailTemplates';
 
 export class SubscriptionServices {
   private stripe: any = null;
 
-  constructor(private prisma: PrismaClient) {
+  constructor(
+    private prisma: PrismaClient,
+    private emailProvider: IEmailProvider
+  ) {
     if (process.env.STRIPE_SECRET_KEY) {
       this.stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
         apiVersion: "2024-04-10" as any,
@@ -44,7 +49,7 @@ export class SubscriptionServices {
     });
 
     if (!subscription) {
-      throw new NotFoundError('No active subscription found');
+      return null;
     }
 
     return subscription;
@@ -98,6 +103,18 @@ export class SubscriptionServices {
     const amountStr = data.billingCycle === 'monthly' ? plan.priceMonthly : plan.priceAnnually;
     const amount = Number(amountStr) || 0;
 
+    const activeSub = await this.prisma.subscription.findFirst({
+      where: { userId, status: SubscriptionStatus.active }
+    });
+
+    if (activeSub) {
+      if (activeSub.planId === data.planId) {
+        throw new BadRequestError('You are already subscribed to this plan.');
+      } else {
+        throw new BadRequestError('You already have an active subscription. Please cancel your current plan before switching.');
+      }
+    }
+
     if (!this.stripe) {
       // Mock logic if no Stripe keys are available yet
       const subscription = await this.prisma.subscription.create({
@@ -106,18 +123,18 @@ export class SubscriptionServices {
           planId: data.planId,
           status: SubscriptionStatus.active,
           stripeSubId: 'mock_sub_' + Date.now(),
-          periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // +30 days
+          periodEnd: new Date(Date.now() + (data.billingCycle === 'monthly' ? 30 : 365) * 24 * 60 * 60 * 1000), // approx
         }
       });
       
       // Auto-generate invoice for mock payment
-      await this.prisma.invoice.create({
+      await this.prisma.subscriptionInvoice.create({
         data: {
           userId,
+          planId: data.planId,
           amount,
-          type: 'SUBSCRIPTION',
-          method: 'CASH', // Mock treated as cash/offline
-          status: 'paid'
+          status: SubscriptionInvoiceStatus.paid,
+          stripeInvoiceId: 'mock_invoice_' + Date.now()
         }
       });
 
@@ -127,6 +144,7 @@ export class SubscriptionServices {
     // Actual Stripe Logic using inline dynamic pricing (price_data)
     const unitAmount = Math.round(amount * 100); // Stripe requires cents
 
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     const session = await this.stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [{
@@ -144,12 +162,13 @@ export class SubscriptionServices {
         quantity: 1,
       }],
       mode: 'subscription',
-      success_url: data.successUrl || `${process.env.FRONTEND_URL}/dashboard?success=true`,
-      cancel_url: data.cancelUrl || `${process.env.FRONTEND_URL}/pricing?canceled=true`,
+      success_url: data.successUrl || `${baseUrl}/dashboard?success=true`,
+      cancel_url: data.cancelUrl || `${baseUrl}/pricing?canceled=true`,
       client_reference_id: userId,
       metadata: {
         userId,
         planId: plan.id.toString(),
+        billingCycle: data.billingCycle,
       }
     });
 
@@ -169,10 +188,26 @@ export class SubscriptionServices {
       await this.stripe.subscriptions.cancel(subscription.stripeSubId);
     }
 
-    await this.prisma.subscription.update({
-      where: { id: subscription.id },
-      data: { status: SubscriptionStatus.canceled }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.subscription.update({
+        where: { id: subscription.id },
+        data: { status: SubscriptionStatus.canceled }
+      });
+      
+      await tx.tenant.updateMany({
+        where: { userId },
+        data: { subscriptionStatus: 'canceled' }
+      });
     });
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (user && user.email) {
+      this.emailProvider.sendEmail(
+        user.email,
+        "Subscription Canceled - UpBeat Africa",
+        EmailTemplates.getSubscriptionCanceledTemplate()
+      );
+    }
 
     return { success: true, message: 'Subscription canceled' };
   }
@@ -217,18 +252,18 @@ export class SubscriptionServices {
             planId: parseInt(planId, 10),
             stripeSubId,
             status: SubscriptionStatus.active,
-            periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // approx, will be updated via invoice.payment_succeeded
+            periodEnd: new Date(Date.now() + (session.metadata?.billingCycle === 'monthly' ? 30 : 365) * 24 * 60 * 60 * 1000)
           }
         });
 
         // Auto-generate invoice for actual Stripe payment
-        await this.prisma.invoice.create({
+        await this.prisma.subscriptionInvoice.create({
           data: {
             userId,
+            planId: parseInt(planId, 10),
             amount: amountPaid,
-            type: 'SUBSCRIPTION',
-            method: 'STRIPE',
-            status: 'paid'
+            status: SubscriptionInvoiceStatus.paid,
+            stripeInvoiceId: session.invoice ? (session.invoice as string) : 'stripe_mock'
           }
         });
       }

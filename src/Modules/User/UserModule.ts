@@ -6,6 +6,8 @@ import { validateRequest } from '@/middleware/validation';
 import { authenticateUser, authorizeRole } from '@/middleware/auth';
 import { UpdateProfileDTOSchema, UpdateUserRoleDTOSchema, UpdateUserStatusDTOSchema } from './UserDTO';
 import { UserRole } from '@/prisma/generated/client';
+import { IFileUploader } from '@/utils/IFileUploader';
+import multer from 'multer';
 
 export class UserModule extends BaseModule {
   public name: string = 'UserModule';
@@ -22,15 +24,23 @@ export class UserModule extends BaseModule {
 
   protected async setupControllers(): Promise<void> {
     const userService = this.getService<UserServices>('UserService');
-    this.registerController('UserController', new UserController(userService));
+    const fileUploader = this.context.getService('fileUploader') as IFileUploader;
+    this.registerController('UserController', new UserController(userService, fileUploader));
   }
 
   protected async setupRoutes(): Promise<void> {
     const controller = this.getController<UserController>('UserController');
+    const upload = multer({ dest: 'tmp/' });
 
     // Current user profile routes
     this.router.get('/me', authenticateUser, controller.getMe.bind(controller));
-    this.router.patch('/me', authenticateUser, validateRequest(UpdateProfileDTOSchema), controller.updateMe.bind(controller));
+    this.router.patch(
+      '/me', 
+      authenticateUser, 
+      upload.single('profileImage'),
+      validateRequest(UpdateProfileDTOSchema), 
+      controller.updateMe.bind(controller)
+    );
 
     // Admin routes
     this.router.get('/', authenticateUser, authorizeRole([UserRole.SUPER_ADMIN]), controller.getAllUsers.bind(controller));

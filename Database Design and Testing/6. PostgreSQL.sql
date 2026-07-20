@@ -21,17 +21,17 @@ CREATE TYPE "booking_status" AS ENUM (
   'completed'
 );
 
-CREATE TYPE "invoice_type" AS ENUM (
-  'SUBSCRIPTION',
-  'BOOKING'
+CREATE TYPE "subscription_invoice_status" AS ENUM (
+  'paid',
+  'unpaid'
 );
 
-CREATE TYPE "invoice_method" AS ENUM (
+CREATE TYPE "booking_payment_method" AS ENUM (
   'STRIPE',
   'CASH'
 );
 
-CREATE TYPE "invoice_payment_status" AS ENUM (
+CREATE TYPE "booking_payment_status" AS ENUM (
   'paid',
   'unpaid'
 );
@@ -158,7 +158,8 @@ CREATE TABLE "mix_tapes" (
     "cover_url" VARCHAR(255),
     "order" INTEGER,
     "created_at" TIMESTAMP,
-    "updated_at" TIMESTAMP
+    "updated_at" TIMESTAMP,
+    "deleted_at" TIMESTAMP
 );
 
 CREATE TABLE "events" (
@@ -166,12 +167,23 @@ CREATE TABLE "events" (
     "tenant_id" UUID,
     "title" VARCHAR(255),
     "description" Text,
-    "event_date" DATE,
+    "event_date" TIMESTAMP WITH TIME ZONE,
     "venue_name" VARCHAR(255),
     "venue_address" VARCHAR(255),
     "capacity" INTEGER,
     "price" DECIMAL(10, 2),
     "status" event_status,
+    "created_at" TIMESTAMP,
+    "updated_at" TIMESTAMP,
+    "deleted_at" TIMESTAMP
+);
+
+CREATE TABLE "clients" (
+    "id" UUID PRIMARY KEY,
+    "tenant_id" UUID,
+    "name" VARCHAR(255),
+    "email" VARCHAR(255),
+    "phone" VARCHAR(50),
     "created_at" TIMESTAMP,
     "updated_at" TIMESTAMP
 );
@@ -179,25 +191,34 @@ CREATE TABLE "events" (
 CREATE TABLE "bookings" (
     "id" UUID PRIMARY KEY,
     "tenant_id" UUID,
-    "client_name" VARCHAR(255),
-    "client_email" VARCHAR(255),
+    "client_id" UUID,
     "event_type" VARCHAR(255),
     "event_details" Text,
     "status" booking_status,
     "total_amount" DECIMAL(10, 2),
     "created_at" TIMESTAMP,
+    "updated_at" TIMESTAMP,
+    "deleted_at" TIMESTAMP
+);
+
+CREATE TABLE "subscription_invoices" (
+    "id" UUID PRIMARY KEY,
+    "user_id" UUID,
+    "plan_id" INTEGER,
+    "amount" DECIMAL(10, 2),
+    "status" subscription_invoice_status,
+    "stripe_invoice_id" VARCHAR(255),
+    "created_at" TIMESTAMP,
     "updated_at" TIMESTAMP
 );
 
-CREATE TABLE "invoices" (
+CREATE TABLE "booking_payments" (
     "id" UUID PRIMARY KEY,
     "tenant_id" UUID,
     "booking_id" UUID UNIQUE,
-    "user_id" UUID,
     "amount" DECIMAL(10, 2),
-    "type" invoice_type,
-    "method" invoice_method,
-    "status" invoice_payment_status,
+    "method" booking_payment_method,
+    "status" booking_payment_status,
     "created_at" TIMESTAMP,
     "updated_at" TIMESTAMP
 );
@@ -292,7 +313,13 @@ ADD FOREIGN KEY ("tenant_id") REFERENCES "tenants" ("id") DEFERRABLE INITIALLY I
 ALTER TABLE "bookings"
 ADD FOREIGN KEY ("tenant_id") REFERENCES "tenants" ("id") DEFERRABLE INITIALLY IMMEDIATE;
 
-ALTER TABLE "invoices"
+ALTER TABLE "clients"
+ADD FOREIGN KEY ("tenant_id") REFERENCES "tenants" ("id") DEFERRABLE INITIALLY IMMEDIATE;
+
+ALTER TABLE "bookings"
+ADD FOREIGN KEY ("client_id") REFERENCES "clients" ("id") DEFERRABLE INITIALLY IMMEDIATE;
+
+ALTER TABLE "booking_payments"
 ADD FOREIGN KEY ("booking_id") REFERENCES "bookings" ("id") DEFERRABLE INITIALLY IMMEDIATE;
 
 ALTER TABLE "subscriptions"
@@ -301,11 +328,14 @@ ADD FOREIGN KEY ("user_id") REFERENCES "users" ("id") DEFERRABLE INITIALLY IMMED
 ALTER TABLE "subscriptions"
 ADD FOREIGN KEY ("plan_id") REFERENCES "subscription_plans" ("id") DEFERRABLE INITIALLY IMMEDIATE;
 
-ALTER TABLE "invoices"
+ALTER TABLE "booking_payments"
 ADD FOREIGN KEY ("tenant_id") REFERENCES "tenants" ("id") DEFERRABLE INITIALLY IMMEDIATE;
 
-ALTER TABLE "invoices"
+ALTER TABLE "subscription_invoices"
 ADD FOREIGN KEY ("user_id") REFERENCES "users" ("id") DEFERRABLE INITIALLY IMMEDIATE;
+
+ALTER TABLE "subscription_invoices"
+ADD FOREIGN KEY ("plan_id") REFERENCES "subscription_plans" ("id") DEFERRABLE INITIALLY IMMEDIATE;
 
 ALTER TABLE "audit_logs"
 ADD FOREIGN KEY ("user_id") REFERENCES "users" ("id") DEFERRABLE INITIALLY IMMEDIATE;

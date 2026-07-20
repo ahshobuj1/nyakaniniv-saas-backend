@@ -5,11 +5,16 @@ import { ConflictError, NotFoundError, AuthenticationError } from "@/core/errors
 import { hashPassword, comparePassword } from "@/utils/password";
 import { generateToken } from "@/utils/jwt";
 import { generateOtp } from "@/utils/otp";
+import { IEmailProvider } from "@/providers/EmailProvider";
+import { EmailTemplates } from "@/utils/EmailTemplates";
 
 export class AuthServices {
   private logger = new AppLogger("AuthServices");
 
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly emailProvider: IEmailProvider
+  ) {}
 
   public async register(
     email: string,
@@ -41,13 +46,17 @@ export class AuthServices {
         password: hashed,
         role: "DJ" as UserRole, // Default
         isVerified: false,
-        otp,
         otpExpiry,
       },
     });
 
-    // Mock Email Send
-    this.logger.info(`[MOCK EMAIL] Sent OTP ${otp} to ${email}`);
+    // Send Email
+    //  this.emailProvider.sendEmail
+    this.emailProvider.sendEmail(
+      email,
+      "Verify Email - UpBeat Africa",
+      EmailTemplates.getOtpTemplate(otp)
+    );
 
     this.logger.info("User registered successfully", { userId: newUser.id });
     return newUser;
@@ -80,6 +89,14 @@ export class AuthServices {
     });
 
     const token = generateToken({ id: updatedUser.id, email: updatedUser.email, role: updatedUser.role });
+
+    // Send Welcome Email
+    this.emailProvider.sendEmail(
+      updatedUser.email,
+      "Welcome to Nyakaniniv!",
+      EmailTemplates.getWelcomeTemplate(updatedUser.firstName || "DJ")
+    );
+
     return { user: updatedUser, token };
   }
 
@@ -107,8 +124,12 @@ export class AuthServices {
       },
     });
 
-    // Mock Email Send
-    this.logger.info(`[MOCK EMAIL] Sent NEW Verification OTP ${otp} to ${email}`);
+    // Send Email
+    this.emailProvider.sendEmail(
+      email,
+      "New Verification Code - UpBeat Africa",
+      EmailTemplates.getOtpTemplate(otp)
+    );
 
     return { otp };
   }
@@ -151,8 +172,13 @@ export class AuthServices {
       data: { otp, otpExpiry },
     });
 
-    // Mock Email Send
-    this.logger.info(`[MOCK EMAIL] Sent Password Reset OTP ${otp} to ${email}`);
+    // Send Email
+    this.emailProvider.sendEmail(
+      email,
+      "Password Reset Request - UpBeat Africa",
+      EmailTemplates.getPasswordResetTemplate(`http://localhost:3000/auth/reset-password?otp=${otp}&email=${encodeURIComponent(email)}`)
+    );
+
     return { otp };
   }
 
@@ -176,6 +202,31 @@ export class AuthServices {
         password: hashed,
         otp: null,
         otpExpiry: null,
+      },
+    });
+
+    return true;
+  }
+
+  public async changePassword(userId: string, currentPasswordRaw: string, newPasswordRaw: string) {
+    this.logger.info("Attempting to change password", { userId });
+
+    const user: any = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundError("User not found");
+    }
+
+    const isMatch = await comparePassword(currentPasswordRaw, user.password);
+    if (!isMatch) {
+      throw new AuthenticationError("Incorrect current password");
+    }
+
+    const hashed = await hashPassword(newPasswordRaw);
+
+    await (this.prisma.user as any).update({
+      where: { id: user.id },
+      data: {
+        password: hashed,
       },
     });
 

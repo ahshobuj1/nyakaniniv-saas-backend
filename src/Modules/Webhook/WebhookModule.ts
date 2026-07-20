@@ -13,8 +13,9 @@ export class WebhookModule extends BaseModule {
   private logger = new AppLogger('WebhookModule');
 
   protected async setupUseCases(): Promise<void> {
-    const prisma = this.context.getService('prisma');
-    this.registerService('WebhookService', new WebhookServices(prisma));
+    const prisma = this.context.getService("prisma");
+    const emailProvider = this.context.getService("email");
+    this.registerService("WebhookService", new WebhookServices(prisma, emailProvider));
   }
 
   protected async setupControllers(): Promise<void> {
@@ -26,5 +27,6 @@ export class WebhookModule extends BaseModule {
     const controller = this.getController<WebhookController>('WebhookController');
 
     this.router.post('/stripe', express.raw({ type: 'application/json' }), controller.stripeWebhook.bind(controller));
+    this.router.post('/paystack', express.raw({ type: 'application/json' }), controller.paystackWebhook.bind(controller));
   }
 }

@@ -31,12 +31,16 @@ export class AnalyticsModule extends BaseModule {
     this.router.get('/admin', authenticateUser, authorizeRole([UserRole.SUPER_ADMIN]), controller.getAdminAnalytics.bind(controller));
 
     // Tenant (DJ) analytics route - Requires basic active subscription to view dashboard analytics
-    this.router.get('/tenant', authenticateUser, authorizeRole([UserRole.DJ]), checkSubscription(), controller.getTenantAnalytics.bind(controller));
+    this.router.get('/tenant', authenticateUser, authorizeRole([UserRole.DJ]), 
+    checkSubscription(), 
+    controller.getTenantAnalytics.bind(controller));
 
     // Admin charts route
     this.router.get('/admin/charts', authenticateUser, authorizeRole([UserRole.SUPER_ADMIN]), controller.getAdminCharts.bind(controller));
 
     // Tenant (DJ) charts route
-    this.router.get('/tenant/charts', authenticateUser, authorizeRole([UserRole.DJ]), checkSubscription(), controller.getTenantCharts.bind(controller));
+    this.router.get('/tenant/charts', authenticateUser, authorizeRole([UserRole.DJ]), 
+    checkSubscription(), 
+    controller.getTenantCharts.bind(controller));
   }
 }

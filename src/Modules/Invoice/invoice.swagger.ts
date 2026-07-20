@@ -4,34 +4,34 @@
  * @swagger
  * /invoices/v1/all:
  *   get:
- *     summary: Get all invoices (Admin only)
- *     tags: [Invoice]
+ *     summary: Get all subscription invoices (Admin only)
+ *     tags: [SubscriptionInvoice]
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: List of all invoices
+ *         description: List of all subscription invoices
  */
 
 /**
  * @swagger
  * /invoices/v1/my-invoices:
  *   get:
- *     summary: Get all invoices for the authenticated DJ
- *     tags: [Invoice]
+ *     summary: Get all subscription invoices for the authenticated DJ
+ *     tags: [SubscriptionInvoice]
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: List of invoices for the DJ
+ *         description: List of subscription invoices for the DJ
  */
 
 /**
  * @swagger
  * /invoices/v1/{id}/pay:
  *   post:
- *     summary: Pay an invoice (Stripe Checkout)
- *     tags: [Invoice]
+ *     summary: Pay a booking payment (Stripe Checkout)
+ *     tags: [BookingPayment]
  *     parameters:
  *       - in: path
  *         name: id
@@ -59,8 +59,8 @@
  * @swagger
  * /invoices/v1/{id}/mark-paid:
  *   patch:
- *     summary: Mark an invoice as paid (DJ only, for cash bookings)
- *     tags: [Invoice]
+ *     summary: Mark a booking payment as paid (DJ only, for cash bookings)
+ *     tags: [BookingPayment]
  *     security:
  *       - bearerAuth: []
  *     parameters:

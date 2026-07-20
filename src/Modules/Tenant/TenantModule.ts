@@ -9,8 +9,11 @@ import {
   createTenantSchema,
   updateTenantSchema,
   assignThemeSchema,
+  updateTenantStatusSchema,
 } from './TenantDTO';
 import {UserRole} from '@/prisma/generated/client';
+import { IFileUploader } from '@/utils/IFileUploader';
+import multer from 'multer';
 
 export class TenantModule extends BaseModule {
   public name: string = 'TenantModule';
@@ -21,20 +24,31 @@ export class TenantModule extends BaseModule {
   private logger = new AppLogger('TenantModule');
 
   protected async setupUseCases(): Promise<void> {
-    const prisma = this.context.getService('prisma');
-    this.registerService('TenantService', new TenantServices(prisma));
+    const prisma = this.context.getService("prisma");
+    const emailProvider = this.context.getService("email");
+    this.registerService("TenantService", new TenantServices(prisma, emailProvider));
   }
 
   protected async setupControllers(): Promise<void> {
     const tenantService = this.getService<TenantServices>('TenantService');
+    const fileUploader = this.context.getService('fileUploader') as IFileUploader;
     this.registerController(
       'TenantController',
-      new TenantController(tenantService),
+      new TenantController(tenantService, fileUploader),
     );
   }
 
   protected async setupRoutes(): Promise<void> {
     const controller = this.getController<TenantController>('TenantController');
+    const upload = multer({ dest: 'tmp/' });
+
+    // Upload Media for Themes
+    this.router.post(
+      '/upload-media',
+      authenticateUser,
+      upload.single('file'),
+      controller.uploadMedia.bind(controller),
+    );
 
     // DJ Onboarding (Create Tenant)
     this.router.post(
@@ -72,6 +86,15 @@ export class TenantModule extends BaseModule {
       authenticateUser,
       validateRequest(assignThemeSchema),
       controller.assignTheme.bind(controller),
+    );
+
+    // Update Tenant Status (Admin Only)
+    this.router.patch(
+      '/:id/status',
+      authenticateUser,
+      authorizeRole([UserRole.SUPER_ADMIN]),
+      validateRequest(updateTenantStatusSchema),
+      controller.updateTenantStatus.bind(controller),
     );
   }
 }

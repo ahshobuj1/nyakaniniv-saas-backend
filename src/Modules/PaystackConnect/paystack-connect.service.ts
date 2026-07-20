@@ -1,0 +1,132 @@
+import axios from 'axios';
+import { PrismaClient } from '@/prisma/generated/client';
+
+export class PaystackConnectService {
+  constructor(private prisma: PrismaClient) { }
+
+  public async createSubaccount(tenantId: string, bankCode: string, accountNumber: string, businessName: string) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      include: { user: true },
+    });
+
+    if (!tenant) throw new Error("Tenant not found");
+
+    const secretKey = process.env.PAYSTACK_SECRET_KEY;
+    if (!secretKey) throw new Error("Paystack secret key is not configured.");
+
+    let subaccountId = tenant.paystackSubaccountId;
+
+    // Create a new Paystack Subaccount if they don't have one
+    if (!subaccountId) {
+      try {
+        const response = await axios.post(
+          'https://api.paystack.co/subaccount',
+          {
+            business_name: businessName,
+            settlement_bank: bankCode,
+            account_number: accountNumber,
+            percentage_charge: 5, // Just for default, we override at checkout
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${secretKey}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+
+        subaccountId = response.data.data.subaccount_code;
+
+        // Save the subaccount ID to the tenant
+        await this.prisma.tenant.update({
+          where: { id: tenantId },
+          data: { paystackSubaccountId: subaccountId },
+        });
+      } catch (error: any) {
+        console.error("Paystack Subaccount Error:", error.response?.data || error.message);
+        throw new Error(error.response?.data?.message || "Failed to create Paystack subaccount");
+      }
+    }
+
+    return {
+      success: true,
+      subaccountCode: subaccountId,
+    };
+  }
+
+  public async checkAccountStatus(tenantId: string) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+    });
+
+    if (!tenant || !tenant.paystackSubaccountId) {
+      return { isConnected: false };
+    }
+
+    const secretKey = process.env.PAYSTACK_SECRET_KEY;
+    if (!secretKey) throw new Error("Paystack secret key is not configured.");
+
+    try {
+      const paystackRes = await axios.get(
+        `https://api.paystack.co/subaccount/${tenant.paystackSubaccountId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${secretKey}`,
+          },
+        }
+      );
+      
+      const subaccount = paystackRes.data.data;
+      
+      return {
+        isConnected: true,
+        subaccountCode: tenant.paystackSubaccountId,
+        bankName: subaccount.settlement_bank,
+        accountNumber: subaccount.account_number
+      };
+    } catch (error: any) {
+      console.error("Failed to verify subaccount with Paystack:", error.response?.data || error.message);
+      // Fallback if the API fails, but we have the ID
+      return {
+        isConnected: true,
+        subaccountCode: tenant.paystackSubaccountId
+      };
+    }
+  }
+
+  public async disconnectAccount(tenantId: string) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+    });
+
+    if (!tenant) throw new Error("Tenant not found");
+
+    await this.prisma.tenant.update({
+      where: { id: tenantId },
+      data: { paystackSubaccountId: null },
+    });
+
+    return { success: true };
+  }
+
+  public async getBanks(country: string = 'nigeria') {
+    const secretKey = process.env.PAYSTACK_SECRET_KEY;
+    if (!secretKey) throw new Error("Paystack secret key is not configured.");
+
+    try {
+      const response = await axios.get(
+        `https://api.paystack.co/bank?country=${country}`,
+        {
+          headers: {
+            Authorization: `Bearer ${secretKey}`,
+          },
+        }
+      );
+      return response.data.data;
+    } catch (error: any) {
+      console.error("Paystack Get Banks Error:", error.response?.data || error.message);
+      throw new Error(error.response?.data?.message || "Failed to fetch banks from Paystack");
+    }
+  }
+}

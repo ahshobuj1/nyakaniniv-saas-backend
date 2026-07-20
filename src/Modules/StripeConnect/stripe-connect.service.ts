@@ -61,10 +61,22 @@ export class StripeConnectService {
     }
 
     const account = await stripe.accounts.retrieve(tenant.stripeAccountId);
+    
+    let externalAccount = null;
+    if (account.external_accounts?.data?.length) {
+      const extAcc = account.external_accounts.data[0] as any;
+      if (extAcc.object === 'bank_account') {
+        externalAccount = { type: 'bank_account', last4: extAcc.last4, bankName: extAcc.bank_name };
+      } else if (extAcc.object === 'card') {
+        externalAccount = { type: 'card', last4: extAcc.last4, brand: extAcc.brand };
+      }
+    }
+
     return {
       isConnected: true,
       detailsSubmitted: account.details_submitted,
       payoutsEnabled: account.payouts_enabled,
+      externalAccount
     };
   }
 }

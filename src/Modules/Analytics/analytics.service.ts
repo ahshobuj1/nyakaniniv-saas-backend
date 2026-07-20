@@ -15,7 +15,7 @@ export class AnalyticsServices {
       this.prisma.user.count(),
       this.prisma.tenant.count(),
       this.prisma.booking.count(),
-      this.prisma.invoice.aggregate({
+      this.prisma.subscriptionInvoice.aggregate({
         _sum: { amount: true },
         where: { status: 'paid' }
       }),
@@ -56,11 +56,11 @@ export class AnalyticsServices {
       bookingStats,
       recentRequests
     ] = await Promise.all([
-      this.prisma.invoice.aggregate({
+      this.prisma.bookingPayment.aggregate({
         _sum: { amount: true },
         where: { tenantId: tenant.id, status: 'paid' }
       }),
-      this.prisma.invoice.aggregate({
+      this.prisma.bookingPayment.aggregate({
         _sum: { amount: true },
         where: { tenantId: tenant.id, status: 'unpaid' }
       }),
@@ -72,7 +72,8 @@ export class AnalyticsServices {
       this.prisma.booking.findMany({
         where: { tenantId: tenant.id },
         take: 10,
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'desc' },
+        include: { client: true, payment: true }
       })
     ]);
 
@@ -93,7 +94,7 @@ export class AnalyticsServices {
   async getAdminCharts() {
     const revenueChart = await this.prisma.$queryRaw`
       SELECT to_char(DATE_TRUNC('month', created_at), 'YYYY-MM') as month, COALESCE(SUM(amount), 0)::float as amount
-      FROM invoices
+      FROM subscription_invoices
       WHERE status = 'paid' AND created_at >= CURRENT_DATE - INTERVAL '12 months'
       GROUP BY month
       ORDER BY month ASC;
@@ -116,7 +117,7 @@ export class AnalyticsServices {
 
     const earningsChart = await this.prisma.$queryRaw`
       SELECT to_char(DATE_TRUNC('month', created_at), 'YYYY-MM') as month, COALESCE(SUM(amount), 0)::float as amount
-      FROM invoices
+      FROM booking_payments
       WHERE tenant_id = CAST(${tenant.id} AS UUID) AND status = 'paid' AND created_at >= CURRENT_DATE - INTERVAL '12 months'
       GROUP BY month
       ORDER BY month ASC;
