@@ -6,6 +6,7 @@ import { config } from "./core/config";
 // Providers (Infrastructure)
 import { PrismaProvider } from "./providers/PrismaProvider";
 import { FileUploaderProvider } from "./providers/FileUploaderProvider";
+import { EmailProvider } from "./providers/EmailProvider";
 import { prisma } from "./lib/prisma";
 import { AuthModule } from "./Modules/Auth/AuthModule";
 
@@ -22,6 +23,7 @@ import { LandingPageModule } from "./Modules/LandingPage/LandingPageModule";
 import { UserModule } from "./Modules/User/UserModule";
 import { WebhookModule } from "./Modules/Webhook/WebhookModule";
 import { AnalyticsModule } from "./Modules/Analytics/AnalyticsModule";
+import { ClientModule } from "./Modules/Client/ClientModule";
 
 // Modules (Business Logic)
 
@@ -36,6 +38,7 @@ async function bootstrap() {
     AppLogger.info("⚙ Registering infrastructure...");
     app.getContext().registerProvider("prisma", new PrismaProvider(prisma));
     app.getContext().registerProvider("fileUploader", new FileUploaderProvider());
+    app.getContext().registerProvider("email", new EmailProvider());
 
     // 3. Register Application Modules
     AppLogger.info("⚙ Registering modules...");
@@ -53,6 +56,7 @@ async function bootstrap() {
     app.registerModule(new UserModule());
     app.registerModule(new WebhookModule());
     app.registerModule(new AnalyticsModule());
+    app.registerModule(new ClientModule());
     AppLogger.info("✔ All modules registered successfully");
 
     // 4. Spark the server!

@@ -20,7 +20,8 @@ export class BookingModule extends BaseModule {
 
   protected async setupUseCases(): Promise<void> {
     const prisma = this.context.getService("prisma");
-    this.registerService("BookingService", new BookingServices(prisma));
+    const emailProvider = this.context.getService("email");
+    this.registerService("BookingService", new BookingServices(prisma, emailProvider));
   }
 
   protected async setupControllers(): Promise<void> {
@@ -59,6 +60,37 @@ export class BookingModule extends BaseModule {
       authorizeRole([UserRole.DJ]),
       validateRequest(updateBookingStatusSchema),
       controller.updateBookingStatus.bind(controller),
+    );
+
+    this.router.post(
+      "/:id/remind-payment",
+      authenticateUser,
+      authorizeRole([UserRole.DJ]),
+      controller.resendPaymentReminder.bind(controller),
+    );
+
+    // Client/Public route to generate fresh checkout session
+    this.router.get(
+      "/:id/payment-link",
+      controller.getPaymentLink.bind(controller),
+    );
+
+    // Client/Public route to automatically redirect to checkout
+    this.router.get(
+      "/:id/checkout-redirect",
+      controller.checkoutRedirect.bind(controller),
+    );
+
+    // Client/Public route to request cash payment
+    this.router.patch(
+      "/:id/request-cash",
+      controller.requestCashPayment.bind(controller),
+    );
+
+    // Client/Public route to request cash payment via email button (redirects to success page)
+    this.router.get(
+      "/:id/request-cash-redirect",
+      controller.requestCashRedirect.bind(controller),
     );
   }
 }

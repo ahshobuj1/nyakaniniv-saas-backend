@@ -3,12 +3,17 @@ import { Request, Response } from "express";
 import { BaseController } from "@/core/BaseController";
 import { AppLogger } from "@/core/logging/logger";
 import { TenantServices } from "./tenant.service";
-import { CreateTenantDTO, UpdateTenantDTO, AssignThemeDTO } from "./TenantDTO";
+import { CreateTenantDTO, UpdateTenantDTO, AssignThemeDTO, UpdateTenantStatusDTO } from "./TenantDTO";
+import { IFileUploader } from "@/utils/IFileUploader";
+import { BadRequestError } from "@/core/errors/AppError";
 
 export class TenantController extends BaseController {
   private logger = new AppLogger("TenantController");
 
-  constructor(private readonly tenantService: TenantServices) {
+  constructor(
+    private readonly tenantService: TenantServices,
+    private readonly fileUploader: IFileUploader
+  ) {
     super();
   }
 
@@ -47,11 +52,28 @@ export class TenantController extends BaseController {
   }
 
   public async assignTheme(req: Request, res: Response) {
-    const { themeId } = req.validatedBody as AssignThemeDTO;
+    const { themeSlug, config } = req.validatedBody as AssignThemeDTO;
     const userId = req.user!.id;
 
-    const updatedTenant = await this.tenantService.assignTheme(userId, themeId);
+    const updatedTenant = await this.tenantService.assignTheme(userId, themeSlug, config);
 
     return this.sendResponse(req, res, "Theme assigned successfully", 200, updatedTenant);
+  }
+
+  public async uploadMedia(req: Request, res: Response) {
+    if (!req.file) {
+      throw new BadRequestError("No file uploaded");
+    }
+
+    const url = await this.fileUploader.upload(req.file);
+    return this.sendResponse(req, res, "Media uploaded successfully", 200, { url });
+  }
+
+  public async updateTenantStatus(req: Request, res: Response) {
+    const data = req.validatedBody as UpdateTenantStatusDTO;
+    const tenantId = req.params.id as string;
+
+    const updatedTenant = await this.tenantService.updateTenantStatus(tenantId, data);
+    return this.sendResponse(req, res, "Tenant status updated successfully", 200, updatedTenant);
   }
 }

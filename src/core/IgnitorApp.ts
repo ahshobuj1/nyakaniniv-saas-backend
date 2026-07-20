@@ -7,6 +7,7 @@ import { BaseModule } from "./BaseModule";
 import { AuthModule } from "@/Modules/Auth/AuthModule";
 import { TenantModule } from "@/Modules/Tenant/TenantModule";
 import { StripeConnectModule } from "@/Modules/StripeConnect/StripeConnectModule";
+import { PaystackConnectModule } from "@/Modules/PaystackConnect/PaystackConnectModule";
 import { AppError } from "./errors/AppError";
 import { HTTPStatusCode } from "@/types/HTTPStatusCode";
 import { AppLogger } from "./logging/logger";
@@ -17,6 +18,7 @@ import { sortModulesByDependencies } from "@/utils/moduleSorter";
 import { Server } from "http";
 import swaggerUi from "swagger-ui-express";
 import { swaggerSpec } from "./config/swagger";
+import { EmailCronJobs } from "@/cron/emailJobs";
 
 export class IgnitorApp {
   private app: Express;
@@ -51,6 +53,7 @@ export class IgnitorApp {
       new AuthModule(),
       new TenantModule(),
       new StripeConnectModule(),
+      new PaystackConnectModule(),
     ];
     for (const module of modules) {
       this.registerModule(module);
@@ -64,6 +67,12 @@ export class IgnitorApp {
       await this.context.initialize();
 
       await this.loadModules();
+
+      // 1.5 Initialize Cron Jobs
+      const emailProvider = this.context.getService('email');
+      const prisma = this.context.getService('prisma');
+      const emailCronJobs = new EmailCronJobs(prisma, emailProvider);
+      emailCronJobs.init();
 
       // 2. Sort and Initialize Modules
       const sortedModules = sortModulesByDependencies(this.modules);

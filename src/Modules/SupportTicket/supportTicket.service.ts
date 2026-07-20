@@ -2,12 +2,18 @@ import { PrismaClient, TicketStatus } from '@/prisma/generated/client';
 import { NotFoundError, BadRequestError, AuthorizationError } from '@/core/errors/AppError';
 import { CreateSupportTicketDTO, UpdateTicketStatusDTO } from './SupportTicketDTO';
 import { QueryBuilder } from '@/utils/QueryBuilder';
+import { IEmailProvider } from '@/providers/EmailProvider';
+import { EmailTemplates } from '@/utils/EmailTemplates';
+import { config } from '@/core/config';
 
 export class SupportTicketServices {
-  constructor(private prisma: PrismaClient) { }
+  constructor(
+    private prisma: PrismaClient,
+    private emailProvider: IEmailProvider
+  ) { }
 
   async createTicket(data: CreateSupportTicketDTO, userId?: string) {
-    return this.prisma.supportTicket.create({
+    const ticket = await this.prisma.supportTicket.create({
       data: {
         userId, // optional
         fullName: data.fullName,
@@ -17,6 +23,24 @@ export class SupportTicketServices {
         status: TicketStatus.open,
       },
     });
+
+    // Alert Admin
+    this.emailProvider.sendEmail(
+      config.defaultAdmin.email || "admin@upbeatafrica.com",
+      `New Support Ticket: ${ticket.id}`,
+      EmailTemplates.getNewSupportTicketAdminAlertTemplate(data.fullName, data.subject, data.issue)
+    );
+
+    // Auto-reply to User
+    if (data.email) {
+      this.emailProvider.sendEmail(
+        data.email,
+        "Support Ticket Received - UpBeat Africa",
+        EmailTemplates.getSupportTicketReceivedTemplate(data.subject)
+      );
+    }
+
+    return ticket;
   }
 
   async getAllTickets(query: Record<string, unknown> = {}) {
@@ -67,9 +91,19 @@ export class SupportTicketServices {
       throw new NotFoundError();
     }
 
-    return this.prisma.supportTicket.update({
+    const updated = await this.prisma.supportTicket.update({
       where: { id },
       data: { status: data.status },
     });
+
+    if (data.status === TicketStatus.resolved && updated.email) {
+      this.emailProvider.sendEmail(
+        updated.email,
+        "Support Ticket Resolved ✅ - UpBeat Africa",
+        EmailTemplates.getSupportTicketResolvedTemplate(updated.subject || "Your Ticket")
+      );
+    }
+
+    return updated;
   }
 }

@@ -30,12 +30,12 @@ export const updateTenantSchema = {
     timezone: z.string().optional(),
     socialLinks: z
       .object({
-        facebook: z.string().url().optional().or(z.literal("")),
-        instagram: z.string().url().optional().or(z.literal("")),
-        linkedin: z.string().url().optional().or(z.literal("")),
-        twitter: z.string().url().optional().or(z.literal("")),
-        soundcloud: z.string().url().optional().or(z.literal("")),
-        mixcloud: z.string().url().optional().or(z.literal("")),
+        facebook: z.string().optional().or(z.literal("")),
+        instagram: z.string().optional().or(z.literal("")),
+        linkedin: z.string().optional().or(z.literal("")),
+        twitter: z.string().optional().or(z.literal("")),
+        soundcloud: z.string().optional().or(z.literal("")),
+        mixcloud: z.string().optional().or(z.literal("")),
       })
       .optional(),
   }),
@@ -43,10 +43,18 @@ export const updateTenantSchema = {
 
 export const assignThemeSchema = {
   body: z.object({
-    themeId: z.number(),
+    themeSlug: z.string(),
+    config: z.any().optional(),
+  }),
+};
+
+export const updateTenantStatusSchema = {
+  body: z.object({
+    isActive: z.boolean(),
   }),
 };
 
 export type CreateTenantDTO = z.infer<typeof createTenantSchema.body>;
 export type UpdateTenantDTO = z.infer<typeof updateTenantSchema.body>;
 export type AssignThemeDTO = z.infer<typeof assignThemeSchema.body>;
+export type UpdateTenantStatusDTO = z.infer<typeof updateTenantStatusSchema.body>;

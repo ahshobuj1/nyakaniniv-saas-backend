@@ -45,8 +45,16 @@ export const resetPasswordSchema = {
   }),
 };
 
+export const changePasswordSchema = {
+  body: z.object({
+    currentPassword: z.string().min(1, "Current password is required"),
+    newPassword: z.string().min(8, "Password must be at least 8 characters"),
+  }),
+};
+
 export type CreateUserDTO = z.infer<typeof createUserSchema.body>;
 export type VerifyOtpDTO = z.infer<typeof verifyOtpSchema.body>;
 export type LoginDTO = z.infer<typeof loginSchema.body>;
 export type ForgotPasswordDTO = z.infer<typeof forgotPasswordSchema.body>;
 export type ResetPasswordDTO = z.infer<typeof resetPasswordSchema.body>;
+export type ChangePasswordDTO = z.infer<typeof changePasswordSchema.body>;

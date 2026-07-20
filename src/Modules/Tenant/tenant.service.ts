@@ -4,11 +4,17 @@ import { AppLogger } from '@/core/logging/logger';
 import { ConflictError, NotFoundError } from '@/core/errors/AppError';
 import { CreateTenantDTO, UpdateTenantDTO } from './TenantDTO';
 import { QueryBuilder } from '@/utils/QueryBuilder';
+import { IEmailProvider } from '@/providers/EmailProvider';
+import { EmailTemplates } from '@/utils/EmailTemplates';
+import { UpdateTenantStatusDTO } from './TenantDTO';
 
 export class TenantServices {
   private logger = new AppLogger('TenantServices');
 
-  constructor(private readonly prisma: PrismaClient) { }
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly emailProvider: IEmailProvider
+  ) { }
 
   public async createTenant(userId: string, data: CreateTenantDTO) {
     this.logger.info('Attempting to onboard tenant', {
@@ -34,7 +40,6 @@ export class TenantServices {
       throw new ConflictError('Subdomain is already taken');
     }
 
-    // 3. Create Tenant
     const newTenant = await this.prisma.tenant.create({
       data: {
         userId,
@@ -45,7 +50,17 @@ export class TenantServices {
         genres: data.genres ?? [],
         isActive: true, // Assuming active by default, or depends on subscription later
       },
+      include: { user: true }
     });
+
+    if (newTenant.user && newTenant.user.email) {
+      const url = `https://${newTenant.subdomain}.upbeatafrica.com`;
+      this.emailProvider.sendEmail(
+        newTenant.user.email,
+        "Your Portfolio is Live! 🌐 - UpBeat Africa",
+        EmailTemplates.getPortfolioLiveTemplate(url)
+      );
+    }
 
     return newTenant;
   }
@@ -135,8 +150,8 @@ export class TenantServices {
     return updatedTenant;
   }
 
-  public async assignTheme(userId: string, themeId: number) {
-    this.logger.info('Assigning theme to tenant', { userId, themeId });
+  public async assignTheme(userId: string, themeSlug: string, config?: any) {
+    this.logger.info('Assigning theme to tenant', { userId, themeSlug });
 
     const tenant = await this.prisma.tenant.findUnique({
       where: { userId },
@@ -146,8 +161,8 @@ export class TenantServices {
       throw new NotFoundError('Tenant profile not found');
     }
 
-    const theme = await this.prisma.theme.findUnique({
-      where: { id: themeId },
+    const theme = await this.prisma.theme.findFirst({
+      where: { slug: themeSlug },
     });
 
     if (!theme) {
@@ -159,13 +174,42 @@ export class TenantServices {
     const updatedTenant = await this.prisma.tenant.update({
       where: { id: tenant.id },
       data: {
-        themeId,
-        config: theme.defaultConfig || {},
+        themeId: theme.id,
+        config: config ? config : (theme.defaultConfig || {}),
       },
       include: {
         theme: true,
       },
     });
+
+    return updatedTenant;
+  }
+
+  public async updateTenantStatus(tenantId: string, data: UpdateTenantStatusDTO) {
+    this.logger.info('Updating tenant status', { tenantId, isActive: data.isActive });
+
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      include: { user: true }
+    });
+
+    if (!tenant) {
+      throw new NotFoundError('Tenant profile not found');
+    }
+
+    const updatedTenant = await this.prisma.tenant.update({
+      where: { id: tenantId },
+      data: { isActive: data.isActive }
+    });
+
+    // Send Account Suspended email if isActive changes to false
+    if (!data.isActive && tenant.isActive && tenant.user?.email) {
+      this.emailProvider.sendEmail(
+        tenant.user.email,
+        "Account Suspended - UpBeat Africa",
+        EmailTemplates.getAccountSuspendedTemplate()
+      );
+    }
 
     return updatedTenant;
   }

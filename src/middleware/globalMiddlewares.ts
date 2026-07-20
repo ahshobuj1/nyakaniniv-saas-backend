@@ -22,9 +22,34 @@ export function setupGlobalMiddlewares(app: Express) {
 
   app.use(
     cors({
-      origin: config.security.cors.allowedOrigins
-        .split(",")
-        .map((url) => url.trim()),
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+
+        try {
+          const originUrl = new URL(origin);
+          const hostname = originUrl.hostname;
+
+          // Allow local development and multi-tenant testing
+          if (hostname === "localhost" || hostname.endsWith(".localhost")) {
+            return callback(null, true);
+          }
+
+          // Allow production domain and wildcard subdomains
+          if (hostname === "upbeatafrica.com" || hostname.endsWith(".upbeatafrica.com")) {
+            return callback(null, true);
+          }
+
+          // Fallback to explicit env allowed list
+          const allowedList = config.security.cors.allowedOrigins.split(",").map((url) => url.trim());
+          if (allowedList.includes(origin)) {
+            return callback(null, true);
+          }
+
+          callback(new Error("Not allowed by CORS"));
+        } catch (error) {
+          callback(new Error("Invalid Origin"));
+        }
+      },
       credentials: true,
       optionsSuccessStatus: 200,
     }),

@@ -18,7 +18,8 @@ export class SubscriptionModule extends BaseModule {
 
   protected async setupUseCases(): Promise<void> {
     const prisma = this.context.getService("prisma");
-    this.registerService("SubscriptionService", new SubscriptionServices(prisma));
+    const emailProvider = this.context.getService("email");
+    this.registerService("SubscriptionService", new SubscriptionServices(prisma, emailProvider));
   }
 
   protected async setupControllers(): Promise<void> {

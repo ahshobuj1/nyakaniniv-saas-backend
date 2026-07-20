@@ -22,7 +22,8 @@ export class SupportTicketModule extends BaseModule {
 
   protected async setupUseCases(): Promise<void> {
     const prisma = this.context.getService("prisma");
-    this.registerService("SupportTicketService", new SupportTicketServices(prisma));
+    const emailProvider = this.context.getService("email");
+    this.registerService("SupportTicketService", new SupportTicketServices(prisma, emailProvider));
   }
 
   protected async setupControllers(): Promise<void> {

@@ -12,6 +12,7 @@ import {
   loginSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  changePasswordSchema,
 } from "./AuthDTO";
 
 export class AuthModule extends BaseModule {
@@ -24,7 +25,8 @@ export class AuthModule extends BaseModule {
 
   protected async setupUseCases(): Promise<void> {
     const prisma = this.context.getService("prisma");
-    this.registerService("AuthService", new AuthServices(prisma));
+    const emailProvider = this.context.getService("email");
+    this.registerService("AuthService", new AuthServices(prisma, emailProvider));
   }
   protected async setupControllers(): Promise<void> {
     const authService = this.getService<AuthServices>("AuthService");
@@ -81,6 +83,14 @@ export class AuthModule extends BaseModule {
       "/reset-password",
       validateRequest(resetPasswordSchema),
       controller.resetPassword.bind(controller),
+    );
+
+    // Change Password
+    this.router.post(
+      "/change-password",
+      authenticateUser,
+      validateRequest(changePasswordSchema),
+      controller.changePassword.bind(controller),
     );
   }
 }
