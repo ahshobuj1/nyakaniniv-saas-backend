@@ -31,4 +31,5 @@ COPY --from=builder /app/src/prisma ./src/prisma
 EXPOSE 3030
 
 # Use exec form for CMD
-CMD ["bun", "dist/index.js"]
+# CMD ["bun", "dist/index.js"]
+CMD ["sh", "-c", "bunx prisma migrate deploy && bun dist/index.js"]
