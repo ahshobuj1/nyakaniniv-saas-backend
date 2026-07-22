@@ -34,13 +34,19 @@ export function setupGlobalMiddlewares(app: Express) {
             return callback(null, true);
           }
 
-          // Allow production domain and wildcard subdomains
-          if (hostname === "upbeatafrica.com" || hostname.endsWith(".upbeatafrica.com")) {
+          // Allow production domains and wildcard subdomains
+          const allowedDomains = ["upbeatafrica.com", "upbeat.africa", "deejay.africa"];
+          
+          const isAllowedDomain = allowedDomains.some(
+            domain => hostname === domain || hostname.endsWith(`.${domain}`)
+          );
+
+          if (isAllowedDomain) {
             return callback(null, true);
           }
 
           // Fallback to explicit env allowed list
-          const allowedList = config.security.cors.allowedOrigins.split(",").map((url) => url.trim());
+          const allowedList = config.security.cors.allowedOrigins?.split(",").map((url) => url.trim()) || [];
           if (allowedList.includes(origin)) {
             return callback(null, true);
           }
