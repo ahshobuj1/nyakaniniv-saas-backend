@@ -21,13 +21,20 @@ export class S3Uploader implements IFileUploader {
     if (!config.s3.region || !config.s3.accessKeyId || !config.s3.secretAccessKey) {
       throw new Error('Missing required S3 configuration (region, accessKeyId, secretAccessKey)');
     }
-    this.client = new S3Client({
-      region: config.s3.region!,
+    const s3Config: any = {
+      region: config.s3.region || 'us-east-1',
       credentials: {
         accessKeyId: config.s3.accessKeyId!,
         secretAccessKey: config.s3.secretAccessKey!,
       },
-    });
+    };
+
+    if (config.s3.endpoint) {
+      s3Config.endpoint = config.s3.endpoint;
+      s3Config.forcePathStyle = true; // Required for MinIO
+    }
+
+    this.client = new S3Client(s3Config);
   }
 
   async upload(file: Express.Multer.File): Promise<string> {
@@ -44,7 +51,11 @@ export class S3Uploader implements IFileUploader {
         })
       );
 
-      // Construct a public URL – this works for most S3 public‑read buckets.
+      // Construct a public URL
+      if (config.s3.endpoint) {
+        const endpoint = config.s3.endpoint.replace(/\/$/, '');
+        return `${endpoint}/${config.s3.bucket}/${key}`;
+      }
       return `https://${config.s3.bucket}.s3.${config.s3.region}.amazonaws.com/${key}`;
     } catch (err: any) {
       console.error('FULL S3 ERROR:', err);

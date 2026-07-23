@@ -64,6 +64,7 @@ export const config = {
     accessKeyId: process.env.S3_ACCESS_KEY_ID,
     secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
     folder: process.env.S3_FOLDER || 'uploads/',
+    endpoint: process.env.S3_ENDPOINT,
   },
   fileUploader: process.env.FILE_UPLOADER || 'cloudinary',
   logging: {
