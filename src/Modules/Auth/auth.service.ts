@@ -35,7 +35,7 @@ export class AuthServices {
 
     const hashed = await hashPassword(passwordHash);
     const otp = generateOtp();
-    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
+    const otpExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes from now
 
     // Bypassing TS errors for mismatched schema
     const newUser = await (this.prisma.user as any).create({
@@ -46,6 +46,7 @@ export class AuthServices {
         password: hashed,
         role: "DJ" as UserRole, // Default
         isVerified: false,
+        otp,
         otpExpiry,
       },
     });
@@ -114,7 +115,7 @@ export class AuthServices {
     }
 
     const otp = generateOtp();
-    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    const otpExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
     await (this.prisma.user as any).update({
       where: { id: user.id },
@@ -165,7 +166,7 @@ export class AuthServices {
     }
 
     const otp = generateOtp();
-    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    const otpExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
     await (this.prisma.user as any).update({
       where: { id: user.id },
