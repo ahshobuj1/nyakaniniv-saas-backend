@@ -298,8 +298,52 @@ export class WebhookServices {
       const invoiceId = data.metadata?.invoiceId;
       const bookingId = data.metadata?.bookingId;
       const amountPaid = (data.amount || 0) / 100;
+      const type = data.metadata?.type;
+      const userId = data.metadata?.userId;
+      const planId = data.metadata?.planId;
 
-      if (invoiceId || bookingId) {
+      if (type === 'subscription' && userId && planId) {
+        // Handle Subscription Payments
+        await this.prisma.$transaction(async (tx) => {
+          await tx.subscription.create({
+            data: {
+              userId,
+              planId: parseInt(planId, 10),
+              stripeSubId: 'paystack_sub_' + (data.reference || Date.now()), // storing reference
+              status: 'active',
+              periodEnd: new Date(Date.now() + (data.metadata?.billingCycle === 'monthly' ? 30 : 365) * 24 * 60 * 60 * 1000)
+            }
+          });
+
+          await tx.subscriptionInvoice.create({
+            data: {
+              userId,
+              planId: parseInt(planId, 10),
+              amount: amountPaid,
+              status: SubscriptionInvoiceStatus.paid,
+              stripeInvoiceId: data.reference || 'paystack_mock'
+            }
+          });
+        });
+
+        // Send Emails for Subscription
+        const user = await this.prisma.user.findUnique({ where: { id: userId } });
+        if (user && user.email) {
+          const nextBilling = new Date(Date.now() + (data.metadata?.billingCycle === 'monthly' ? 30 : 365) * 24 * 60 * 60 * 1000).toISOString();
+          
+          this.emailProvider.sendEmail(
+            user.email,
+            "Subscription Activated 🚀 - UpBeat Africa",
+            EmailTemplates.getSubscriptionActivatedTemplate(`Plan ${planId}`, nextBilling)
+          );
+
+          this.emailProvider.sendEmail(
+            config.defaultAdmin?.email || "admin@upbeatafrica.com",
+            "New Subscription Alert 💸 - UpBeat Africa",
+            EmailTemplates.getNewSubscriptionAdminAlertTemplate(user.email, parseInt(planId, 10))
+          );
+        }
+      } else if (invoiceId || bookingId) {
         const txResult = await this.prisma.$transaction(async (tx) => {
           let djEmail = null;
           let clientEmail = null;
