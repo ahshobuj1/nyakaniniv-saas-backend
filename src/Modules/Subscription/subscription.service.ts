@@ -1,21 +1,21 @@
 import { PrismaClient } from '@/prisma/generated/client';
 import { NotFoundError, BadRequestError, AuthorizationError } from '@/core/errors/AppError';
-import Stripe from 'stripe';
+import axios from 'axios';
 import { CreateSubscriptionPlanDTO, SubscribeDTO, UpdateSubscriptionPlanDTO } from './SubscriptionDTO';
 import { SubscriptionStatus, SubscriptionInvoiceStatus } from '@/prisma/generated/client';
 import { IEmailProvider } from '@/providers/EmailProvider';
 import { EmailTemplates } from '@/utils/EmailTemplates';
+import Stripe from 'stripe';
 
 export class SubscriptionServices {
   private stripe: any = null;
-
   constructor(
     private prisma: PrismaClient,
     private emailProvider: IEmailProvider
   ) {
     if (process.env.STRIPE_SECRET_KEY) {
       this.stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-        apiVersion: "2024-04-10" as any,
+        apiVersion: '2024-04-10' as any,
       });
     }
   }
@@ -115,14 +115,15 @@ export class SubscriptionServices {
       }
     }
 
-    if (!this.stripe) {
-      // Mock logic if no Stripe keys are available yet
+    const secretKey = process.env.PAYSTACK_SECRET_KEY;
+    if (!secretKey) {
+      // Mock logic if no Paystack keys are available yet
       const subscription = await this.prisma.subscription.create({
         data: {
           userId,
           planId: data.planId,
           status: SubscriptionStatus.active,
-          stripeSubId: 'mock_sub_' + Date.now(),
+          stripeSubId: 'mock_sub_' + Date.now(), // Still using stripeSubId column as a generic reference
           periodEnd: new Date(Date.now() + (data.billingCycle === 'monthly' ? 30 : 365) * 24 * 60 * 60 * 1000), // approx
         }
       });
@@ -138,41 +139,51 @@ export class SubscriptionServices {
         }
       });
 
-      return { url: 'http://localhost:3000/dashboard', subscription };
+      return { url: 'https://upbeat.africa/dashboard', subscription };
     }
 
-    // Actual Stripe Logic using inline dynamic pricing (price_data)
-    const unitAmount = Math.round(amount * 100); // Stripe requires cents
+    // Actual Paystack Logic
+    const amountInKobo = Math.round(amount * 100); 
+    const baseUrl = process.env.FRONTEND_URL || 'https://upbeat.africa';
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    
+    if (!user || !user.email) {
+       throw new BadRequestError('User email is required for Paystack payments');
+    }
 
-    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const session = await this.stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: [{
-        price_data: {
-          currency: 'usd',
-          product_data: {
-            name: `${plan.name} Plan (${data.billingCycle})`,
-            description: `Subscription to the ${plan.name} plan.`,
-          },
-          unit_amount: unitAmount,
-          recurring: {
-            interval: data.billingCycle === 'monthly' ? 'month' : 'year',
-          },
+    try {
+      const response = await axios.post(
+        'https://api.paystack.co/transaction/initialize',
+        {
+          email: user.email,
+          amount: amountInKobo,
+          currency: 'KES',
+          callback_url: data.successUrl || `${baseUrl}/dashboard/billing?success=true`,
+          metadata: {
+            userId,
+            planId: plan.id.toString(),
+            billingCycle: data.billingCycle,
+            type: 'subscription'
+          }
         },
-        quantity: 1,
-      }],
-      mode: 'subscription',
-      success_url: data.successUrl || `${baseUrl}/dashboard?success=true`,
-      cancel_url: data.cancelUrl || `${baseUrl}/pricing?canceled=true`,
-      client_reference_id: userId,
-      metadata: {
-        userId,
-        planId: plan.id.toString(),
-        billingCycle: data.billingCycle,
-      }
-    });
+        {
+          headers: {
+            Authorization: `Bearer ${secretKey}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
 
-    return { url: session.url };
+      const responseData = response.data;
+      if (responseData.status && responseData.data?.authorization_url) {
+        return { url: responseData.data.authorization_url };
+      } else {
+        throw new Error(responseData.message || "Failed to generate Paystack checkout URL");
+      }
+    } catch (error: any) {
+      console.error("Paystack Init Error:", error.response?.data || error.message);
+      throw new BadRequestError("An error occurred while initializing Paystack payment");
+    }
   }
 
   async cancelSubscription(userId: string) {
@@ -184,9 +195,8 @@ export class SubscriptionServices {
       throw new NotFoundError();
     }
 
-    if (this.stripe && subscription.stripeSubId && !subscription.stripeSubId.startsWith('mock_')) {
-      await this.stripe.subscriptions.cancel(subscription.stripeSubId);
-    }
+    // If we have Paystack recurring integrations in the future, cancel here.
+    // For now, we rely on local DB cancellation.
 
     await this.prisma.$transaction(async (tx) => {
       await tx.subscription.update({

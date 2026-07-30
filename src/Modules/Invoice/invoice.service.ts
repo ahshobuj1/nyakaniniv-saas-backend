@@ -154,8 +154,8 @@ export class InvoiceServices {
         quantity: 1,
       }],
       mode: 'payment',
-      success_url: data.successUrl || `${process.env.FRONTEND_URL}/payment/success?invoice_id=${id}`,
-      cancel_url: data.cancelUrl || `${process.env.FRONTEND_URL}/payment/cancel`,
+      success_url: data.successUrl || `${process.env.FRONTEND_URL || 'https://upbeat.africa'}/payment-success?invoice_id=${id}`,
+      cancel_url: data.cancelUrl || `${process.env.FRONTEND_URL || 'https://upbeat.africa'}/payment-cancel`,
       metadata: {
         invoiceId: payment.id,
         ...(payment.bookingId && { bookingId: payment.bookingId }),
