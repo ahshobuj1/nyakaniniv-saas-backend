@@ -31,7 +31,7 @@ export class PaystackPaymentProvider implements IPaymentProvider {
           subaccount: booking.tenant.paystackSubaccountId,
           transaction_charge: platformFeeInKobo,
           bearer: "subaccount",
-          callback_url: `https://${booking.tenant.subdomain}.upbeatafrica.com/payment-success?invoice_id=${paymentId}`,
+          callback_url: `https://${booking.tenant.subdomain}.deejay.africa`,
           metadata: {
             invoiceId: paymentId,
             bookingId: booking.id,
