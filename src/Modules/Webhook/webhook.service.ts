@@ -284,6 +284,8 @@ export class WebhookServices {
 
     if (hash !== signature) {
       console.error('❌ [WEBHOOK] Invalid Paystack Signature');
+      console.error(`Expected: ${hash}`);
+      console.error(`Received: ${signature}`);
       throw new BadRequestError('Invalid Paystack Signature');
     }
 
