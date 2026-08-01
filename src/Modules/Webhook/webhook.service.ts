@@ -170,6 +170,14 @@ export class WebhookServices {
               stripeInvoiceId: session.invoice ? (session.invoice as string) : 'stripe_mock'
             }
           });
+
+          await tx.tenant.updateMany({
+            where: { userId },
+            data: {
+              activePlanId: parseInt(planId, 10),
+              subscriptionStatus: 'active'
+            }
+          });
         });
 
         // Send Emails for Subscription
@@ -324,6 +332,14 @@ export class WebhookServices {
               amount: amountPaid,
               status: SubscriptionInvoiceStatus.paid,
               stripeInvoiceId: data.reference || 'paystack_mock'
+            }
+          });
+
+          await tx.tenant.updateMany({
+            where: { userId },
+            data: {
+              activePlanId: parseInt(planId, 10),
+              subscriptionStatus: 'active'
             }
           });
         });
