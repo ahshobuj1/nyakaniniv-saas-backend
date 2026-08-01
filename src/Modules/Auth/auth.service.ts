@@ -94,7 +94,7 @@ export class AuthServices {
     // Send Welcome Email
     this.emailProvider.sendEmail(
       updatedUser.email,
-      "Welcome to Nyakaniniv!",
+      "Welcome to UpBeat Africa!",
       EmailTemplates.getWelcomeTemplate(updatedUser.firstName || "DJ")
     );
 
