@@ -192,7 +192,7 @@ export class InvoiceServices {
           payment.booking.eventType || "Event",
           djName,
           payment.booking.eventDate?.toISOString() || new Date().toISOString(),
-          payment.method === BookingPaymentMethod.CASH ? "Cash" : (payment.method || "Online Payment"),
+          payment.method === BookingPaymentMethod.CASH ? "Cash" : (payment.method || "Paystack"),
           payment.bookingId
         )
       );
@@ -204,7 +204,7 @@ export class InvoiceServices {
   async payInvoice(id: string, data: PayInvoiceDTO) {
     const payment = await this.prisma.bookingPayment.findUnique({
       where: { id },
-      include: { booking: { include: { client: true } } }
+      include: { booking: { include: { client: true, tenant: true } }, tenant: true }
     });
 
     if (!payment) {
@@ -215,32 +215,20 @@ export class InvoiceServices {
       throw new BadRequestError();
     }
 
-    if (!this.stripe || !payment.amount) {
+    if (!payment.amount || !payment.booking) {
       return { url: 'http://localhost:3000/payment-mock' };
     }
 
-    const session = await this.stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: [{
-        price_data: {
-          currency: 'usd',
-          product_data: {
-            name: `Booking for ${payment.booking?.client?.name || 'Client'}`,
-          },
-          unit_amount: Math.round(Number(payment.amount) * 100), // Stripe expects cents
-        },
-        quantity: 1,
-      }],
-      mode: 'payment',
-      success_url: data.successUrl || `${process.env.FRONTEND_URL || 'https://upbeat.africa'}/payment-success?invoice_id=${id}`,
-      cancel_url: data.cancelUrl || `${process.env.FRONTEND_URL || 'https://upbeat.africa'}/payment-cancel`,
-      metadata: {
-        invoiceId: payment.id,
-        ...(payment.bookingId && { bookingId: payment.bookingId }),
-      }
-    });
-
-    return { url: session.url };
+    const { PaymentProviderFactory } = await import('@/providers/PaymentProvider/PaymentProviderFactory');
+    const paymentProvider = PaymentProviderFactory.getProvider(payment.tenant?.country || payment.booking.tenant?.country);
+    
+    try {
+      const { checkoutUrl } = await paymentProvider.getPaymentLink(payment.booking, payment.id);
+      return { url: checkoutUrl };
+    } catch (error: any) {
+      console.error("Payment Link Generation Error:", error.message);
+      throw new BadRequestError(error.message || "Failed to generate payment link");
+    }
   }
 
   async generateInvoicePdf(id: string): Promise<Buffer> {
@@ -283,13 +271,12 @@ export class InvoiceServices {
         doc.text(`Transaction ID: ${payment.id}`, { align: 'right' });
         if (payment.status === BookingPaymentStatus.paid) {
           doc.text(`Date Paid: ${payment.updatedAt?.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`, { align: 'right' });
-          if (payment.method) {
-            let methodStr = `Payment Method: ${payment.method}`;
-            if (payment.cardBrand && payment.cardLast4) {
-              methodStr += ` (${payment.cardBrand.toUpperCase()} ending in ${payment.cardLast4})`;
-            }
-            doc.text(methodStr, { align: 'right' });
+          const displayMethod = payment.method || BookingPaymentMethod.PAYSTACK;
+          let methodStr = `Payment Method: ${displayMethod}`;
+          if (payment.cardBrand && payment.cardLast4) {
+            methodStr += ` (${payment.cardBrand.toUpperCase()} ending in ${payment.cardLast4})`;
           }
+          doc.text(methodStr, { align: 'right' });
         }
         
         doc.fillColor('#000000');
@@ -340,7 +327,7 @@ export class InvoiceServices {
         doc.font('Helvetica');
         const itemY = tableTop + 25;
         doc.text(`Booking Payment - ${payment.booking?.eventType || 'Event'}`, 50, itemY, { width: 200 });
-        doc.text(payment.method || 'Not Specified', 300, itemY);
+        doc.text(payment.method || 'PAYSTACK', 300, itemY);
         doc.text(`KES ${Number(payment.amount).toFixed(2)}`, 450, itemY, { width: 100, align: 'right' });
 
         // --- Totals ---
