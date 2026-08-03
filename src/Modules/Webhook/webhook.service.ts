@@ -1,4 +1,4 @@
-import { PrismaClient, BookingPaymentStatus, BookingStatus, SubscriptionInvoiceStatus, NotificationType } from '@/prisma/generated/client';
+import { PrismaClient, BookingPaymentStatus, BookingStatus, SubscriptionInvoiceStatus, NotificationType, BookingPaymentMethod } from '@/prisma/generated/client';
 import { BadRequestError } from '@/core/errors/AppError';
 import Stripe from 'stripe';
 import { IEmailProvider } from '@/providers/EmailProvider';
@@ -78,9 +78,14 @@ export class WebhookServices {
           let eventDate = new Date().toISOString();
           let resolvedBookingId = bookingId;
 
-          const payment = invoiceId 
-            ? await tx.bookingPayment.findUnique({ where: { id: invoiceId } })
-            : await tx.bookingPayment.findUnique({ where: { bookingId: resolvedBookingId || '' } });
+          const payment = await tx.bookingPayment.findFirst({
+            where: {
+              OR: [
+                ...(invoiceId ? [{ id: invoiceId }] : []),
+                ...(resolvedBookingId ? [{ bookingId: resolvedBookingId }] : []),
+              ]
+            }
+          });
             
           if (payment && payment.status !== BookingPaymentStatus.paid) {
             // Attempt to extract card details if they exist in the session object
@@ -94,6 +99,8 @@ export class WebhookServices {
                 cardLast4: card?.last4 || null
               }
             });
+          } else {
+            console.warn(`⚠️ [WEBHOOK] Stripe Payment not found or already paid for invoiceId: ${invoiceId}, bookingId: ${resolvedBookingId}`);
           }
 
           resolvedBookingId = resolvedBookingId || payment?.bookingId;
@@ -319,12 +326,13 @@ export class WebhookServices {
 
     if (event.event === 'charge.success') {
       const data = event.data;
-      const invoiceId = data.metadata?.invoiceId;
-      const bookingId = data.metadata?.bookingId;
+      const metadata = typeof data.metadata === 'string' ? JSON.parse(data.metadata) : data.metadata || {};
+      const invoiceId = metadata.invoiceId;
+      const bookingId = metadata.bookingId;
       const amountPaid = (data.amount || 0) / 100;
-      const type = data.metadata?.type;
-      const userId = data.metadata?.userId;
-      const planId = data.metadata?.planId;
+      const type = metadata.type;
+      const userId = metadata.userId;
+      const planId = metadata.planId;
 
       if (type === 'subscription' && userId && planId) {
         // Handle Subscription Payments
@@ -387,9 +395,14 @@ export class WebhookServices {
           let eventDate = new Date().toISOString();
           let resolvedBookingId = bookingId;
 
-          const payment = invoiceId 
-            ? await tx.bookingPayment.findUnique({ where: { id: invoiceId } })
-            : await tx.bookingPayment.findUnique({ where: { bookingId: resolvedBookingId || '' } });
+          const payment = await tx.bookingPayment.findFirst({
+            where: {
+              OR: [
+                ...(invoiceId ? [{ id: invoiceId }] : []),
+                ...(resolvedBookingId ? [{ bookingId: resolvedBookingId }] : []),
+              ]
+            }
+          });
             
           if (payment && payment.status !== BookingPaymentStatus.paid) {
             await tx.bookingPayment.update({
@@ -397,10 +410,12 @@ export class WebhookServices {
               data: { 
                 status: BookingPaymentStatus.paid,
                 method: BookingPaymentMethod.PAYSTACK,
-                cardBrand: data.authorization?.card_type || data.authorization?.brand || null,
+                cardBrand: data.authorization?.card_type || data.authorization?.brand || data.authorization?.bank || null,
                 cardLast4: data.authorization?.last4 || null
               }
             });
+          } else {
+            console.warn(`⚠️ [WEBHOOK] Payment not found or already paid for invoiceId: ${invoiceId}, bookingId: ${resolvedBookingId}`);
           }
 
           resolvedBookingId = resolvedBookingId || payment?.bookingId;

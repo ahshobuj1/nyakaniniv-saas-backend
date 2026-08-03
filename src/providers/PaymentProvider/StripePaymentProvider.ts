@@ -34,8 +34,12 @@ export class StripePaymentProvider implements IPaymentProvider {
         },
       ],
       mode: 'payment',
-      success_url: `https://${booking.tenant.subdomain}.deejay.africa/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `https://${booking.tenant.subdomain}.deejay.africa/book`,
+      success_url: process.env.NODE_ENV === 'development' 
+        ? `http://${booking.tenant.subdomain}.localhost:3000` 
+        : `https://${booking.tenant.subdomain}.deejay.africa`,
+      cancel_url: process.env.NODE_ENV === 'development'
+        ? `http://${booking.tenant.subdomain}.localhost:3000/book`
+        : `https://${booking.tenant.subdomain}.deejay.africa/book`,
       payment_intent_data: {
         application_fee_amount: Math.round(Number(booking.totalAmount) * 100 * 0.05), // 5% Application Fee
         transfer_data: {
