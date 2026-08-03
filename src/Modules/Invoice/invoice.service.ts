@@ -265,22 +265,28 @@ export class InvoiceServices {
         // Receipt info
         doc.fillColor('#111827');
         doc.fontSize(24).font('Helvetica-Bold').text('INVOICE', 50, 40, { align: 'right' });
-        doc.moveDown();
-        doc.fontSize(10).font('Helvetica').text(`Receipt No: ${payment.id.split('-')[0].toUpperCase()}`, { align: 'right' });
-        doc.text(`Date Issued: ${payment.createdAt?.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`, { align: 'right' });
-        doc.text(`Transaction ID: ${payment.id}`, { align: 'right' });
+        doc.fontSize(10).font('Helvetica').text(`Receipt No: ${payment.id.split('-')[0].toUpperCase()}`, 50, 80, { align: 'left' });
+        doc.text(`Date Issued: ${payment.createdAt?.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`, { align: 'left' });
+        doc.text(`Transaction ID: ${payment.id}`, { align: 'left' });
         if (payment.status === BookingPaymentStatus.paid) {
-          doc.text(`Date Paid: ${payment.updatedAt?.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`, { align: 'right' });
+          doc.text(`Date Paid: ${payment.updatedAt?.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`, { align: 'left' });
           const displayMethod = payment.method || BookingPaymentMethod.PAYSTACK;
-          let methodStr = `Payment Method: ${displayMethod}`;
+          doc.text(`Payment Method: ${displayMethod}`, { align: 'left' });
           if (payment.cardBrand && payment.cardLast4) {
-            methodStr += ` (${payment.cardBrand.toUpperCase()} ending in ${payment.cardLast4})`;
+            const first4 = (payment as any).cardFirst6 ? (payment as any).cardFirst6.substring(0, 4) : '****';
+            doc.text(`Payment Source: ${payment.cardBrand.toUpperCase()} ${first4} **** **** ${payment.cardLast4}`, { align: 'left' });
           }
-          doc.text(methodStr, { align: 'right' });
+          if ((payment as any).bankName) {
+            doc.text(`Bank Name: ${(payment as any).bankName}`, { align: 'left' });
+          }
+          if ((payment as any).accountName) {
+            doc.text(`Account Name: ${(payment as any).accountName}`, { align: 'left' });
+          }
         }
         
         doc.fillColor('#000000');
-        doc.y = 120; // Reset Y below header
+        doc.y = Math.max(doc.y, 120);
+        doc.moveDown(2); // Reset Y below header
 
         // --- Parties Section ---
         const djName = payment.tenant?.stageName || payment.tenant?.user?.firstName || 'DJ / Service Provider';
@@ -291,16 +297,23 @@ export class InvoiceServices {
         const clientEmail = payment.booking?.client?.email || 'N/A';
         const clientPhone = payment.booking?.client?.phone || 'N/A';
         
-        doc.fontSize(12).font('Helvetica-Bold').fillColor('#111827').text('Billed From:', 50, doc.y);
+        const partiesY = doc.y;
+        
+        doc.fontSize(12).font('Helvetica-Bold').fillColor('#111827').text('Billed From:', 50, partiesY);
         doc.fontSize(10).font('Helvetica').fillColor('#374151').text(djName, 50, doc.y + 5);
         doc.text(djEmail, 50, doc.y + 2);
         doc.text(djLocation, 50, doc.y + 2);
         doc.text('UpBeat Africa Platform', 50, doc.y + 2);
         
-        doc.fontSize(12).font('Helvetica-Bold').fillColor('#111827').text('Billed To:', 300, doc.y - 45);
+        const leftColY = doc.y;
+        doc.y = partiesY;
+        
+        doc.fontSize(12).font('Helvetica-Bold').fillColor('#111827').text('Billed To:', 300, partiesY);
         doc.fontSize(10).font('Helvetica').fillColor('#374151').text(clientName, 300, doc.y + 5);
         doc.text(clientEmail, 300, doc.y + 2);
         doc.text(clientPhone, 300, doc.y + 2);
+        
+        doc.y = Math.max(leftColY, doc.y);
         doc.moveDown(3);
 
         // --- Event Details ---
@@ -369,31 +382,46 @@ export class InvoiceServices {
         
         doc.fillColor('#111827');
         doc.fontSize(24).font('Helvetica-Bold').text('RECEIPT', 50, 40, { align: 'right' });
-        doc.moveDown();
-        doc.fontSize(10).font('Helvetica').text(`Receipt No: ${subscription.id.split('-')[0].toUpperCase()}`, { align: 'right' });
-        doc.text(`Date Issued: ${subscription.createdAt?.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`, { align: 'right' });
-        doc.text(`Transaction ID: ${subscription.id}`, { align: 'right' });
+        doc.fontSize(10).font('Helvetica').text(`Receipt No: ${subscription.id.split('-')[0].toUpperCase()}`, 50, 80, { align: 'left' });
+        doc.text(`Date Issued: ${subscription.createdAt?.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`, { align: 'left' });
+        doc.text(`Transaction ID: ${subscription.id}`, { align: 'left' });
         if (subscription.status === 'paid') {
-          doc.text(`Date Paid: ${subscription.updatedAt?.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`, { align: 'right' });
+          doc.text(`Date Paid: ${subscription.updatedAt?.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`, { align: 'left' });
+          doc.text(`Payment Method: PAYSTACK`, { align: 'left' });
           if (subscription.cardBrand && subscription.cardLast4) {
-            doc.text(`Payment Method: ${subscription.cardBrand.toUpperCase()} ending in ${subscription.cardLast4}`, { align: 'right' });
+            const first4 = subscription.cardFirst6 ? subscription.cardFirst6.substring(0, 4) : '****';
+            doc.text(`Payment Source: ${subscription.cardBrand.toUpperCase()} ${first4} **** **** ${subscription.cardLast4}`, { align: 'left' });
+          }
+          if (subscription.bankName) {
+            doc.text(`Bank Name: ${subscription.bankName}`, { align: 'left' });
+          }
+          if (subscription.accountName) {
+            doc.text(`Account Name: ${subscription.accountName}`, { align: 'left' });
           }
         }
         
         doc.fillColor('#000000');
-        doc.y = 120; // Reset Y below header
+        doc.y = Math.max(doc.y, 120);
+        doc.moveDown(2); // Reset Y below header
 
         // --- Parties Section ---
         const clientName = `${subscription.user?.firstName || ''} ${subscription.user?.lastName || ''}`.trim() || 'Valued Client';
         const clientEmail = subscription.user?.email || 'N/A';
         
-        doc.fontSize(12).font('Helvetica-Bold').text('Billed From:', 50, doc.y);
+        const partiesY = doc.y;
+        
+        doc.fontSize(12).font('Helvetica-Bold').text('Billed From:', 50, partiesY);
         doc.fontSize(10).font('Helvetica').text('UpBeat Africa Platform', 50, doc.y + 5);
         doc.text('Billing Department', 50, doc.y + 2);
         
-        doc.fontSize(12).font('Helvetica-Bold').text('Billed To:', 300, doc.y - 25);
+        const leftColY = doc.y;
+        doc.y = partiesY;
+        
+        doc.fontSize(12).font('Helvetica-Bold').text('Billed To:', 300, partiesY);
         doc.fontSize(10).font('Helvetica').text(clientName, 300, doc.y + 5);
         doc.text(clientEmail, 300, doc.y + 2);
+        
+        doc.y = Math.max(leftColY, doc.y);
         doc.moveDown(3);
 
         // --- Table Header ---
