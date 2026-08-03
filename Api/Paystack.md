@@ -1,6 +1,6 @@
 # Paystack Integration Guide
 
-This document provides a comprehensive guide on how Paystack is integrated into the Nyakaniniv SaaS platform to support African DJs (Kenya, Ghana, Nigeria, South Africa, etc.) where Stripe payouts are not fully supported.
+This document provides a comprehensive guide on how Paystack is integrated into the UpbeatAfrica SaaS platform to support African DJs (Kenya, Ghana, Nigeria, South Africa, etc.) where Stripe payouts are not fully supported.
 
 ---
 
