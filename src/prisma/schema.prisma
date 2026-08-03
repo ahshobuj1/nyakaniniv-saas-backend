@@ -249,6 +249,9 @@ model SubscriptionInvoice {
   stripeInvoiceId String?                    @map("stripe_invoice_id") @db.VarChar(255)
   cardBrand       String?                    @map("card_brand") @db.VarChar(50)
   cardLast4       String?                    @map("card_last4") @db.VarChar(10)
+  cardFirst6      String?                    @map("card_first6") @db.VarChar(10)
+  bankName        String?                    @map("bank_name") @db.VarChar(100)
+  accountName     String?                    @map("account_name") @db.VarChar(255)
   createdAt       DateTime?                  @default(now()) @map("created_at")
   updatedAt       DateTime?                  @default(now()) @updatedAt @map("updated_at")
 
@@ -267,6 +270,9 @@ model BookingPayment {
   status    BookingPaymentStatus?
   cardBrand String?               @map("card_brand") @db.VarChar(50)
   cardLast4 String?               @map("card_last4") @db.VarChar(10)
+  cardFirst6 String?              @map("card_first6") @db.VarChar(10)
+  bankName  String?               @map("bank_name") @db.VarChar(100)
+  accountName String?             @map("account_name") @db.VarChar(255)
   createdAt DateTime?             @default(now()) @map("created_at")
   updatedAt DateTime?             @default(now()) @updatedAt @map("updated_at")
 

@@ -6,7 +6,6 @@ export class EmailTemplates {
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>${title}</title>
       </head>
       <body style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f9fafb; margin: 0; padding: 0;">
         <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f9fafb; padding: 20px 0;">
@@ -43,7 +42,6 @@ export class EmailTemplates {
   // Case 1 & 3: User Registration OTP / Resend OTP
   static getOtpTemplate(otp: string): string {
     const content = `
-      <h2 style="color: #1f2937; margin-top: 0;">Verify your Email Address</h2>
       <p>Here is your One-Time Password (OTP) to verify your account.</p>
       <div style="background-color: #f3f4f6; padding: 15px; text-align: center; border-radius: 6px; margin: 25px 0;">
         <span style="color: #dc2626; font-size: 32px; font-weight: bold; letter-spacing: 4px;">${otp}</span>
@@ -56,7 +54,6 @@ export class EmailTemplates {
   // Case 2: Successful Verification (Welcome Email)
   static getWelcomeTemplate(name: string): string {
     const content = `
-      <h2 style="color: #1f2937; margin-top: 0;">Welcome, ${name}! 🎉</h2>
       <p>Your email has been successfully verified, and your account is now active on <strong>UpBeat Africa</strong>.</p>
       <p>Log in to your DJ dashboard to set up your portfolio, manage themes, and start taking bookings.</p>
       <div style="text-align: center; margin-top: 30px;">
@@ -69,7 +66,6 @@ export class EmailTemplates {
   // Case 4: Forgot Password Request
   static getPasswordResetTemplate(link: string): string {
     const content = `
-      <h2 style="color: #1f2937; margin-top: 0;">Password Reset Request</h2>
       <p>You recently requested to reset your password for your UpBeat Africa account.</p>
       <p>Click the <strong>Reset Password</strong> button below to create a new password.</p>
       <div style="text-align: center; margin-top: 30px; margin-bottom: 30px;">
@@ -83,7 +79,6 @@ export class EmailTemplates {
   // Case 5: New Booking Request Alert for DJ
   static getNewBookingAlertTemplate(clientName: string, eventType: string, date: string): string {
     const content = `
-      <h2 style="color: #1f2937; margin-top: 0;">New Booking Request!</h2>
       <p>You have received a new booking request from <strong>${clientName}</strong>.</p>
       <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 20px; margin: 20px 0;">
         <h3 style="margin-top: 0; color: #334155; font-size: 18px;">Booking Details</h3>
@@ -100,7 +95,6 @@ export class EmailTemplates {
   // Case 6: Auto-reply to Client for New Booking Request
   static getBookingAutoReplyTemplate(djName: string, eventType: string): string {
     const content = `
-      <h2 style="color: #1f2937; margin-top: 0;">Booking Request Received</h2>
       <p>Thank you for submitting your booking request for <strong>${djName}</strong> on UpBeat Africa.</p>
       <p>Your request for a <strong>${eventType}</strong> is currently pending review.</p>
       <p>The DJ will review your request and get back to you shortly.</p>
@@ -111,7 +105,6 @@ export class EmailTemplates {
   // Case 7: Booking Request Accepted
   static getBookingAcceptedTemplate(djName: string, eventType: string, paymentUrl: string, requestCashUrl: string): string {
     const content = `
-      <h2 style="color: #1f2937; margin-top: 0;">Booking Request Accepted! 🎉</h2>
       <p>Great news! <strong>${djName}</strong> has accepted your booking request for a <strong>${eventType}</strong>.</p>
       <p>To finalize the booking and secure your event date, please complete your payment using one of the following options:</p>
       <div style="text-align: center; margin-top: 30px; margin-bottom: 20px;">
@@ -125,7 +118,6 @@ export class EmailTemplates {
   // Case 8: Booking Canceled / Rejected
   static getBookingRejectedTemplate(djName: string, eventType: string): string {
     const content = `
-      <h2 style="color: #1f2937; margin-top: 0;">Booking Update</h2>
       <p>Unfortunately, <strong>${djName}</strong> is unable to accept your booking request for a <strong>${eventType}</strong> at this time.</p>
       <p>We encourage you to explore other talented DJs on UpBeat Africa for your event.</p>
     `;
@@ -135,7 +127,6 @@ export class EmailTemplates {
   // Case 9: Booking Details Updated
   static getBookingUpdatedTemplate(djName: string, eventType: string, date: string): string {
     const content = `
-      <h2 style="color: #1f2937; margin-top: 0;">Booking Details Updated</h2>
       <p><strong>${djName}</strong> has updated the details for your <strong>${eventType}</strong> booking.</p>
       <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 20px; margin: 20px 0;">
         <p style="margin: 0;"><strong>Updated Event Date & Time:</strong><br/> ${new Date(date).toLocaleString()}</p>
@@ -148,7 +139,6 @@ export class EmailTemplates {
   // Case 10: Cash Payment Requested by Client
   static getCashPaymentRequestedTemplate(clientName: string, eventType: string): string {
     const content = `
-      <h2 style="color: #1f2937; margin-top: 0;">Cash Payment Requested</h2>
       <p><strong>${clientName}</strong> has requested a cash payment for their <strong>${eventType}</strong> booking.</p>
       <p>Once you receive the cash payment, you can mark the booking as paid from your UpBeat Africa dashboard.</p>
     `;
@@ -158,7 +148,6 @@ export class EmailTemplates {
   // Case 11: Payment Reminder for Booking
   static getPaymentReminderTemplate(djName: string, eventType: string, paymentUrl: string): string {
     const content = `
-      <h2 style="color: #1f2937; margin-top: 0;">Payment Reminder ⚠️</h2>
       <p>This is a friendly reminder from <strong>${djName}</strong> regarding your <strong>${eventType}</strong> booking.</p>
       <p>Your payment is still pending. Please complete your payment to fully secure your event date.</p>
       <div style="text-align: center; margin-top: 30px; margin-bottom: 20px;">
@@ -179,7 +168,6 @@ export class EmailTemplates {
     bookingId: string
   ): string {
     const content = `
-      <h2 style="color: #1f2937; margin-top: 0;">Payment Receipt</h2>
       <p>Thank you! Your payment for the booking has been successfully processed.</p>
       <p>Your booking is now fully secured.</p>
       
@@ -195,15 +183,13 @@ export class EmailTemplates {
         </ul>
       </div>
       
-      <p>Please keep this email as proof of your payment.</p>
-    `;
+      `;
     return this.getHtmlShell("Payment Receipt", content);
   }
 
   // Case 13: Booking Payment Received Alert (To DJ)
   static getPaymentReceivedAlertTemplate(clientName: string, amount: number): string {
     const content = `
-      <h2 style="color: #1f2937; margin-top: 0;">Payment Received! 💰</h2>
       <p>You have successfully received a payment of <strong>$${amount.toFixed(2)}</strong> from <strong>${clientName}</strong>.</p>
       <p>The booking status is now complete and secured.</p>
     `;
@@ -213,7 +199,6 @@ export class EmailTemplates {
   // Case 14: Subscription Activated
   static getSubscriptionActivatedTemplate(planName: string, nextBillingDate: string): string {
     const content = `
-      <h2 style="color: #1f2937; margin-top: 0;">Subscription Activated 🚀</h2>
       <p>Thank you for subscribing to the <strong>${planName}</strong> plan on UpBeat Africa.</p>
       <p>Your premium features are now unlocked.</p>
       <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 20px; margin: 20px 0;">
@@ -226,7 +211,6 @@ export class EmailTemplates {
   // Case 15: New Subscription Alert for Admin
   static getNewSubscriptionAdminAlertTemplate(djEmail: string, planId: number): string {
     const content = `
-      <h2 style="color: #1f2937; margin-top: 0;">New Subscription Alert 💸</h2>
       <p>A DJ (<strong>${djEmail}</strong>) has successfully subscribed on UpBeat Africa.</p>
       <p><strong>Plan ID:</strong> ${planId}</p>
     `;
@@ -236,7 +220,6 @@ export class EmailTemplates {
   // Case 16: Subscription Canceled
   static getSubscriptionCanceledTemplate(): string {
     const content = `
-      <h2 style="color: #1f2937; margin-top: 0;">Subscription Canceled</h2>
       <p>Your subscription has been canceled successfully.</p>
       <p>You will continue to have access to your premium features until the end of your current billing cycle.</p>
     `;
@@ -246,7 +229,6 @@ export class EmailTemplates {
   // Case 17: Payment Failed (Subscription Invoice)
   static getPaymentFailedTemplate(): string {
     const content = `
-      <h2 style="color: #1f2937; margin-top: 0;">Payment Failed ⚠️</h2>
       <p>We attempted to process your subscription renewal payment, but the payment was unsuccessful.</p>
       <p>Please update your billing details as soon as possible to avoid any interruption to your service.</p>
       <div style="text-align: center; margin-top: 30px;">
@@ -259,7 +241,6 @@ export class EmailTemplates {
   // Case 18: Subscription Expiring Soon
   static getSubscriptionExpiryWarningTemplate(daysLeft: number): string {
     const content = `
-      <h2 style="color: #1f2937; margin-top: 0;">Subscription Expiring Soon!</h2>
       <p>Your subscription will expire in <strong>${daysLeft} days</strong>.</p>
       <p>Please ensure your payment method is up to date to avoid interruption and keep your portfolio online.</p>
     `;
@@ -269,7 +250,6 @@ export class EmailTemplates {
   // Case 19: Subscription Expired
   static getSubscriptionExpiredTemplate(): string {
     const content = `
-      <h2 style="color: #1f2937; margin-top: 0;">Subscription Expired - Portfolio Offline ⚠️</h2>
       <p>Your subscription has officially expired.</p>
       <p>Your public portfolio is now offline, and your premium features have been disabled.</p>
       <p>Please log in and renew your subscription to reactivate your profile.</p>
@@ -283,7 +263,6 @@ export class EmailTemplates {
   // Case 20: Subscription Changed
   static getSubscriptionChangedTemplate(planId: number): string {
     const content = `
-      <h2 style="color: #1f2937; margin-top: 0;">Subscription Updated</h2>
       <p>Your subscription has been successfully updated.</p>
       <p><strong>New Plan ID:</strong> ${planId}</p>
     `;
@@ -293,7 +272,6 @@ export class EmailTemplates {
   // Case 21: Portfolio Live Notification
   static getPortfolioLiveTemplate(url: string): string {
     const content = `
-      <h2 style="color: #1f2937; margin-top: 0;">Your Portfolio is Live! 🌐</h2>
       <p>Congratulations!</p>
       <p>Your personal DJ portfolio is now live and accessible at:</p>
       <div style="background-color: #f8fafc; padding: 15px; border-radius: 6px; margin: 20px 0; text-align: center; border: 1px solid #e2e8f0;">
@@ -307,7 +285,6 @@ export class EmailTemplates {
   // Case 22: Account Suspended
   static getAccountSuspendedTemplate(): string {
     const content = `
-      <h2 style="color: #1f2937; margin-top: 0;">Account Suspended 🚫</h2>
       <p>Your account has been suspended by an administrator.</p>
       <p>If you believe this was done in error, please contact our support team.</p>
     `;
@@ -317,7 +294,6 @@ export class EmailTemplates {
   // Case 23: New Support Ticket Alert for Admin
   static getNewSupportTicketAdminAlertTemplate(djName: string, subject: string, issue: string): string {
     const content = `
-      <h2 style="color: #1f2937; margin-top: 0;">New Support Ticket</h2>
       <p>A new support request has been submitted.</p>
       <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 20px; margin: 20px 0;">
         <p style="margin-top: 0;"><strong>Customer:</strong> ${djName}</p>
@@ -334,7 +310,6 @@ export class EmailTemplates {
   // Case 24: Support Ticket Received Auto-reply
   static getSupportTicketReceivedTemplate(subject: string): string {
     const content = `
-      <h2 style="color: #1f2937; margin-top: 0;">Support Request Received</h2>
       <p>We have received your support request regarding:</p>
       <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 15px; margin: 20px 0;">
         <strong>${subject}</strong>
@@ -347,7 +322,6 @@ export class EmailTemplates {
   // Case 25: Support Ticket Resolved
   static getSupportTicketResolvedTemplate(subject: string): string {
     const content = `
-      <h2 style="color: #1f2937; margin-top: 0;">Support Ticket Resolved ✅</h2>
       <p>Your support ticket regarding "<strong>${subject}</strong>" has been marked as resolved.</p>
       <p>If you need any further assistance, please open a new support ticket.</p>
     `;
@@ -358,7 +332,6 @@ export class EmailTemplates {
   static getUpcomingEventReminderTemplate(eventType: string, date: string, isDJ: boolean): string {
     const message = isDJ ? 'Good luck with the gig!' : 'We hope you enjoy the event!';
     const content = `
-      <h2 style="color: #1f2937; margin-top: 0;">Upcoming Event Reminder 📅</h2>
       <p>This is a reminder that your <strong>${eventType}</strong> is scheduled for tomorrow.</p>
       <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 20px; margin: 20px 0;">
         <p style="margin: 0;"><strong>Date & Time:</strong><br/> ${new Date(date).toLocaleString()}</p>
