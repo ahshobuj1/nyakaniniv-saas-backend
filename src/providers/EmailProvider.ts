@@ -5,7 +5,7 @@ import { AppLogger } from "@/core/logging/logger";
 import { InfrastructureProvider } from "@/core/InfrastructureProvider";
 
 export interface IEmailProvider {
-  sendEmail(to: string, subject: string, html: string): Promise<boolean>;
+  sendEmail(to: string, subject: string, html: string, attachments?: { filename: string, content: Buffer, contentType?: string }[]): Promise<boolean>;
 }
 
 export class EmailProvider implements InfrastructureProvider<IEmailProvider>, IEmailProvider {
@@ -31,7 +31,7 @@ export class EmailProvider implements InfrastructureProvider<IEmailProvider>, IE
     this.transporter.close();
   }
 
-  async sendEmail(to: string, subject: string, html: string): Promise<boolean> {
+  async sendEmail(to: string, subject: string, html: string, attachments?: { filename: string, content: Buffer, contentType?: string }[]): Promise<boolean> {
     try {
       if (!config.smtp.user || !config.smtp.pass) {
         AppLogger.warn(`[EmailProvider] SMTP credentials not set. Mock sending email to ${to}: ${subject}`);
@@ -43,6 +43,7 @@ export class EmailProvider implements InfrastructureProvider<IEmailProvider>, IE
         to,
         subject,
         html,
+        attachments,
       });
 
       AppLogger.info(`[EmailProvider] Successfully sent email to ${to}`);

@@ -3,6 +3,7 @@ import { BadRequestError } from '@/core/errors/AppError';
 import Stripe from 'stripe';
 import { IEmailProvider } from '@/providers/EmailProvider';
 import { EmailTemplates } from '@/utils/EmailTemplates';
+import { InvoiceServices } from '../Invoice/invoice.service';
 import { config } from '@/core/config';
 import { AppLogger } from '@/core/logging/logger';
 import crypto from 'crypto';
@@ -138,15 +139,32 @@ export class WebhookServices {
               }
             }
           }
-          return { djEmail, clientEmail, djName, eventType, clientName, eventDate, resolvedBookingId };
+          return { djEmail, clientEmail, djName, eventType, clientName, eventDate, resolvedBookingId, paymentId: payment?.id };
         });
 
         // Send Emails outside transaction
+        let pdfBuffer: Buffer | undefined;
+        if ((txResult.djEmail || txResult.clientEmail) && txResult.paymentId) {
+          try {
+            const invoiceService = new InvoiceServices(this.prisma, this.emailProvider);
+            pdfBuffer = await invoiceService.generateInvoicePdf(txResult.paymentId);
+          } catch (error) {
+            console.error("Failed to generate PDF receipt", error);
+          }
+        }
+
+        const attachments = pdfBuffer ? [{
+          filename: `Receipt-${txResult.paymentId.split('-')[0].toUpperCase()}.pdf`,
+          content: pdfBuffer,
+          contentType: 'application/pdf'
+        }] : undefined;
+
         if (txResult.djEmail) {
           this.emailProvider.sendEmail(
             txResult.djEmail,
-            "Payment Received! 💰 - UpBeat Africa",
-            EmailTemplates.getPaymentReceivedAlertTemplate(txResult.clientName, amountPaid)
+            "Payment Received! 🎉 - UpBeat Africa",
+            EmailTemplates.getPaymentReceivedAlertTemplate(txResult.clientName, amountPaid),
+            attachments
           );
         }
 
@@ -159,141 +177,14 @@ export class WebhookServices {
               txResult.eventType,
               txResult.djName,
               txResult.eventDate,
-              "Stripe / Credit Card",
+              "Paystack",
               txResult.resolvedBookingId
-            )
+            ),
+            attachments
           );
         }
-      }
-
-      // 2. Handle Subscription Payments
-      if (userId && planId) {
-        await this.prisma.$transaction(async (tx) => {
-          await tx.subscription.create({
-            data: {
-              userId,
-              planId: parseInt(planId, 10),
-              stripeSubId: stripeSubId || 'one_time_sub', // If mode is not subscription
-              status: 'active',
-              periodEnd: new Date(Date.now() + (session.metadata?.billingCycle === 'monthly' ? 30 : 365) * 24 * 60 * 60 * 1000)
-            }
-          });
-
-          const card = (session as any).payment_method_details?.card || (session as any).charges?.data?.[0]?.payment_method_details?.card;
-          await tx.subscriptionInvoice.create({
-            data: {
-              userId,
-              planId: parseInt(planId, 10),
-              amount: amountPaid,
-              status: SubscriptionInvoiceStatus.paid,
-              stripeInvoiceId: session.invoice ? (session.invoice as string) : 'stripe_mock',
-              cardBrand: card?.brand || null,
-              cardLast4: card?.last4 || null
-            }
-          });
-
-          await tx.tenant.updateMany({
-            where: { userId },
-            data: {
-              activePlanId: parseInt(planId, 10),
-              subscriptionStatus: 'active'
-            }
-          });
-        });
-
-        // Send Emails for Subscription
-        const user = await this.prisma.user.findUnique({ where: { id: userId } });
-        if (user && user.email) {
-          const nextBilling = new Date(Date.now() + (session.metadata?.billingCycle === 'monthly' ? 30 : 365) * 24 * 60 * 60 * 1000).toISOString();
-          
-          this.emailProvider.sendEmail(
-            user.email,
-            "Subscription Activated 🚀 - UpBeat Africa",
-            EmailTemplates.getSubscriptionActivatedTemplate(`Plan ${planId}`, nextBilling)
-          );
-
-          this.emailProvider.sendEmail(
-            config.defaultAdmin?.email || "admin@upbeatafrica.com",
-            "New Subscription Alert 💸 - UpBeat Africa",
-            EmailTemplates.getNewSubscriptionAdminAlertTemplate(user.email, parseInt(planId, 10))
-          );
-        }
-      }
-    } else if (event.type === 'customer.subscription.deleted') {
-      const stripeSub = event.data.object as any;
-      const sub = await this.prisma.subscription.findFirst({
-        where: { stripeSubId: stripeSub.id },
-        include: { user: true }
-      });
-
-      if (sub) {
-        await this.prisma.$transaction(async (tx) => {
-          await tx.subscription.update({
-            where: { id: sub.id },
-            data: { status: 'canceled' }
-          });
-          
-          await tx.tenant.updateMany({
-            where: { userId: sub.userId },
-            data: { subscriptionStatus: 'canceled' }
-          });
-        });
-
-        if (sub.user && sub.user.email) {
-          this.emailProvider.sendEmail(
-            sub.user.email,
-            "Subscription Canceled - UpBeat Africa",
-            EmailTemplates.getSubscriptionCanceledTemplate()
-          );
-        }
-      }
-    } else if (event.type === 'customer.subscription.updated') {
-      const stripeSub = event.data.object as any;
-      const planIdStr = stripeSub.metadata?.planId;
-      
-      if (planIdStr) {
-        const newPlanId = parseInt(planIdStr, 10);
-        const sub = await this.prisma.subscription.findFirst({
-          where: { stripeSubId: stripeSub.id },
-          include: { user: true }
-        });
-
-        if (sub && sub.planId !== newPlanId) {
-          await this.prisma.subscription.update({
-            where: { id: sub.id },
-            data: { planId: newPlanId }
-          });
-
-          if (sub.user && sub.user.email) {
-            this.emailProvider.sendEmail(
-              sub.user.email,
-              "Subscription Updated - UpBeat Africa",
-              EmailTemplates.getSubscriptionChangedTemplate(newPlanId)
-            );
-          }
-        }
-      }
-    } else if (event.type === 'invoice.payment_failed') {
-      const invoice = event.data.object as any;
-      const stripeSubId = invoice.subscription as string;
-      const sub = await this.prisma.subscription.findFirst({
-        where: { stripeSubId },
-        include: { user: true }
-      });
-
-      if (sub && sub.user && sub.user.email) {
-        this.emailProvider.sendEmail(
-          sub.user.email,
-          "Payment Failed ⚠️ - UpBeat Africa",
-          EmailTemplates.getPaymentFailedTemplate()
-        );
       }
     }
-
-    await this.prisma.webhookEvent.update({
-      where: { stripeEventId: event.id },
-      data: { status: 'processed' }
-    });
 
     return { received: true };
   }
@@ -453,7 +344,7 @@ export class WebhookServices {
               }
             }
           }
-          return { djEmail, clientEmail, djName, eventType, clientName, eventDate, resolvedBookingId };
+          return { djEmail, clientEmail, djName, eventType, clientName, eventDate, resolvedBookingId, paymentId: payment?.id };
         });
 
         // Send Emails outside transaction
