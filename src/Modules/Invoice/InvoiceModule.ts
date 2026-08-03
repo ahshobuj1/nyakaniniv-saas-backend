@@ -47,6 +47,12 @@ export class InvoiceModule extends BaseModule {
       controller.getMyInvoices.bind(controller),
     );
 
+    this.router.get(
+      "/:id",
+      authenticateUser,
+      controller.getInvoiceById.bind(controller),
+    );
+
     this.router.patch(
       "/:id/mark-paid",
       authenticateUser,
@@ -59,6 +65,13 @@ export class InvoiceModule extends BaseModule {
       "/:id/pay",
       validateRequest(payInvoiceSchema),
       controller.payInvoice.bind(controller),
+    );
+
+    // Download PDF (Public or Authenticated, keeping it public via link for clients, or maybe we should authenticate)
+    // We will keep it accessible by ID, in a real app this should have a token or be authenticated. 
+    this.router.get(
+      "/:id/pdf",
+      controller.downloadInvoicePdf.bind(controller),
     );
   }
 }

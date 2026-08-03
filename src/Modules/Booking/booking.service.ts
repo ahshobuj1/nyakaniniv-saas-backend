@@ -68,6 +68,7 @@ export class BookingServices {
           title: "New Booking Request",
           message: `You have a new booking request from ${data.clientName} for ${data.eventType}.`,
           type: NotificationType.booking_request, 
+          referenceId: booking.id,
         }
       });
 
@@ -164,7 +165,7 @@ export class BookingServices {
             tenantId,
             bookingId: id,
             amount: data.totalAmount,
-            method: BookingPaymentMethod.STRIPE, // default to stripe, client pays online
+            // method is not set initially; it will be set by the respective webhook (Stripe/Paystack) upon payment
             status: BookingPaymentStatus.unpaid,
           }
         });
@@ -282,7 +283,8 @@ export class BookingServices {
           userId: booking.tenant.userId,
           title: 'Cash Payment Requested',
           message: `${booking.client?.name || 'Client'} has requested to pay by cash for the ${booking.eventType} booking.`,
-          type: NotificationType.system
+          type: NotificationType.system,
+          referenceId: booking.id,
         }
       });
 

@@ -13,6 +13,13 @@ export class InvoiceController extends BaseController {
     this.sendPaginatedResponse(req, res, meta, 'Invoices retrieved successfully', invoices);
   }
 
+  public async getInvoiceById(req: Request, res: Response): Promise<void> {
+    const userId = req.user!.id;
+    const id = String(req.params.id);
+    const invoice = await this.invoiceService.getInvoiceById(userId, id);
+    this.sendResponse(req, res, 'Invoice retrieved successfully', undefined, invoice);
+  }
+
   public async getAllInvoices(req: Request, res: Response): Promise<void> {
     const { invoices, meta } = await this.invoiceService.getAllInvoices(req.query);
     this.sendPaginatedResponse(req, res, meta, 'All invoices retrieved successfully', invoices);
@@ -29,5 +36,15 @@ export class InvoiceController extends BaseController {
     const id = String(req.params.id);
     const invoice = await this.invoiceService.markAsPaid(userId, id);
     this.sendResponse(req, res, 'Invoice marked as paid', undefined, invoice);
+  }
+
+  public async downloadInvoicePdf(req: Request, res: Response): Promise<void> {
+    const id = String(req.params.id);
+    const pdfBuffer = await this.invoiceService.generateInvoicePdf(id);
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=invoice-${id}.pdf`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.send(pdfBuffer);
   }
 }

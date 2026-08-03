@@ -1,6 +1,6 @@
 # Stripe Integration Guide
 
-This document provides a comprehensive guide on how Stripe is integrated into the Nyakaniniv SaaS platform, how to configure your environment variables, and how to run end-to-end tests for the payment flows.
+This document provides a comprehensive guide on how Stripe is integrated into the UpbeatAfrica SaaS platform, how to configure your environment variables, and how to run end-to-end tests for the payment flows.
 
 ---
 
