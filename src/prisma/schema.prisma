@@ -247,6 +247,8 @@ model SubscriptionInvoice {
   amount          Decimal?                   @db.Decimal(10, 2)
   status          SubscriptionInvoiceStatus?
   stripeInvoiceId String?                    @map("stripe_invoice_id") @db.VarChar(255)
+  cardBrand       String?                    @map("card_brand") @db.VarChar(50)
+  cardLast4       String?                    @map("card_last4") @db.VarChar(10)
   createdAt       DateTime?                  @default(now()) @map("created_at")
   updatedAt       DateTime?                  @default(now()) @updatedAt @map("updated_at")
 
@@ -263,6 +265,8 @@ model BookingPayment {
   amount    Decimal?              @db.Decimal(10, 2)
   method    BookingPaymentMethod?
   status    BookingPaymentStatus?
+  cardBrand String?               @map("card_brand") @db.VarChar(50)
+  cardLast4 String?               @map("card_last4") @db.VarChar(10)
   createdAt DateTime?             @default(now()) @map("created_at")
   updatedAt DateTime?             @default(now()) @updatedAt @map("updated_at")
 
@@ -317,6 +321,7 @@ model Notification {
   message   String?           @db.Text
   type      NotificationType?
   isRead    Boolean?          @default(false) @map("is_read")
+  referenceId String?         @map("reference_id") @db.VarChar(255)
   createdAt DateTime?         @default(now()) @map("created_at")
 
   user User? @relation(fields: [userId], references: [id])

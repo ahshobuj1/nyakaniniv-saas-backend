@@ -78,11 +78,21 @@ export class WebhookServices {
           let eventDate = new Date().toISOString();
           let resolvedBookingId = bookingId;
 
-          const payment = await tx.bookingPayment.findUnique({ where: { id: invoiceId || '' } });
-          if (payment) {
+          const payment = invoiceId 
+            ? await tx.bookingPayment.findUnique({ where: { id: invoiceId } })
+            : await tx.bookingPayment.findUnique({ where: { bookingId: resolvedBookingId || '' } });
+            
+          if (payment && payment.status !== BookingPaymentStatus.paid) {
+            // Attempt to extract card details if they exist in the session object
+            const card = (session as any).payment_method_details?.card || (session as any).charges?.data?.[0]?.payment_method_details?.card;
             await tx.bookingPayment.update({
               where: { id: payment.id },
-              data: { status: BookingPaymentStatus.paid }
+              data: { 
+                status: BookingPaymentStatus.paid,
+                method: BookingPaymentMethod.STRIPE,
+                cardBrand: card?.brand || null,
+                cardLast4: card?.last4 || null
+              }
             });
           }
 
@@ -112,7 +122,8 @@ export class WebhookServices {
                         userId: tenant.user.id,
                         title: 'Payment Received',
                         message: `Payment received for booking ${eventType} from ${clientName}.`,
-                        type: NotificationType.payment
+                        type: NotificationType.payment,
+                        referenceId: payment?.id || resolvedBookingId,
                       }
                     });
                   }
@@ -161,13 +172,16 @@ export class WebhookServices {
             }
           });
 
+          const card = (session as any).payment_method_details?.card || (session as any).charges?.data?.[0]?.payment_method_details?.card;
           await tx.subscriptionInvoice.create({
             data: {
               userId,
               planId: parseInt(planId, 10),
               amount: amountPaid,
               status: SubscriptionInvoiceStatus.paid,
-              stripeInvoiceId: session.invoice ? (session.invoice as string) : 'stripe_mock'
+              stripeInvoiceId: session.invoice ? (session.invoice as string) : 'stripe_mock',
+              cardBrand: card?.brand || null,
+              cardLast4: card?.last4 || null
             }
           });
 
@@ -331,7 +345,9 @@ export class WebhookServices {
               planId: parseInt(planId, 10),
               amount: amountPaid,
               status: SubscriptionInvoiceStatus.paid,
-              stripeInvoiceId: data.reference || 'paystack_mock'
+              stripeInvoiceId: data.reference || 'paystack_mock',
+              cardBrand: data.authorization?.card_type || data.authorization?.brand || null,
+              cardLast4: data.authorization?.last4 || null
             }
           });
 
@@ -371,11 +387,19 @@ export class WebhookServices {
           let eventDate = new Date().toISOString();
           let resolvedBookingId = bookingId;
 
-          const payment = await tx.bookingPayment.findUnique({ where: { id: invoiceId || '' } });
+          const payment = invoiceId 
+            ? await tx.bookingPayment.findUnique({ where: { id: invoiceId } })
+            : await tx.bookingPayment.findUnique({ where: { bookingId: resolvedBookingId || '' } });
+            
           if (payment && payment.status !== BookingPaymentStatus.paid) {
             await tx.bookingPayment.update({
               where: { id: payment.id },
-              data: { status: BookingPaymentStatus.paid }
+              data: { 
+                status: BookingPaymentStatus.paid,
+                method: BookingPaymentMethod.PAYSTACK,
+                cardBrand: data.authorization?.card_type || data.authorization?.brand || null,
+                cardLast4: data.authorization?.last4 || null
+              }
             });
           }
 
@@ -405,7 +429,8 @@ export class WebhookServices {
                         userId: tenant.user.id,
                         title: 'Payment Received via Paystack',
                         message: `Payment received for booking ${eventType} from ${clientName}.`,
-                        type: NotificationType.payment
+                        type: NotificationType.payment,
+                        referenceId: payment?.id || resolvedBookingId,
                       }
                     });
                   }

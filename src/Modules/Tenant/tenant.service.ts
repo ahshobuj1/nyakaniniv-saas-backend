@@ -54,7 +54,7 @@ export class TenantServices {
     });
 
     if (newTenant.user && newTenant.user.email) {
-      const url = `https://${newTenant.subdomain}.upbeatafrica.com`;
+      const url = `https://${newTenant.subdomain}.deejay.africa`;
       this.emailProvider.sendEmail(
         newTenant.user.email,
         "Your Portfolio is Live! 🌐 - UpBeat Africa",
