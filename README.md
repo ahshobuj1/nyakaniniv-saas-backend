@@ -1,88 +1,103 @@
-# Express Class-Based Backend Template (Ignitor App)
+<div align="center">
+  <img src="./public/logo.png" alt="UpBeat Africa Logo" width="150" />
+  
+  # 🌍 UpBeat Africa SaaS Backend
+  **A scalable, modular, and multi-tenant backend platform powering the UpBeat Africa DJ ecosystem.**
 
-Welcome to the Express Class-Based Backend Server template! This starter kit provides a robust, modular, and highly scalable architecture for building Node.js applications using Express, TypeScript, Prisma, and Bun.
+  [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+  [![Express.js](https://img.shields.io/badge/Express.js-404D59?style=for-the-badge)](https://expressjs.com/)
+  [![Prisma](https://img.shields.io/badge/Prisma-3982CE?style=for-the-badge&logo=Prisma&logoColor=white)](https://www.prisma.io/)
+  [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+  [![Bun](https://img.shields.io/badge/Bun-000000?style=for-the-badge&logo=bun&logoColor=white)](https://bun.sh/)
+  
+</div>
 
-> ℹ️ **Info:** This project utilizes an `IgnitorApp` core engine to cleanly separate infrastructure, business logic (modules), and server bootstrapping.
+---
 
-## 🚀 Getting Started
+## 📚 Documentation & Resources
+
+Dive right into the core documentation to understand how the platform works:
+
+- 📖 **[Local API Documentation](./Api/API%20Documentation.md)** - Comprehensive markdown file listing all endpoints.
+- 🗄️ **[Database & Technology Specs](./Database%20Design%20and%20Testing/Technology.md)** - Details on the DB schema, tech stack, and design choices.
+- 🚀 **Live API Base URL:** `https://api.upbeat.africa`
+- 🎯 **Interactive Swagger UI (Live):** [https://api.upbeat.africa/api-docs](https://api.upbeat.africa/api-docs)
+
+> **Note:** The interactive Swagger UI is built automatically from JSDoc comments in the controllers and allows you to test endpoints directly from your browser.
+
+---
+
+## 🏗 Architecture (The Ignitor Engine)
+
+This backend runs on a highly structured, class-based modular engine located in `src/index.ts`. It ensures the codebase remains maintainable as the SaaS platform scales.
+
+1. **Initialization:** The application begins by instantiating the `IgnitorApp` engine.
+2. **Infrastructure Providers:** Core services (e.g., `PrismaProvider`, `EmailProvider`, `FileUploaderProvider`) are registered into the app context for global access.
+3. **Module Registration:** Business logic is encapsulated in completely standalone modules (e.g., `AuthModule`, `BookingModule`, `TenantModule`). These modules seamlessly attach their specific routes, controllers, and services.
+4. **Spark:** The server initializes and handles routing safely!
+
+---
+
+## 🚀 Getting Started Locally
 
 ### Prerequisites
-
-Make sure you have the following installed on your local machine:
-
-- **Bun:** We use Bun as the primary package manager and runtime.
-- **Docker:** (Optional but recommended) For quickly spinning up the local PostgreSQL database.
+Make sure you have the following installed on your machine:
+- **Bun:** We use [Bun](https://bun.sh/) for blisteringly fast dependency management and execution.
+- **Docker:** (Optional but highly recommended) For quickly spinning up the local PostgreSQL database via `docker-compose`.
 
 ### Installation & Setup
 
 1. **Install Dependencies:**
-   Run the following command to install all required packages:
+   ```bash
+   bun install
+   ```
 
-```bash
-bun install
+2. **Environment Configuration:**
+   Copy the `.env.demo` file to create your own `.env` file. Ensure you update the database credentials and the Paystack/Stripe/AWS secrets.
+   ```bash
+   cp .env.demo .env
+   ```
 
-```
+3. **Start the Local Database:**
+   Use the built-in script to spin up your PostgreSQL database:
+   ```bash
+   bun run docker:up
+   ```
 
-1. **Environment Configuration:**
-   Ensure you have your environment variables set up. Copy the `.env.demo` file to create your own `.env` file and update the database credentials.
-2. **Start the Database:**
-   Use the built-in Docker script to spin up your database via docker-compose:
+4. **Initialize Database (Prisma):**
+   Run the setup script which automatically generates the Prisma Client and applies all migrations:
+   ```bash
+   bun run setup
+   ```
+   > 💡 **Tip:** The `setup` script is a convenient wrapper that bundles `bun install`, `prisma generate`, and `prisma migrate dev` into a single command.
 
-```bash
-bun run docker:up
+---
 
-```
+## 💻 Running the Application
 
-1. **Database Setup (Prisma):**
-   Run the setup script which handles client generation and migrations automatically:
-
-```bash
-bun run setup
-
-```
-
-> 💡 **Tip:** The `setup` script is a convenient wrapper that bundles `bun install`, `prisma generate`, and `prisma migrate dev` into a single command.
-
-### Running the Application
-
-- **Development Mode:**
-
+**Development Mode (Hot Reloading):**
 ```bash
 bun run dev
-
 ```
+*This starts the server on `http://localhost:3030` and watches for file changes.*
 
-This will start the server in watch mode with `NODE_ENV=development`.
-
-- **Production Build:**
-
+**Production Build:**
 ```bash
 bun run build
 bun run start
-
 ```
+> ⚠️ **Warning:** Always ensure you compile the TypeScript code using `bun run build` before deploying to production. The `start` script specifically executes the compiled output in the `dist` directory.
 
-> ⚠️ **Warning:** Always ensure you compile the TypeScript code using `bun run build` before deploying to production. The `start` script specifically looks for the compiled output in the `dist` directory (`dist/index.js`).
+---
 
-## 🏗 Architecture (The Ignitor Engine)
+## 📜 Essential Developer Scripts
 
-This app relies on a structured, class-based bootstrap process located in `src/index.ts`. It is designed to keep your codebase organized as it scales.
+Here are some of the most useful commands included in this repository:
 
-1. **Initialization:** The application begins by instantiating the `IgnitorApp` engine.
-2. **Infrastructure Providers:** Essential external services and databases (like the `PrismaProvider`) are registered into the app context first.
-3. **Module Registration:** Business logic is encapsulated in standalone modules (e.g., `AuthModule`, `ProductModule`). You register these modules to attach their specific routes, controllers, and services to the app.
-4. **Spark:** The server is officially started by calling `app.spark()` on your configured port.
+- `bun run dev` - Starts the development server with hot-reloading.
+- `bun run db:studio` - Opens **Prisma Studio** in your browser to easily view, edit, and query your database tables visually.
+- `bun run db:push` - Pushes schema changes directly to the database without creating a migration file (good for prototyping).
+- `bun run lint:fix` - Automatically scans and fixes ESLint rule violations.
+- `bun run format` - Formats your code using Prettier to maintain a consistent style across the team.
 
-> ℹ️ **Info:** Centralized error handling is built directly into the bootstrap process to gracefully catch, log, and terminate the process if any fatal startup errors occur.
-
-## 📜 Key Scripts
-
-Here are some of the most useful commands included in this template:
-
-- **`bun run dev`**: Starts the development server with hot-reloading.
-- **`bun run add:module`**: A handy utility script to generate the boilerplate files for a new module.
-- **`bun run db:studio`**: Opens Prisma Studio in your browser to easily view and edit your database tables.
-- **`bun run lint:fix`**: Automatically scans and fixes ESLint rule violations.
-- **`bun run format`**: Formats your code using Prettier to maintain a consistent style.
-
-> 💡 **Tip:** If your local database ever gets into an unrecoverable state, use `bun run reset`. This command safely resets the Prisma migrations and runs your database seeder to give you a fresh slate.
+> 💡 **Tip:** If your local database gets into a weird state during development, you can use `bun run reset`. This command safely resets the Prisma migrations and seeds the database to give you a fresh slate.

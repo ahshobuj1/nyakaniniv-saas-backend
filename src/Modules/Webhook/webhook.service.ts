@@ -153,7 +153,7 @@ export class WebhookServices {
           }
         }
 
-        const attachments = pdfBuffer ? [{
+        const attachments = (pdfBuffer && txResult.paymentId) ? [{
           filename: `Receipt-${txResult.paymentId.split('-')[0].toUpperCase()}.pdf`,
           content: pdfBuffer,
           contentType: 'application/pdf'

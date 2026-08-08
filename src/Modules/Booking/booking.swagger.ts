@@ -162,3 +162,72 @@
  *       400:
  *         description: Booking is not ready for payment or already paid
  */
+
+/**
+ * @swagger
+ * /bookings/v1/{id}:
+ *   get:
+ *     summary: Get booking by ID
+ *     tags: [Booking]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Booking object
+ */
+/**
+ * @swagger
+ * /bookings/v1/{id}/remind-payment:
+ *   post:
+ *     summary: Remind client about payment
+ *     tags: [Booking]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Reminder sent
+ */
+/**
+ * @swagger
+ * /bookings/v1/{id}/payment-link:
+ *   get:
+ *     summary: Get payment link
+ *     tags: [Booking]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Payment link returned
+ */
+/**
+ * @swagger
+ * /bookings/v1/{id}/checkout-redirect:
+ *   get:
+ *     summary: Redirect to checkout
+ *     tags: [Booking]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       302:
+ *         description: Redirected to Stripe or Paystack
+ */

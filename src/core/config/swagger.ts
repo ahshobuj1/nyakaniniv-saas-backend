@@ -11,6 +11,10 @@ const options: swaggerJsdoc.Options = {
     },
     servers: [
       {
+        url: "https://api.upbeat.africa",
+        description: "Production Server",
+      },
+      {
         url: `http://localhost:${config.server.port}`,
         description: "Development Server",
       },
