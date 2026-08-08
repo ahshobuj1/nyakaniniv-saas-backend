@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="./public/logo.png" alt="UpBeat Africa Logo" width="150" />
+  <img src="./public/upbeat.png" alt="UpBeat Africa Logo" width="150" />
   
   # 🌍 UpBeat Africa SaaS Backend
   **A scalable, modular, and multi-tenant backend platform powering the UpBeat Africa DJ ecosystem.**

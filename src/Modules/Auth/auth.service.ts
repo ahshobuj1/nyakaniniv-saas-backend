@@ -177,7 +177,7 @@ export class AuthServices {
     this.emailProvider.sendEmail(
       email,
       "Password Reset Request - UpBeat Africa",
-      EmailTemplates.getPasswordResetTemplate(`http://localhost:3000/auth/reset-password?otp=${otp}&email=${encodeURIComponent(email)}`)
+      EmailTemplates.getPasswordResetTemplate(`https://upbeat.africa/auth/reset-password?otp=${otp}&email=${encodeURIComponent(email)}`)
     );
 
     return { otp };

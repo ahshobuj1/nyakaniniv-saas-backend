@@ -5,7 +5,13 @@ import { UpdateProfileDTO, UpdateUserRoleDTO, UpdateUserStatusDTO } from './User
 export class UserServices {
   constructor(private prisma: PrismaClient) {}
 
-  async getAllUsers(page: number, limit: number, search?: string) {
+  async getAllUsers(
+    page: number, 
+    limit: number, 
+    search?: string, 
+    sortBy: string = 'createdAt', 
+    sortOrder: 'asc' | 'desc' = 'desc'
+  ) {
     const skip = (page - 1) * limit;
     
     const whereClause: any = {};
@@ -31,7 +37,7 @@ export class UserServices {
           isVerified: true,
           createdAt: true,
         },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { [sortBy === 'displayName' ? 'firstName' : sortBy === 'status' ? 'isVerified' : sortBy]: sortOrder }
       }),
       this.prisma.user.count({ where: whereClause })
     ]);
