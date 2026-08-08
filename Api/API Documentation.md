@@ -4,9 +4,9 @@ This document contains the API endpoints for the project. You can use this to ma
 
 ## Base URL
 
-`http://localhost:3030`
+`https://api.upbeat.africa`
 
-> **Note:** A complete, interactive Swagger documentation is available at `http://localhost:3030/api-docs`. It includes all modules: Auth, Theme, Tenant, Event, Subscription, MixTape, Booking, Invoice, Support Ticket, Notification, and Landing Page.
+> **Note:** A complete, interactive Swagger documentation is available at `https://api.upbeat.africa/api-docs`. It includes all modules: Auth, Theme, Tenant, Event, Subscription, MixTape, Booking, Invoice, Support Ticket, Notification, and Landing Page.
 
 ---
 
@@ -818,3 +818,31 @@ The following resources follow standard CRUD (`POST /`, `PATCH /:id`, `DELETE /:
 - **Service:** `/landing-page/v1/service`
 - **FAQ:** `/landing-page/v1/faq`
 - **Marquee:** `/landing-page/v1/marquee`
+
+---
+
+## 🆕 Newly Added Endpoints (Discovered during recent update)
+
+### Auth Module
+- **POST** `/auth/v1/change-password` - Change password for an authenticated user.
+
+### Tenant Module
+- **POST** `/tenant/v1/upload-media` - Upload tenant-specific media (e.g., logo).
+- **PATCH** `/tenant/v1/:id/status` - Update the status of a specific tenant.
+
+### Booking Module
+- **GET** `/bookings/v1/:id` - Get specific booking details.
+- **POST** `/bookings/v1/:id/remind-payment` - Send a payment reminder to the client.
+- **GET** `/bookings/v1/:id/payment-link` - Get the payment link for a booking.
+- **GET** `/bookings/v1/:id/checkout-redirect` - Redirect client to Stripe/Paystack checkout.
+- **GET** `/bookings/v1/:id/request-cash-redirect` - Redirect endpoint after requesting cash payment.
+
+### Invoice Module
+- **GET** `/invoices/v1/:id/pdf` - Download invoice as a PDF receipt.
+
+### Paystack Connect Module
+- **GET** `/paystack-connect/v1/banks` - Fetch supported banks.
+- **DELETE** `/paystack-connect/v1/disconnect` - Disconnect Paystack account.
+
+### Notification Module
+- **GET** `/notifications/v1/unread-count` - Get count of unread notifications.

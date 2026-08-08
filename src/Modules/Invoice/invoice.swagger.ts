@@ -74,3 +74,22 @@
  *       200:
  *         description: Invoice marked as paid
  */
+
+/**
+ * @swagger
+ * /invoices/v1/{id}/pdf:
+ *   get:
+ *     summary: Download invoice PDF
+ *     tags: [Invoice]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: PDF file returned
+ */

@@ -170,3 +170,34 @@
  *       404:
  *         description: Theme or Tenant not found
  */
+
+/**
+ * @swagger
+ * /tenant/v1/upload-media:
+ *   post:
+ *     summary: Upload tenant media
+ *     tags: [Tenant]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Media uploaded
+ */
+/**
+ * @swagger
+ * /tenant/v1/{id}/status:
+ *   patch:
+ *     summary: Update tenant status
+ *     tags: [Tenant]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Status updated
+ */
