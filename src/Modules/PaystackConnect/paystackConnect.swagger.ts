@@ -100,3 +100,28 @@
  *       400:
  *         description: Missing tenantId
  */
+
+/**
+ * @swagger
+ * /paystack-connect/v1/banks:
+ *   get:
+ *     summary: Get list of supported banks
+ *     tags: [Paystack Connect]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of banks
+ */
+/**
+ * @swagger
+ * /paystack-connect/v1/disconnect:
+ *   delete:
+ *     summary: Disconnect Paystack account
+ *     tags: [Paystack Connect]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Account disconnected
+ */
