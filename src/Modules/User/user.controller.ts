@@ -16,8 +16,10 @@ export class UserController extends BaseController {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
       const search = req.query.search as string | undefined;
+      const sortBy = (req.query.sortBy as string) || 'createdAt';
+      const sortOrder = (req.query.sortOrder as 'asc' | 'desc') || 'desc';
 
-      const result = await this.userServices.getAllUsers(page, limit, search);
+      const result = await this.userServices.getAllUsers(page, limit, search, sortBy, sortOrder);
       return this.sendPaginatedResponse(req, res, result.meta, 'Users retrieved successfully', result.data);
     } catch (error) {
       next(error);
