@@ -35,8 +35,10 @@ export class SubscriptionServices {
     return plan;
   }
 
-  async getAllPlans() {
+  async getAllPlans(all?: boolean) {
+    const where = all ? {} : { isActive: true };
     return this.prisma.subscriptionPlan.findMany({
+      where,
       orderBy: { priceMonthly: 'asc' },
     });
   }
@@ -70,6 +72,7 @@ export class SubscriptionServices {
         stripeMonthlyPriceId: data.stripeMonthlyPriceId !== undefined ? data.stripeMonthlyPriceId : existing.stripeMonthlyPriceId,
         stripeAnnualPriceId: data.stripeAnnualPriceId !== undefined ? data.stripeAnnualPriceId : existing.stripeAnnualPriceId,
         discountPercentage: data.discountPercentage !== undefined ? data.discountPercentage : existing.discountPercentage,
+        isActive: data.isActive !== undefined ? data.isActive : existing.isActive,
         features: data.features !== undefined ? data.features : (existing.features as any),
       },
     });

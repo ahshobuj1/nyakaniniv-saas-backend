@@ -14,7 +14,8 @@ export class SubscriptionController extends BaseController {
   }
 
   public async getAllPlans(req: Request, res: Response): Promise<void> {
-    const plans = await this.subscriptionService.getAllPlans();
+    const all = req.query.all === 'true';
+    const plans = await this.subscriptionService.getAllPlans(all);
     this.sendResponse(req, res, 'Plans retrieved successfully', undefined, plans);
   }
 

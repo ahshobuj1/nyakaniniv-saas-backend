@@ -19,6 +19,7 @@ export const createSubscriptionPlanSchema = {
     stripeMonthlyPriceId: z.string().optional(),
     stripeAnnualPriceId: z.string().optional(),
     discountPercentage: z.number().min(0).max(100).optional().default(0),
+    isActive: z.boolean().optional().default(true),
     features: z.preprocess(parseJsonString, z.record(z.string(), z.any()).optional()),
   }),
 };
@@ -31,6 +32,7 @@ export const updateSubscriptionPlanSchema = {
     stripeMonthlyPriceId: z.string().optional(),
     stripeAnnualPriceId: z.string().optional(),
     discountPercentage: z.number().min(0).max(100).optional(),
+    isActive: z.boolean().optional(),
     features: z.preprocess(parseJsonString, z.record(z.string(), z.any()).optional()),
   }),
   params: z.object({
