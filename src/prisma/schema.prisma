@@ -142,6 +142,7 @@ model SubscriptionPlan {
   stripeMonthlyPriceId String?   @map("stripe_monthly_price_id") @db.VarChar(255)
   stripeAnnualPriceId  String?   @map("stripe_annual_price_id") @db.VarChar(255)
   discountPercentage   Int?      @map("discount_percentage")
+  isActive             Boolean   @default(true) @map("is_active")
   features             Json?
   createdAt            DateTime? @default(now()) @map("created_at")
   updatedAt            DateTime? @default(now()) @updatedAt @map("updated_at")
