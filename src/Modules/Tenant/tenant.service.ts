@@ -75,26 +75,56 @@ export class TenantServices {
       .pagination()
       .fields();
 
-    // In Prisma, if we use select via fields(), we can't easily merge includes
-    // So we'll conditionally add our include if fields() wasn't used
-    if (!tenantQuery.prismaArgs.select) {
-      tenantQuery.prismaArgs.include = {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-          },
+    // Override the Prisma arguments to only select the necessary fields
+    // as requested by the admin dashboard to reduce payload size.
+    tenantQuery.prismaArgs.select = {
+      id: true,
+      subdomain: true,
+      stageName: true,
+      isActive: true,
+      activePlanId: true,
+      user: {
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
         },
-      };
-    }
+      },
+      _count: {
+        select: {
+          mixTapes: true,
+          events: true,
+          bookings: true,
+        },
+      },
+    };
+
+    // Make sure 'include' is removed when using 'select' in Prisma
+    delete tenantQuery.prismaArgs.include;
 
     const tenants = await tenantQuery.model.findMany(tenantQuery.prismaArgs);
     const meta = await tenantQuery.countTotal();
 
+    // Fetch subscription plans to map activePlanId to the actual plan name
+    const plans = await this.prisma.subscriptionPlan.findMany({
+      select: { id: true, name: true },
+    });
+    const planMap = new Map(plans.map((p) => [p.id, p.name]));
+
+    const mappedTenants = tenants.map((tenant: any) => {
+      const activePlanName = tenant.activePlanId
+        ? planMap.get(tenant.activePlanId) || 'Unknown Plan'
+        : 'No Plan';
+
+      return {
+        ...tenant,
+        activePlanName,
+      };
+    });
+
     return {
-      tenants,
+      tenants: mappedTenants,
       meta,
     };
   }

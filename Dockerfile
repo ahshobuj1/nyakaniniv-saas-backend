@@ -7,7 +7,7 @@ COPY package.json bun.lock prisma.config.ts ./
 COPY src/prisma ./src/prisma/
 
 # Install dependencies
-RUN bun install --frozen-lockfile --production && bun run db:generate
+RUN bun install --frozen-lockfile && bun run db:generate
 
 
 # Copy source code and build
