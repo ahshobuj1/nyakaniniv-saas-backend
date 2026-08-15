@@ -28,6 +28,8 @@ enum BookingStatus {
   pending
   accepted
   completed
+  canceled
+  rejected
 }
 
 enum TicketStatus {

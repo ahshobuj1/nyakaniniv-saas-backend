@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { BaseController } from '@/core/BaseController';
 import { BookingServices } from './booking.service';
+import { BadRequestError } from "@/core/errors/AppError";
 
 export class BookingController extends BaseController {
   constructor(private bookingService: BookingServices) {
@@ -161,5 +162,23 @@ export class BookingController extends BaseController {
         </html>
       `);
     }
+  }
+
+  public async handleCashRequestDecision(req: Request, res: Response): Promise<void> {
+    const userId = req.user!.id;
+    const id = String(req.params.id);
+    const { decision } = req.body;
+    if (decision !== 'approve' && decision !== 'reject') {
+      throw new BadRequestError('Invalid decision');
+    }
+    const result = await this.bookingService.handleCashRequestDecision(userId, id, decision);
+    this.sendResponse(req, res, result.message, undefined, result);
+  }
+
+  public async markCashAsPaid(req: Request, res: Response): Promise<void> {
+    const userId = req.user!.id;
+    const id = String(req.params.id);
+    const result = await this.bookingService.markCashAsPaid(userId, id);
+    this.sendResponse(req, res, result.message, undefined, result);
   }
 }
