@@ -370,8 +370,8 @@ export class InvoiceServices {
 
         // Parties Info
         let billedFromName = 'UpBeat Africa';
-        let billedFromDesc = 'shobuj';
-        let billedFromEmail = 'ahshobuj0@gmail.com';
+        let billedFromDesc = 'UpBeat Africa';
+        let billedFromEmail = 'hello@upbeatafrica.com';
         
         let clientName = 'Valued Client';
         let clientEmail = 'N/A';
@@ -380,7 +380,7 @@ export class InvoiceServices {
         if (invoice.type === 'BOOKING' && invoice.booking) {
           billedFromName = invoice.tenant?.stageName || invoice.tenant?.user?.firstName || billedFromName;
           billedFromDesc = invoice.tenant?.user?.email || billedFromDesc;
-          billedFromEmail = '';
+          billedFromEmail = invoice.tenant?.subdomain ? `https://${invoice.tenant.subdomain}.deejay.africa` : '';
           clientName = invoice.booking.client?.name || clientName;
           clientEmail = invoice.booking.client?.email || clientEmail;
           clientPhone = invoice.booking.client?.phone || '';
