@@ -288,7 +288,7 @@ model Transaction {
   userId           String?           @map("user_id") @db.Uuid
   tenantId         String?           @map("tenant_id") @db.Uuid
   amount           Decimal           @db.Decimal(10, 2)
-  currency         String            @default("NGN") @db.VarChar(10)
+  currency         String            @default("KES") @db.VarChar(10)
   gateway          PaymentGateway
   channel          PaymentChannel    @default(UNKNOWN)
   status           TransactionStatus @default(PENDING)

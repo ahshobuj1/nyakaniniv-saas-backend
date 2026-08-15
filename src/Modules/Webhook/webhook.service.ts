@@ -154,6 +154,7 @@ export class WebhookServices {
                 invoiceId: invoice.id,
                 tenantId: invoice.tenantId,
                 amount: amountPaid,
+                currency: data.currency || 'KES',
                 gateway: 'PAYSTACK',
                 channel: data.authorization?.channel?.toUpperCase() || 'CARD',
                 status: 'SUCCESS',
