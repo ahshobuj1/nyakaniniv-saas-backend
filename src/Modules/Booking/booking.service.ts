@@ -108,7 +108,7 @@ export class BookingServices {
 
     if (!bookingQuery.prismaArgs.select) {
       bookingQuery.prismaArgs.include = {
-        invoice: true,
+        invoice: { include: { transactions: true } },
         client: true,
       };
     }
@@ -123,7 +123,7 @@ export class BookingServices {
     const tenantId = await this.getTenantIdByUserId(userId);
     const booking = await this.prisma.booking.findFirst({
       where: { id, tenantId },
-      include: { invoice: true, client: true },
+      include: { invoice: { include: { transactions: true } }, client: true },
     });
 
     if (!booking) {
@@ -202,7 +202,7 @@ export class BookingServices {
       },
     });
 
-    if ((data.status as any) === 'canceled' && booking.client?.email) {
+    if (((data.status as any) === 'canceled' || (data.status as any) === 'rejected') && booking.client?.email) {
       this.emailProvider.sendEmail(
         booking.client.email,
         "Booking Canceled - UpBeat Africa",
@@ -269,6 +269,12 @@ export class BookingServices {
 
     if (!booking.invoice) {
       throw new BadRequestError('Payment record not found');
+    }
+
+    // Check if a PENDING cash transaction already exists
+    const existingCashTx = booking.invoice.transactions.find(tx => tx.gateway === 'CASH' && tx.status === 'PENDING');
+    if (existingCashTx) {
+      return { success: true, message: 'Cash payment already requested' };
     }
 
     // Create a new PENDING transaction for CASH
