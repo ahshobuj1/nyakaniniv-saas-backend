@@ -26,7 +26,6 @@ export class WebhookModule extends BaseModule {
   protected async setupRoutes(): Promise<void> {
     const controller = this.getController<WebhookController>('WebhookController');
 
-    this.router.post('/stripe', controller.stripeWebhook.bind(controller));
     this.router.post('/paystack', controller.paystackWebhook.bind(controller));
   }
 }

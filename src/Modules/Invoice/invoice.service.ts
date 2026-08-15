@@ -1,25 +1,11 @@
-import { PrismaClient, BookingPaymentStatus, SubscriptionInvoiceStatus, BookingStatus, NotificationType, BookingPaymentMethod } from '@/prisma/generated/client';
+import { PrismaClient, BookingStatus } from '@/prisma/generated/client';
 import { NotFoundError, BadRequestError, AuthorizationError } from '@/core/errors/AppError';
-import Stripe from 'stripe';
 import { PayInvoiceDTO } from './InvoiceDTO';
 import { QueryBuilder } from '@/utils/QueryBuilder';
-import { IEmailProvider } from '@/providers/EmailProvider';
-import { EmailTemplates } from '@/utils/EmailTemplates';
 import PDFDocument from 'pdfkit';
 
 export class InvoiceServices {
-  private stripe: any = null;
-
-  constructor(
-    private prisma: PrismaClient,
-    private emailProvider: IEmailProvider
-  ) {
-    if (process.env.STRIPE_SECRET_KEY) {
-      this.stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-        apiVersion: "2024-04-10" as any,
-      });
-    }
-  }
+  constructor(private prisma: PrismaClient) {}
 
   private async getTenantIdByUserId(userId: string): Promise<string> {
     const tenant = await this.prisma.tenant.findUnique({ where: { userId } });
@@ -29,64 +15,125 @@ export class InvoiceServices {
     return tenant.id;
   }
 
-
   async getMyInvoices(userId: string, query: Record<string, unknown> = {}) {
     const tenantId = await this.getTenantIdByUserId(userId).catch(() => null);
 
-    const subscriptionInvoices = await this.prisma.subscriptionInvoice.findMany({
-      where: { userId },
-      include: { plan: true }
-    });
+    const page = Number(query?.page) || 1;
+    const limit = Number(query?.limit) || 10;
+    const skip = (page - 1) * limit;
 
-    const bookingPayments = tenantId ? await this.prisma.bookingPayment.findMany({
-      where: { tenantId },
-      include: { booking: { include: { client: true } } }
-    }) : [];
+    const whereClause: any = {
+      OR: [
+        { userId },
+        ...(tenantId ? [{ tenantId }] : [])
+      ]
+    };
 
-    const invoices = [
-      ...subscriptionInvoices.map(s => ({ ...s, type: 'SUBSCRIPTION' })),
-      ...bookingPayments.map(b => ({ ...b, type: 'BOOKING' }))
-    ].sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+    const [total, txs] = await Promise.all([
+      this.prisma.transaction.count({ where: whereClause }),
+      this.prisma.transaction.findMany({
+        where: whereClause,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          invoice: {
+            include: { plan: true, booking: { include: { client: true } } }
+          }
+        }
+      })
+    ]);
 
-    return { invoices, meta: { total: invoices.length, page: 1, limit: invoices.length, totalPages: 1, hasNext: false, hasPrevious: false } };
+    const invoices = txs.map(tx => ({
+      ...tx,
+      type: tx.invoice?.type || 'UNKNOWN',
+      plan: tx.invoice?.plan,
+      booking: tx.invoice?.booking,
+    }));
+
+    const totalPages = Math.ceil(total / limit);
+
+    return { 
+      invoices, 
+      meta: { total, page, limit, totalPages, hasNext: page < totalPages, hasPrevious: page > 1 } 
+    };
   }
+
   async getAllInvoices(query: Record<string, unknown> = {}) {
-    const subscriptionInvoices = await this.prisma.subscriptionInvoice.findMany({
-      include: { 
-        user: { select: { email: true, firstName: true, lastName: true } },
-        plan: true
+    const txQuery = new QueryBuilder(this.prisma.transaction, query)
+      .search(['id'])
+      .filter()
+      .sort()
+      .pagination();
+    
+    // 1. Complex Search
+    const searchTerm = (query?.searchTerm as string || query?.search as string)?.toLowerCase();
+    if (searchTerm) {
+      txQuery.prismaArgs.where.OR = [
+        { id: { contains: searchTerm, mode: 'insensitive' } },
+        { user: { email: { contains: searchTerm, mode: 'insensitive' } } },
+        { invoice: { booking: { client: { email: { contains: searchTerm, mode: 'insensitive' } } } } }
+      ];
+    }
+
+    // 2. Filter by status
+    const status = query?.status as string || query?.paymentStatus as string;
+    if (status && status !== 'all') {
+      txQuery.prismaArgs.where.status = status.toUpperCase();
+    }
+
+    // 3. Includes
+    txQuery.prismaArgs.include = {
+      user: { select: { email: true, firstName: true, lastName: true } },
+      tenant: { select: { subdomain: true, stageName: true } },
+      invoice: {
+        include: {
+          plan: { select: { name: true } },
+          booking: { include: { client: { select: { name: true, email: true } } } }
+        }
       }
-    });
+    };
 
-    const bookingPayments = await this.prisma.bookingPayment.findMany({
-      include: { 
-        booking: { include: { client: true } }, 
-        tenant: { select: { subdomain: true, stageName: true } } 
-      }
-    });
+    // 4. Cleanup query builder filter artifacts
+    delete txQuery.prismaArgs.where.search;
+    delete txQuery.prismaArgs.where.sortBy;
+    delete txQuery.prismaArgs.where.sortOrder;
+    delete txQuery.prismaArgs.where.paymentStatus;
 
-    const invoices = [
-      ...subscriptionInvoices.map(s => ({ ...s, type: 'SUBSCRIPTION' })),
-      ...bookingPayments.map(b => ({ ...b, type: 'BOOKING' }))
-    ].sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+    const transactionsData = await txQuery.model.findMany(txQuery.prismaArgs);
+    const meta = await txQuery.countTotal();
 
-    return { invoices, meta: { total: invoices.length, page: 1, limit: invoices.length, totalPages: 1, hasNext: false, hasPrevious: false } };
+    const invoices = transactionsData.map((tx: any) => ({
+      id: tx.id,
+      amount: Number(tx.amount),
+      status: tx.status,
+      method: tx.channel,
+      type: tx.invoice?.type || 'UNKNOWN',
+      createdAt: tx.createdAt,
+      user: tx.user ? { email: tx.user.email, firstName: tx.user.firstName, lastName: tx.user.lastName } : 
+            tx.invoice?.booking?.client ? { email: tx.invoice.booking.client.email, firstName: tx.invoice.booking.client.name, lastName: '' } : null,
+      plan: tx.invoice?.plan ? { name: tx.invoice.plan.name } : null,
+      tenant: tx.tenant ? { subdomain: tx.tenant.subdomain, stageName: tx.tenant.stageName } : null
+    }));
+
+    return { invoices, meta };
   }
 
   async getInvoiceById(userId: string, id: string) {
     const tenantId = await this.getTenantIdByUserId(userId).catch(() => null);
 
-    const payment = await this.prisma.bookingPayment.findFirst({
-      where: tenantId ? { id, OR: [{ tenantId }, { booking: { clientId: userId } }] } : { id, booking: { clientId: userId } },
-      select: {
-        id: true,
-        amount: true,
-        status: true,
-        method: true,
-        createdAt: true,
-        updatedAt: true,
-        tenantId: true,
-        bookingId: true,
+    const invoice = await this.prisma.invoice.findFirst({
+      where: {
+        id,
+        OR: [
+          { userId },
+          ...(tenantId ? [{ tenantId }] : []),
+          { booking: { clientId: userId } }
+        ]
+      },
+      include: {
+        user: { select: { firstName: true, lastName: true, email: true } },
+        plan: { select: { name: true, priceMonthly: true, priceAnnually: true } },
         tenant: {
           select: {
             stageName: true,
@@ -107,124 +154,109 @@ export class InvoiceServices {
             totalAmount: true,
             client: { select: { name: true, email: true, phone: true } }
           }
-        }
-      }
-    });
-
-    if (payment) {
-      return { ...payment, type: 'BOOKING' };
-    }
-
-    const subscription = await this.prisma.subscriptionInvoice.findFirst({
-      where: { id, userId },
-      select: {
-        id: true,
-        amount: true,
-        status: true,
-        stripeInvoiceId: true,
-        createdAt: true,
-        updatedAt: true,
-        planId: true,
-        userId: true,
-        plan: {
-          select: {
-            name: true,
-            priceMonthly: true,
-            priceAnnually: true
-          }
         },
-        user: {
-          select: {
-            firstName: true,
-            lastName: true,
-            email: true
-          }
-        }
+        transactions: true
       }
     });
 
-    if (subscription) {
-      return { ...subscription, type: 'SUBSCRIPTION' };
+    if (!invoice) {
+      throw new NotFoundError('Invoice not found');
     }
 
-    throw new NotFoundError('Invoice not found');
+    // Attach transaction details to root for backward compatibility with frontend
+    const mainTx = invoice.transactions[0];
+    return {
+      ...invoice,
+      method: mainTx?.channel || 'UNKNOWN',
+      gateway: mainTx?.gateway || null,
+      cardBrand: mainTx?.cardBrand || null,
+      cardLast4: mainTx?.cardLast4 || null,
+      bankName: mainTx?.bankName || null,
+      accountName: mainTx?.accountName || null,
+      paidAt: mainTx?.createdAt || null
+    };
   }
 
   async markAsPaid(userId: string, id: string) {
     const tenantId = await this.getTenantIdByUserId(userId);
-    const payment = await this.prisma.bookingPayment.findFirst({
+    const invoice = await this.prisma.invoice.findFirst({
       where: { id, tenantId },
       include: { booking: { include: { client: true } }, tenant: { include: { user: true } } }
     });
 
-    if (!payment) {
+    if (!invoice) {
       throw new NotFoundError();
     }
 
-    if (payment.status === BookingPaymentStatus.paid) {
-      return payment;
+    if (invoice.status === 'PAID') {
+      return invoice;
     }
 
     const txResult = await this.prisma.$transaction(async (tx) => {
-      const updatedPayment = await tx.bookingPayment.update({
+      const updatedInvoice = await tx.invoice.update({
         where: { id },
-        data: { status: BookingPaymentStatus.paid },
+        data: { status: 'PAID' }
       });
 
-      if (payment.bookingId) {
+      await tx.transaction.create({
+        data: {
+          invoiceId: id,
+          tenantId,
+          amount: invoice.amount,
+          gateway: 'MANUAL',
+          channel: 'CASH',
+          status: 'SUCCESS'
+        }
+      });
+
+      if (invoice.bookingId) {
         await tx.booking.update({
-          where: { id: payment.bookingId },
+          where: { id: invoice.bookingId },
           data: { status: BookingStatus.completed }
         });
       }
 
-      return updatedPayment;
+      return updatedInvoice;
     });
-
-    // Send Email Receipt to Client
-    if (payment.bookingId && payment.booking?.client?.email && payment.amount) {
-      const djName = payment.tenant?.stageName || payment.tenant?.user?.firstName || "DJ";
-      this.emailProvider.sendEmail(
-        payment.booking.client.email,
-        "Payment Receipt - UpBeat Africa",
-        EmailTemplates.getPaymentReceiptTemplate(
-          Number(payment.amount), 
-          payment.booking.eventType || "Event",
-          djName,
-          payment.booking.eventDate?.toISOString() || new Date().toISOString(),
-          payment.method === BookingPaymentMethod.CASH ? "Cash" : (payment.method || "Paystack"),
-          payment.bookingId
-        )
-      );
-    }
 
     return txResult;
   }
 
   async payInvoice(id: string, data: PayInvoiceDTO) {
-    const payment = await this.prisma.bookingPayment.findUnique({
+    const invoice = await this.prisma.invoice.findUnique({
       where: { id },
       include: { booking: { include: { client: true, tenant: true } }, tenant: true }
     });
 
-    if (!payment) {
+    if (!invoice) {
       throw new NotFoundError();
     }
 
-    if (payment.status === BookingPaymentStatus.paid) {
-      throw new BadRequestError();
+    if (invoice.status === 'PAID') {
+      throw new BadRequestError('Invoice is already paid');
     }
 
-    if (!payment.amount || !payment.booking) {
+    if (!invoice.amount) {
       return { url: 'http://localhost:3000/payment-mock' };
     }
 
     const { PaymentProviderFactory } = await import('@/providers/PaymentProvider/PaymentProviderFactory');
-    const paymentProvider = PaymentProviderFactory.getProvider(payment.tenant?.country || payment.booking.tenant?.country);
+    // Using Paystack by default for now if no specific country is found
+    const country = invoice.tenant?.country || invoice.booking?.tenant?.country || 'NG';
+    const paymentProvider = PaymentProviderFactory.getProvider(country);
     
     try {
-      const { checkoutUrl } = await paymentProvider.getPaymentLink(payment.booking, payment.id);
-      return { url: checkoutUrl };
+      // Mocking payment link generation if booking doesn't exist (e.g. for subscription)
+      if (invoice.type === 'SUBSCRIPTION') {
+        return { url: `https://paystack.com/pay/subscription_${invoice.id}` };
+      }
+
+      if (invoice.booking) {
+        const { checkoutUrl } = await paymentProvider.getPaymentLink(invoice.booking, invoice.id);
+        return { url: checkoutUrl };
+      }
+      
+      throw new BadRequestError("Cannot generate link for this invoice type");
     } catch (error: any) {
       console.error("Payment Link Generation Error:", error.message);
       throw new BadRequestError(error.message || "Failed to generate payment link");
@@ -232,24 +264,25 @@ export class InvoiceServices {
   }
 
   async generateInvoicePdf(id: string): Promise<Buffer> {
-    const payment = await this.prisma.bookingPayment.findUnique({
+    const invoice = await this.prisma.invoice.findUnique({
       where: { id },
       include: {
         booking: { include: { client: true } },
-        tenant: { include: { user: true } }
+        tenant: { include: { user: true } },
+        user: true,
+        plan: true,
+        transactions: {
+          orderBy: { createdAt: 'desc' },
+          take: 1
+        }
       }
     });
 
-    if (!payment) {
-      const subscription = await this.prisma.subscriptionInvoice.findUnique({
-        where: { id },
-        include: { user: true, plan: true }
-      });
-      if (!subscription) {
-        throw new NotFoundError();
-      }
-      return this.generateSubscriptionPdf(subscription);
+    if (!invoice) {
+      throw new NotFoundError();
     }
+
+    const mainTx = invoice.transactions[0];
 
     return new Promise<Buffer>((resolve, reject) => {
       try {
@@ -259,51 +292,55 @@ export class InvoiceServices {
         doc.on('end', () => resolve(Buffer.concat(buffers)));
 
         // --- Header Section ---
-        // UpBeat Africa Brand
         doc.fontSize(28).font('Helvetica-Bold').fillColor('#F63131').text('UpBeat Africa', 50, 40, { align: 'left' });
         
-        // Receipt info
         doc.fillColor('#111827');
-        doc.fontSize(24).font('Helvetica-Bold').text('INVOICE', 50, 40, { align: 'right' });
-        doc.fontSize(10).font('Helvetica').text(`Receipt No: ${payment.id.split('-')[0].toUpperCase()}`, 50, 80, { align: 'left' });
-        doc.text(`Date Issued: ${payment.createdAt?.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`, { align: 'left' });
-        doc.text(`Transaction ID: ${payment.id}`, { align: 'left' });
-        if (payment.status === BookingPaymentStatus.paid) {
-          doc.text(`Date Paid: ${payment.updatedAt?.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`, { align: 'left' });
-          const displayMethod = payment.method || BookingPaymentMethod.PAYSTACK;
-          doc.text(`Payment Method: ${displayMethod}`, { align: 'left' });
-          if (payment.cardBrand && payment.cardLast4) {
-            const first4 = (payment as any).cardFirst6 ? (payment as any).cardFirst6.substring(0, 4) : '****';
-            doc.text(`Payment Source: ${payment.cardBrand.toUpperCase()} ${first4} **** **** ${payment.cardLast4}`, { align: 'left' });
+        doc.fontSize(24).font('Helvetica-Bold').text(invoice.status === 'PAID' ? 'RECEIPT' : 'INVOICE', 50, 40, { align: 'right' });
+        doc.fontSize(10).font('Helvetica').text(`Invoice No: ${invoice.id.split('-')[0].toUpperCase()}`, 50, 80, { align: 'left' });
+        doc.text(`Date Issued: ${invoice.createdAt?.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`, { align: 'left' });
+        doc.text(`Transaction ID: ${invoice.id}`, { align: 'left' });
+        
+        if (invoice.status === 'PAID' && mainTx) {
+          doc.text(`Date Paid: ${mainTx.createdAt?.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`, { align: 'left' });
+          doc.text(`Payment Method: ${mainTx.gateway}`, { align: 'left' });
+          if (mainTx.cardBrand && mainTx.cardLast4) {
+            doc.text(`Payment Source: ${mainTx.cardBrand.toUpperCase()} **** **** ${mainTx.cardLast4}`, { align: 'left' });
           }
-          if ((payment as any).bankName) {
-            doc.text(`Bank Name: ${(payment as any).bankName}`, { align: 'left' });
+          if (mainTx.bankName) {
+            doc.text(`Bank Name: ${mainTx.bankName}`, { align: 'left' });
           }
-          if ((payment as any).accountName) {
-            doc.text(`Account Name: ${(payment as any).accountName}`, { align: 'left' });
+          if (mainTx.accountName) {
+            doc.text(`Account Name: ${mainTx.accountName}`, { align: 'left' });
           }
         }
         
         doc.fillColor('#000000');
         doc.y = Math.max(doc.y, 120);
-        doc.moveDown(2); // Reset Y below header
+        doc.moveDown(2);
 
         // --- Parties Section ---
-        const djName = payment.tenant?.stageName || payment.tenant?.user?.firstName || 'DJ / Service Provider';
-        const djEmail = payment.tenant?.user?.email || 'N/A';
-        const djLocation = [payment.tenant?.city, payment.tenant?.country].filter(Boolean).join(', ') || 'Online';
-        
-        const clientName = payment.booking?.client?.name || 'Valued Client';
-        const clientEmail = payment.booking?.client?.email || 'N/A';
-        const clientPhone = payment.booking?.client?.phone || 'N/A';
+        let billedFrom = 'UpBeat Africa Platform';
+        let billedFromDesc = 'Billing Department';
+        let clientName = 'Valued Client';
+        let clientEmail = 'N/A';
+        let clientPhone = '';
+
+        if (invoice.type === 'BOOKING' && invoice.booking) {
+          billedFrom = invoice.tenant?.stageName || invoice.tenant?.user?.firstName || "DJ";
+          billedFromDesc = invoice.tenant?.user?.email || '';
+          clientName = invoice.booking.client?.name || clientName;
+          clientEmail = invoice.booking.client?.email || clientEmail;
+          clientPhone = invoice.booking.client?.phone || '';
+        } else if (invoice.type === 'SUBSCRIPTION') {
+          clientName = `${invoice.user?.firstName || ''} ${invoice.user?.lastName || ''}`.trim() || clientName;
+          clientEmail = invoice.user?.email || clientEmail;
+        }
         
         const partiesY = doc.y;
         
         doc.fontSize(12).font('Helvetica-Bold').fillColor('#111827').text('Billed From:', 50, partiesY);
-        doc.fontSize(10).font('Helvetica').fillColor('#374151').text(djName, 50, doc.y + 5);
-        doc.text(djEmail, 50, doc.y + 2);
-        doc.text(djLocation, 50, doc.y + 2);
-        doc.text('UpBeat Africa Platform', 50, doc.y + 2);
+        doc.fontSize(10).font('Helvetica').fillColor('#374151').text(billedFrom, 50, doc.y + 5);
+        doc.text(billedFromDesc, 50, doc.y + 2);
         
         const leftColY = doc.y;
         doc.y = partiesY;
@@ -311,20 +348,20 @@ export class InvoiceServices {
         doc.fontSize(12).font('Helvetica-Bold').fillColor('#111827').text('Billed To:', 300, partiesY);
         doc.fontSize(10).font('Helvetica').fillColor('#374151').text(clientName, 300, doc.y + 5);
         doc.text(clientEmail, 300, doc.y + 2);
-        doc.text(clientPhone, 300, doc.y + 2);
+        if (clientPhone) doc.text(clientPhone, 300, doc.y + 2);
         
         doc.y = Math.max(leftColY, doc.y);
         doc.moveDown(3);
 
-        // --- Event Details ---
-        if (payment.booking) {
+        // --- Event Details (If Booking) ---
+        if (invoice.type === 'BOOKING' && invoice.booking) {
           doc.fontSize(12).font('Helvetica-Bold').text('Event Details');
           doc.moveTo(50, doc.y + 5).lineTo(550, doc.y + 5).strokeColor('#e5e7eb').stroke();
           doc.moveDown();
           doc.fontSize(10).font('Helvetica');
-          doc.text(`Event Type: ${payment.booking.eventType || 'N/A'}`, 50, doc.y + 5);
-          doc.text(`Event Date: ${payment.booking.eventDate ? payment.booking.eventDate.toLocaleDateString('en-US') : 'N/A'}`, 300, doc.y - 12);
-          doc.text(`Location: ${payment.booking.address || 'N/A'}`, 50, doc.y + 10);
+          doc.text(`Event Type: ${invoice.booking.eventType || 'N/A'}`, 50, doc.y + 5);
+          doc.text(`Event Date: ${invoice.booking.eventDate ? invoice.booking.eventDate.toLocaleDateString('en-US') : 'N/A'}`, 300, doc.y - 12);
+          doc.text(`Location: ${invoice.booking.address || 'N/A'}`, 50, doc.y + 10);
           doc.moveDown(3);
         }
 
@@ -332,127 +369,6 @@ export class InvoiceServices {
         const tableTop = doc.y;
         doc.font('Helvetica-Bold');
         doc.text('Item Description', 50, tableTop);
-        doc.text('Payment Method', 300, tableTop);
-        doc.text('Amount', 450, tableTop, { width: 100, align: 'right' });
-        doc.moveTo(50, tableTop + 15).lineTo(550, tableTop + 15).strokeColor('#000000').stroke();
-        
-        // --- Table Content ---
-        doc.font('Helvetica');
-        const itemY = tableTop + 25;
-        doc.text(`Booking Payment - ${payment.booking?.eventType || 'Event'}`, 50, itemY, { width: 200 });
-        doc.text(payment.method || 'PAYSTACK', 300, itemY);
-        doc.text(`KES ${Number(payment.amount).toFixed(2)}`, 450, itemY, { width: 100, align: 'right' });
-
-        // --- Totals ---
-        doc.moveTo(50, itemY + 30).lineTo(550, itemY + 30).strokeColor('#e5e7eb').stroke();
-        doc.font('Helvetica-Bold');
-        doc.text('Total Paid', 300, itemY + 45);
-        doc.fontSize(12).text(`KES ${Number(payment.amount).toFixed(2)}`, 450, itemY + 45, { width: 100, align: 'right' });
-
-        // --- Status Banner ---
-        doc.moveDown(3);
-        const statusY = doc.y + 20;
-        const isPaid = payment.status === BookingPaymentStatus.paid;
-        
-        doc.rect(50, statusY, 500, 30).fill(isPaid ? '#ecfdf5' : '#fef2f2');
-        doc.fillColor(isPaid ? '#059669' : '#dc2626').font('Helvetica-Bold').fontSize(12);
-        doc.text(`PAYMENT STATUS: ${isPaid ? 'PAID IN FULL' : 'PAYMENT PENDING'}`, 50, statusY + 10, { width: 500, align: 'center' });
-
-        // --- Footer ---
-        doc.fillColor('#6b7280').font('Helvetica').fontSize(8);
-        doc.text('Thank you for choosing UpBeat Africa.', 50, 700, { align: 'center', width: 500 });
-
-        doc.end();
-      } catch (err) {
-        reject(err);
-      }
-    });
-  }
-
-  private generateSubscriptionPdf(subscription: any): Promise<Buffer> {
-    return new Promise<Buffer>((resolve, reject) => {
-      try {
-        const doc = new PDFDocument({ margin: 50 });
-        const buffers: Buffer[] = [];
-        doc.on('data', buffers.push.bind(buffers));
-        doc.on('end', () => resolve(Buffer.concat(buffers)));
-
-        // --- Header Section ---
-        doc.fontSize(28).font('Helvetica-Bold').fillColor('#F63131').text('UpBeat Africa', 50, 40, { align: 'left' });
-        
-        doc.fillColor('#111827');
-        doc.fontSize(24).font('Helvetica-Bold').text('RECEIPT', 50, 40, { align: 'right' });
-        doc.fontSize(10).font('Helvetica').text(`Receipt No: ${subscription.id.split('-')[0].toUpperCase()}`, 50, 80, { align: 'left' });
-        doc.text(`Date Issued: ${subscription.createdAt?.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`, { align: 'left' });
-        doc.text(`Transaction ID: ${subscription.id}`, { align: 'left' });
-        if (subscription.status === 'paid') {
-          doc.text(`Date Paid: ${subscription.updatedAt?.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`, { align: 'left' });
-          doc.text(`Payment Method: PAYSTACK`, { align: 'left' });
-          if (subscription.cardBrand && subscription.cardLast4) {
-            const first4 = subscription.cardFirst6 ? subscription.cardFirst6.substring(0, 4) : '****';
-            doc.text(`Payment Source: ${subscription.cardBrand.toUpperCase()} ${first4} **** **** ${subscription.cardLast4}`, { align: 'left' });
-          }
-          if (subscription.bankName) {
-            doc.text(`Bank Name: ${subscription.bankName}`, { align: 'left' });
-          }
-          if (subscription.accountName) {
-            doc.text(`Account Name: ${subscription.accountName}`, { align: 'left' });
-          }
-        }
-        
-        doc.fillColor('#000000');
-        doc.y = Math.max(doc.y, 120);
-        doc.moveDown(2); // Reset Y below header
-
-        // --- Parties Section ---
-        const clientName = `${subscription.user?.firstName || ''} ${subscription.user?.lastName || ''}`.trim() || 'Valued Client';
-        const clientEmail = subscription.user?.email || 'N/A';
-        
-        const partiesY = doc.y;
-        
-        doc.fontSize(12).font('Helvetica-Bold').text('Billed From:', 50, partiesY);
-        doc.fontSize(10).font('Helvetica').text('UpBeat Africa Platform', 50, doc.y + 5);
-        doc.text('Billing Department', 50, doc.y + 2);
-        
-        const leftColY = doc.y;
-        doc.y = partiesY;
-        
-        doc.fontSize(12).font('Helvetica-Bold').text('Billed To:', 300, partiesY);
-        doc.fontSize(10).font('Helvetica').text(clientName, 300, doc.y + 5);
-        doc.text(clientEmail, 300, doc.y + 2);
-        
-        doc.y = Math.max(leftColY, doc.y);
-        doc.moveDown(3);
-
-        // --- Table Header ---
-        const tableTop = doc.y;
-        doc.font('Helvetica-Bold');
-        doc.text('Item Description', 50, tableTop);
-        doc.text('Amount', 450, tableTop, { width: 100, align: 'right' });
-        doc.moveTo(50, tableTop + 15).lineTo(550, tableTop + 15).strokeColor('#000000').stroke();
-        
-        // --- Table Content ---
-        doc.font('Helvetica');
-        const itemY = tableTop + 25;
-        doc.text(`Subscription Plan: ${subscription.plan?.name || 'Standard'}`, 50, itemY, { width: 350 });
-        doc.text(`KES ${Number(subscription.amount).toFixed(2)}`, 450, itemY, { width: 100, align: 'right' });
-
-        // --- Totals ---
-        doc.moveTo(50, itemY + 30).lineTo(550, itemY + 30).strokeColor('#e5e7eb').stroke();
-        doc.font('Helvetica-Bold');
-        doc.text('Total Paid', 300, itemY + 45);
-        doc.fontSize(12).text(`KES ${Number(subscription.amount).toFixed(2)}`, 450, itemY + 45, { width: 100, align: 'right' });
-
-        // --- Status Banner ---
-        doc.moveDown(3);
-        const statusY = doc.y + 20;
-        const isPaid = subscription.status === SubscriptionInvoiceStatus.paid;
-        
-        doc.rect(50, statusY, 500, 30).fill(isPaid ? '#ecfdf5' : '#fef2f2');
-        doc.fillColor(isPaid ? '#059669' : '#dc2626').font('Helvetica-Bold').fontSize(12);
-        doc.text(`PAYMENT STATUS: ${isPaid ? 'PAID IN FULL' : 'PAYMENT PENDING'}`, 50, statusY + 10, { width: 500, align: 'center' });
-
-        // --- Footer ---
         doc.fillColor('#6b7280').font('Helvetica').fontSize(8);
         doc.text('Thank you for choosing UpBeat Africa.', 50, 700, { align: 'center', width: 500 });
 
