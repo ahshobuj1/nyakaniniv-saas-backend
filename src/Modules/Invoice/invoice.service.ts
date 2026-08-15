@@ -332,7 +332,7 @@ export class InvoiceServices {
         doc.font('Helvetica-Bold').fontSize(24).fillColor(primary).text('UpBeat Africa', boxX, currentY);
         if (invoice.status === 'PAID') {
           doc.rect(boxX + boxW - 70, currentY, 70, 24).fill('#DEF7EC');
-          doc.font('Helvetica-Bold').fontSize(11).fillColor('#03543F').text('PAID ✓', boxX + boxW - 70, currentY + 6, { width: 70, align: 'center' });
+          doc.font('Helvetica-Bold').fontSize(11).fillColor('#03543F').text('PAID', boxX + boxW - 70, currentY + 6, { width: 70, align: 'center' });
         }
         
         currentY += 30;
@@ -428,7 +428,11 @@ export class InvoiceServices {
         
         const description = invoice.type === 'SUBSCRIPTION' ? 'Platform Subscription' : 'DJ Booking Payment';
         doc.font('Helvetica').fontSize(14).fillColor(textMain).text(description, boxX, currentY);
-        doc.font('Helvetica-Bold').fontSize(14).fillColor(textMain).text(`${mainTx?.currency || 'KES'} ${Number(invoice.amount).toFixed(2)}`, boxX + boxW - 140, currentY, { width: 140, align: 'right' });
+        
+        const displayCurrency = mainTx?.currency || 'KES';
+        const displayAmount = Number(mainTx?.amount || invoice.amount).toFixed(2);
+        
+        doc.font('Helvetica-Bold').fontSize(14).fillColor(textMain).text(`${displayCurrency} ${displayAmount}`, boxX + boxW - 140, currentY, { width: 140, align: 'right' });
         currentY += 30;
         
         // Divider
@@ -437,12 +441,12 @@ export class InvoiceServices {
 
         // TOTAL PAID
         doc.font('Helvetica-Bold').fontSize(14).fillColor(textMain).text('TOTAL PAID', boxX, currentY + 6);
-        doc.font('Helvetica-Bold').fontSize(24).fillColor(primary).text(`${mainTx?.currency || 'KES'} ${Number(invoice.amount).toFixed(2)}`, boxX + boxW - 200, currentY, { width: 200, align: 'right' });
+        doc.font('Helvetica-Bold').fontSize(24).fillColor(primary).text(`${displayCurrency} ${displayAmount}`, boxX + boxW - 200, currentY, { width: 200, align: 'right' });
         
         currentY += 60;
         
         // Footer Message inside the layout
-        doc.font('Helvetica').fontSize(12).fillColor('#03543F').text('✓ Payment Successful', boxX, currentY, { align: 'center', width: boxW });
+        doc.font('Helvetica').fontSize(12).fillColor('#03543F').text('Payment Successful', boxX, currentY, { align: 'center', width: boxW });
         currentY += 30;
         doc.font('Helvetica').fontSize(11).fillColor(textMuted).text('Thank you for choosing UpBeat Africa.', boxX, currentY, { align: 'center', width: boxW });
         currentY += 16;
