@@ -328,11 +328,14 @@ export class InvoiceServices {
 
         let currentY = boxY;
 
-        // Header (UpBeat Africa & PAID Badge)
+        // Header (UpBeat Africa & PAID/UNPAID Badge)
         doc.font('Helvetica-Bold').fontSize(24).fillColor(primary).text('UpBeat Africa', boxX, currentY);
         if (invoice.status === 'PAID') {
           doc.rect(boxX + boxW - 70, currentY, 70, 24).fill('#DEF7EC');
           doc.font('Helvetica-Bold').fontSize(11).fillColor('#03543F').text('PAID', boxX + boxW - 70, currentY + 6, { width: 70, align: 'center' });
+        } else {
+          doc.rect(boxX + boxW - 70, currentY, 70, 24).fill('#FEE2E2');
+          doc.font('Helvetica-Bold').fontSize(11).fillColor('#991B1B').text('UNPAID', boxX + boxW - 70, currentY + 6, { width: 70, align: 'center' });
         }
         
         currentY += 30;
@@ -439,14 +442,19 @@ export class InvoiceServices {
         doc.moveTo(boxX, currentY).lineTo(boxX + boxW, currentY).strokeColor(border).lineWidth(1).stroke();
         currentY += 20;
 
-        // TOTAL PAID
-        doc.font('Helvetica-Bold').fontSize(14).fillColor(textMain).text('TOTAL PAID', boxX, currentY + 6);
+        // TOTAL DUE / PAID
+        const totalText = invoice.status === 'PAID' ? 'TOTAL PAID' : 'TOTAL DUE';
+        doc.font('Helvetica-Bold').fontSize(14).fillColor(textMain).text(totalText, boxX, currentY + 6);
         doc.font('Helvetica-Bold').fontSize(24).fillColor(primary).text(`${displayCurrency} ${displayAmount}`, boxX + boxW - 200, currentY, { width: 200, align: 'right' });
         
         currentY += 60;
         
         // Footer Message inside the layout
-        doc.font('Helvetica').fontSize(12).fillColor('#03543F').text('Payment Successful', boxX, currentY, { align: 'center', width: boxW });
+        if (invoice.status === 'PAID') {
+          doc.font('Helvetica').fontSize(12).fillColor('#03543F').text('Payment Successful', boxX, currentY, { align: 'center', width: boxW });
+        } else {
+          doc.font('Helvetica').fontSize(12).fillColor('#991B1B').text('Payment Pending', boxX, currentY, { align: 'center', width: boxW });
+        }
         currentY += 30;
         doc.font('Helvetica').fontSize(11).fillColor(textMuted).text('Thank you for choosing UpBeat Africa.', boxX, currentY, { align: 'center', width: boxW });
         currentY += 16;
