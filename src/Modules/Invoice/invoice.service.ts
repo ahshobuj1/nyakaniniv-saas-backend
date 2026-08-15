@@ -37,18 +37,32 @@ export class InvoiceServices {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
+          user: { select: { email: true, firstName: true, lastName: true } },
+          tenant: { select: { subdomain: true, stageName: true } },
           invoice: {
-            include: { plan: true, booking: { include: { client: true } } }
+            include: {
+              plan: { select: { name: true } },
+              booking: { include: { client: { select: { name: true, email: true } } } }
+            }
           }
         }
       })
     ]);
 
     const invoices = txs.map(tx => ({
-      ...tx,
+      id: tx.invoice?.id || tx.id,
+      transactionId: tx.id,
+      amount: Number(tx.amount),
+      status: tx.invoice?.status || (tx.status === 'SUCCESS' ? 'PAID' : tx.status),
+      method: tx.channel,
+      gateway: tx.gateway,
       type: tx.invoice?.type || 'UNKNOWN',
-      plan: tx.invoice?.plan,
-      booking: tx.invoice?.booking,
+      createdAt: tx.createdAt,
+      user: tx.user ? { email: tx.user.email, firstName: tx.user.firstName, lastName: tx.user.lastName } : 
+            tx.invoice?.booking?.client ? { email: tx.invoice.booking.client.email, firstName: tx.invoice.booking.client.name, lastName: '' } : null,
+      plan: tx.invoice?.plan ? { name: tx.invoice.plan.name } : null,
+      tenant: tx.tenant ? { subdomain: tx.tenant.subdomain, stageName: tx.tenant.stageName } : null,
+      booking: tx.invoice?.booking || null
     }));
 
     const totalPages = Math.ceil(total / limit);
@@ -104,16 +118,19 @@ export class InvoiceServices {
     const meta = await txQuery.countTotal();
 
     const invoices = transactionsData.map((tx: any) => ({
-      id: tx.id,
+      id: tx.invoice?.id || tx.id,
+      transactionId: tx.id,
       amount: Number(tx.amount),
-      status: tx.status,
+      status: tx.invoice?.status || (tx.status === 'SUCCESS' ? 'PAID' : tx.status),
       method: tx.channel,
+      gateway: tx.gateway,
       type: tx.invoice?.type || 'UNKNOWN',
       createdAt: tx.createdAt,
       user: tx.user ? { email: tx.user.email, firstName: tx.user.firstName, lastName: tx.user.lastName } : 
             tx.invoice?.booking?.client ? { email: tx.invoice.booking.client.email, firstName: tx.invoice.booking.client.name, lastName: '' } : null,
       plan: tx.invoice?.plan ? { name: tx.invoice.plan.name } : null,
-      tenant: tx.tenant ? { subdomain: tx.tenant.subdomain, stageName: tx.tenant.stageName } : null
+      tenant: tx.tenant ? { subdomain: tx.tenant.subdomain, stageName: tx.tenant.stageName } : null,
+      booking: tx.invoice?.booking || null
     }));
 
     return { invoices, meta };
@@ -286,48 +303,84 @@ export class InvoiceServices {
 
     return new Promise<Buffer>((resolve, reject) => {
       try {
-        const doc = new PDFDocument({ margin: 50 });
+        const doc = new PDFDocument({ margin: 0, size: 'A4' });
         const buffers: Buffer[] = [];
         doc.on('data', buffers.push.bind(buffers));
         doc.on('end', () => resolve(Buffer.concat(buffers)));
 
-        // --- Header Section ---
-        doc.fontSize(28).font('Helvetica-Bold').fillColor('#F63131').text('UpBeat Africa', 50, 40, { align: 'left' });
+        // A4 Dimensions: 595.28 x 841.89
+        const pageWidth = 595.28;
+        const pageHeight = 841.89;
+
+        // Background (#FFFFFF)
+        doc.rect(0, 0, pageWidth, pageHeight).fill('#FFFFFF');
+
+        // Compact Container (Centered, Top ~65%)
+        const boxW = 500;
+        const boxX = (pageWidth - boxW) / 2; // ~47.64
+        const boxY = 60;
         
-        doc.fillColor('#111827');
-        doc.fontSize(24).font('Helvetica-Bold').text(invoice.status === 'PAID' ? 'RECEIPT' : 'INVOICE', 50, 40, { align: 'right' });
-        doc.fontSize(10).font('Helvetica').text(`Invoice No: ${invoice.id.split('-')[0].toUpperCase()}`, 50, 80, { align: 'left' });
-        doc.text(`Date Issued: ${invoice.createdAt?.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`, { align: 'left' });
-        doc.text(`Transaction ID: ${invoice.id}`, { align: 'left' });
-        
-        if (invoice.status === 'PAID' && mainTx) {
-          doc.text(`Date Paid: ${mainTx.createdAt?.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`, { align: 'left' });
-          doc.text(`Payment Method: ${mainTx.gateway}`, { align: 'left' });
-          if (mainTx.cardBrand && mainTx.cardLast4) {
-            doc.text(`Payment Source: ${mainTx.cardBrand.toUpperCase()} **** **** ${mainTx.cardLast4}`, { align: 'left' });
-          }
-          if (mainTx.bankName) {
-            doc.text(`Bank Name: ${mainTx.bankName}`, { align: 'left' });
-          }
-          if (mainTx.accountName) {
-            doc.text(`Account Name: ${mainTx.accountName}`, { align: 'left' });
-          }
+        // Colors
+        const primary = '#F63131';
+        const textMain = '#111827';
+        const textMuted = '#6B7280';
+        const border = '#E5E7EB';
+
+        let currentY = boxY;
+
+        // Header (UpBeat Africa & PAID Badge)
+        doc.font('Helvetica-Bold').fontSize(24).fillColor(primary).text('UpBeat Africa', boxX, currentY);
+        if (invoice.status === 'PAID') {
+          doc.rect(boxX + boxW - 70, currentY, 70, 24).fill('#DEF7EC');
+          doc.font('Helvetica-Bold').fontSize(11).fillColor('#03543F').text('PAID ✓', boxX + boxW - 70, currentY + 6, { width: 70, align: 'center' });
         }
         
-        doc.fillColor('#000000');
-        doc.y = Math.max(doc.y, 120);
-        doc.moveDown(2);
+        currentY += 30;
+        doc.font('Helvetica-Bold').fontSize(14).fillColor(textMain).text('Payment Receipt', boxX, currentY);
+        doc.font('Helvetica').fontSize(12).fillColor(textMuted).text(invoice.createdAt?.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) || '', boxX + boxW - 140, currentY, { width: 140, align: 'right' });
+        
+        currentY += 30;
+        // Divider
+        doc.moveTo(boxX, currentY).lineTo(boxX + boxW, currentY).strokeColor(border).lineWidth(1).stroke();
+        currentY += 20;
 
-        // --- Parties Section ---
-        let billedFrom = 'UpBeat Africa Platform';
-        let billedFromDesc = 'Billing Department';
+        // RECEIPT INFORMATION
+        doc.font('Helvetica-Bold').fontSize(11).fillColor(textMuted).text('RECEIPT INFORMATION', boxX, currentY);
+        currentY += 20;
+        
+        const drawRow = (label: string, value: string, y: number) => {
+          doc.font('Helvetica').fontSize(12).fillColor(textMuted).text(label, boxX, y);
+          doc.font('Helvetica-Bold').fontSize(12).fillColor(textMain).text(value, boxX + 160, y);
+        };
+        
+        drawRow('Receipt No.', `INV-${invoice.id.split('-')[0].toUpperCase()}`, currentY); currentY += 20;
+        drawRow('Transaction ID', invoice.id, currentY); currentY += 20;
+        drawRow('Payment Date', mainTx?.createdAt?.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) || '', currentY); currentY += 20;
+        drawRow('Payment Method', `${mainTx?.channel?.replace('_', ' ') || mainTx?.gateway || 'CARD'} ${mainTx?.cardLast4 ? '•••• ' + mainTx.cardLast4 : ''}`.trim(), currentY); currentY += 20;
+        if (mainTx?.bankName) { drawRow('Bank Name', mainTx.bankName, currentY); currentY += 20; }
+        
+        // Divider
+        doc.moveTo(boxX, currentY).lineTo(boxX + boxW, currentY).strokeColor(border).lineWidth(1).stroke();
+        currentY += 20;
+
+        // BILLED FROM / TO
+        doc.font('Helvetica-Bold').fontSize(11).fillColor(textMuted).text('BILLED FROM', boxX, currentY);
+        doc.text('BILLED TO', boxX + boxW / 2, currentY);
+        currentY += 20;
+
+        // Parties Info
+        let billedFromName = 'UpBeat Africa';
+        let billedFromDesc = 'shobuj';
+        let billedFromEmail = 'ahshobuj0@gmail.com';
+        
         let clientName = 'Valued Client';
         let clientEmail = 'N/A';
         let clientPhone = '';
 
         if (invoice.type === 'BOOKING' && invoice.booking) {
-          billedFrom = invoice.tenant?.stageName || invoice.tenant?.user?.firstName || "DJ";
-          billedFromDesc = invoice.tenant?.user?.email || '';
+          billedFromName = invoice.tenant?.stageName || invoice.tenant?.user?.firstName || billedFromName;
+          billedFromDesc = invoice.tenant?.user?.email || billedFromDesc;
+          billedFromEmail = '';
           clientName = invoice.booking.client?.name || clientName;
           clientEmail = invoice.booking.client?.email || clientEmail;
           clientPhone = invoice.booking.client?.phone || '';
@@ -335,42 +388,69 @@ export class InvoiceServices {
           clientName = `${invoice.user?.firstName || ''} ${invoice.user?.lastName || ''}`.trim() || clientName;
           clientEmail = invoice.user?.email || clientEmail;
         }
-        
-        const partiesY = doc.y;
-        
-        doc.fontSize(12).font('Helvetica-Bold').fillColor('#111827').text('Billed From:', 50, partiesY);
-        doc.fontSize(10).font('Helvetica').fillColor('#374151').text(billedFrom, 50, doc.y + 5);
-        doc.text(billedFromDesc, 50, doc.y + 2);
-        
-        const leftColY = doc.y;
-        doc.y = partiesY;
-        
-        doc.fontSize(12).font('Helvetica-Bold').fillColor('#111827').text('Billed To:', 300, partiesY);
-        doc.fontSize(10).font('Helvetica').fillColor('#374151').text(clientName, 300, doc.y + 5);
-        doc.text(clientEmail, 300, doc.y + 2);
-        if (clientPhone) doc.text(clientPhone, 300, doc.y + 2);
-        
-        doc.y = Math.max(leftColY, doc.y);
-        doc.moveDown(3);
 
-        // --- Event Details (If Booking) ---
-        if (invoice.type === 'BOOKING' && invoice.booking) {
-          doc.fontSize(12).font('Helvetica-Bold').text('Event Details');
-          doc.moveTo(50, doc.y + 5).lineTo(550, doc.y + 5).strokeColor('#e5e7eb').stroke();
-          doc.moveDown();
-          doc.fontSize(10).font('Helvetica');
-          doc.text(`Event Type: ${invoice.booking.eventType || 'N/A'}`, 50, doc.y + 5);
-          doc.text(`Event Date: ${invoice.booking.eventDate ? invoice.booking.eventDate.toLocaleDateString('en-US') : 'N/A'}`, 300, doc.y - 12);
-          doc.text(`Location: ${invoice.booking.address || 'N/A'}`, 50, doc.y + 10);
-          doc.moveDown(3);
+        doc.font('Helvetica-Bold').fontSize(13).fillColor(textMain).text(billedFromName, boxX, currentY);
+        doc.text(clientName, boxX + boxW / 2, currentY);
+        currentY += 16;
+        
+        doc.font('Helvetica').fontSize(12).fillColor(textMuted).text(billedFromDesc, boxX, currentY);
+        doc.text(clientEmail, boxX + boxW / 2, currentY);
+        currentY += 16;
+
+        if (billedFromEmail || clientPhone) {
+          if (billedFromEmail) doc.text(billedFromEmail, boxX, currentY);
+          if (clientPhone) doc.text(clientPhone, boxX + boxW / 2, currentY);
+          currentY += 16;
         }
 
-        // --- Table Header ---
-        const tableTop = doc.y;
-        doc.font('Helvetica-Bold');
-        doc.text('Item Description', 50, tableTop);
-        doc.fillColor('#6b7280').font('Helvetica').fontSize(8);
-        doc.text('Thank you for choosing UpBeat Africa.', 50, 700, { align: 'center', width: 500 });
+        currentY += 10;
+        // Divider
+        doc.moveTo(boxX, currentY).lineTo(boxX + boxW, currentY).strokeColor(border).lineWidth(1).stroke();
+        currentY += 20;
+
+        // EVENT DETAILS (If Booking)
+        if (invoice.type === 'BOOKING' && invoice.booking) {
+          doc.font('Helvetica-Bold').fontSize(11).fillColor(textMuted).text('EVENT DETAILS', boxX, currentY);
+          currentY += 20;
+          
+          drawRow('Event Type', (invoice.booking.eventType || 'Event').toUpperCase(), currentY); currentY += 20;
+          drawRow('Event Date', invoice.booking.eventDate?.toLocaleDateString('en-US', { dateStyle: 'medium' }) || 'N/A', currentY); currentY += 20;
+          drawRow('Location', invoice.booking.address || 'N/A', currentY); currentY += 20;
+
+          // Divider
+          doc.moveTo(boxX, currentY).lineTo(boxX + boxW, currentY).strokeColor(border).lineWidth(1).stroke();
+          currentY += 20;
+        }
+
+        // PAYMENT SUMMARY
+        doc.font('Helvetica-Bold').fontSize(11).fillColor(textMuted).text('PAYMENT SUMMARY', boxX, currentY);
+        currentY += 20;
+        
+        const description = invoice.type === 'SUBSCRIPTION' ? 'Platform Subscription' : 'DJ Booking Payment';
+        doc.font('Helvetica').fontSize(14).fillColor(textMain).text(description, boxX, currentY);
+        doc.font('Helvetica-Bold').fontSize(14).fillColor(textMain).text(`${mainTx?.currency || 'KES'} ${Number(invoice.amount).toFixed(2)}`, boxX + boxW - 140, currentY, { width: 140, align: 'right' });
+        currentY += 30;
+        
+        // Divider
+        doc.moveTo(boxX, currentY).lineTo(boxX + boxW, currentY).strokeColor(border).lineWidth(1).stroke();
+        currentY += 20;
+
+        // TOTAL PAID
+        doc.font('Helvetica-Bold').fontSize(14).fillColor(textMain).text('TOTAL PAID', boxX, currentY + 6);
+        doc.font('Helvetica-Bold').fontSize(24).fillColor(primary).text(`${mainTx?.currency || 'KES'} ${Number(invoice.amount).toFixed(2)}`, boxX + boxW - 200, currentY, { width: 200, align: 'right' });
+        
+        currentY += 60;
+        
+        // Footer Message inside the layout
+        doc.font('Helvetica').fontSize(12).fillColor('#03543F').text('✓ Payment Successful', boxX, currentY, { align: 'center', width: boxW });
+        currentY += 30;
+        doc.font('Helvetica').fontSize(11).fillColor(textMuted).text('Thank you for choosing UpBeat Africa.', boxX, currentY, { align: 'center', width: boxW });
+        currentY += 16;
+        doc.font('Helvetica-Bold').fontSize(11).fillColor(textMuted).text('upbeat.africa', boxX, currentY, { align: 'center', width: boxW });
+        
+        // Final bottom message
+        currentY += 40;
+        doc.font('Helvetica').fontSize(10).fillColor('#9CA3AF').text('This is an electronically generated payment receipt.', 0, currentY, { align: 'center', width: pageWidth });
 
         doc.end();
       } catch (err) {
