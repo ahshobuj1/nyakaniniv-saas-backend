@@ -19,8 +19,7 @@ export class InvoiceModule extends BaseModule {
 
   protected async setupUseCases(): Promise<void> {
     const prisma = this.context.getService("prisma");
-    const emailProvider = this.context.getService("email");
-    this.registerService("InvoiceService", new InvoiceServices(prisma, emailProvider));
+    this.registerService("InvoiceService", new InvoiceServices(prisma));
   }
 
   protected async setupControllers(): Promise<void> {

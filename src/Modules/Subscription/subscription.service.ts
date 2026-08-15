@@ -2,7 +2,7 @@ import { PrismaClient } from '@/prisma/generated/client';
 import { NotFoundError, BadRequestError, AuthorizationError } from '@/core/errors/AppError';
 import axios from 'axios';
 import { CreateSubscriptionPlanDTO, SubscribeDTO, UpdateSubscriptionPlanDTO } from './SubscriptionDTO';
-import { SubscriptionStatus, SubscriptionInvoiceStatus } from '@/prisma/generated/client';
+import { SubscriptionStatus, InvoiceStatus, InvoiceType } from '@/prisma/generated/client';
 import { IEmailProvider } from '@/providers/EmailProvider';
 import { EmailTemplates } from '@/utils/EmailTemplates';
 import Stripe from 'stripe';
@@ -132,13 +132,13 @@ export class SubscriptionServices {
       });
       
       // Auto-generate invoice for mock payment
-      await this.prisma.subscriptionInvoice.create({
+      await this.prisma.invoice.create({
         data: {
           userId,
           planId: data.planId,
           amount,
-          status: SubscriptionInvoiceStatus.paid,
-          stripeInvoiceId: 'mock_invoice_' + Date.now()
+          type: InvoiceType.SUBSCRIPTION,
+          status: InvoiceStatus.PAID,
         }
       });
 
@@ -237,19 +237,9 @@ export class SubscriptionServices {
       throw new BadRequestError();
     }
 
-    // Save event for deduplication/audit
-    try {
-      await this.prisma.webhookEvent.create({
-        data: {
-          stripeEventId: event.id,
-          type: event.type,
-          status: 'pending'
-        }
-      });
-    } catch (err) {
-      // If it already exists, it's a duplicate event
-      return { received: true };
-    }
+    // Removed webhook event logic because we removed WebhookEvent model
+    // Just parse and continue
+
 
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as any;
@@ -270,13 +260,13 @@ export class SubscriptionServices {
         });
 
         // Auto-generate invoice for actual Stripe payment
-        await this.prisma.subscriptionInvoice.create({
+        await this.prisma.invoice.create({
           data: {
             userId,
             planId: parseInt(planId, 10),
             amount: amountPaid,
-            status: SubscriptionInvoiceStatus.paid,
-            stripeInvoiceId: session.invoice ? (session.invoice as string) : 'stripe_mock'
+            type: InvoiceType.SUBSCRIPTION,
+            status: InvoiceStatus.PAID,
           }
         });
       }
@@ -288,10 +278,41 @@ export class SubscriptionServices {
       });
     }
 
-    await this.prisma.webhookEvent.update({
-      where: { stripeEventId: event.id },
-      data: { status: 'processed' }
-    });
+    // Process specific events
+    if (event.type === 'invoice.payment_succeeded') {
+      const invoiceData = event.data.object;
+      
+      const sub = await this.prisma.subscription.findFirst({ where: { stripeSubId: invoiceData.subscription } });
+      if (sub) {
+        await this.prisma.$transaction(async (tx) => {
+          await tx.subscription.update({
+            where: { id: sub.id },
+            data: { status: SubscriptionStatus.active }
+          });
+          
+          await tx.invoice.create({
+            data: {
+              userId: sub.userId,
+              planId: sub.planId,
+              amount: invoiceData.amount_paid / 100, // assuming cents
+              type: InvoiceType.SUBSCRIPTION,
+              status: InvoiceStatus.PAID,
+            }
+          });
+        });
+      }
+    } else if (event.type === 'invoice.payment_failed') {
+      const invoiceData = event.data.object;
+      const sub = await this.prisma.subscription.findFirst({ where: { stripeSubId: invoiceData.subscription } });
+      if (sub) {
+        await this.prisma.$transaction(async (tx) => {
+          await tx.subscription.update({
+            where: { id: sub.id },
+            data: { status: SubscriptionStatus.past_due }
+          });
+        });
+      }
+    }
 
     return { received: true };
   }

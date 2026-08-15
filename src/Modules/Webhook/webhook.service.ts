@@ -1,4 +1,4 @@
-import { PrismaClient, BookingPaymentStatus, BookingStatus, SubscriptionInvoiceStatus, NotificationType, BookingPaymentMethod } from '@/prisma/generated/client';
+import { PrismaClient, BookingStatus, NotificationType, InvoiceStatus, InvoiceType } from '@/prisma/generated/client';
 import { BadRequestError } from '@/core/errors/AppError';
 import Stripe from 'stripe';
 import { IEmailProvider } from '@/providers/EmailProvider';
@@ -22,172 +22,7 @@ export class WebhookServices {
     }
   }
 
-  async handleStripeWebhook(signature: string, rawBody: Buffer | string) {
-    if (!this.stripe || !process.env.STRIPE_WEBHOOK_SECRET) {
-      console.error('❌ [WEBHOOK] Stripe not configured');
-      throw new BadRequestError('Stripe not configured');
-    }
-
-    let event: any;
-    try {
-      event = this.stripe.webhooks.constructEvent(rawBody, signature, process.env.STRIPE_WEBHOOK_SECRET);
-      console.log(`✅ [WEBHOOK] Successfully constructed event: ${event.type} [ID: ${event.id}]`);
-    } catch (err: any) {
-      console.error(`❌ [WEBHOOK] Invalid Stripe Signature: ${err.message}`);
-      throw new BadRequestError('Invalid Stripe Signature');
-    }
-
-    // Save event for deduplication
-    try {
-      await this.prisma.webhookEvent.create({
-        data: {
-          stripeEventId: event.id,
-          type: event.type,
-          status: 'pending'
-        }
-      });
-      console.log(`✅ [WEBHOOK] Saved new event for processing: ${event.id}`);
-    } catch (err) {
-      // Duplicate event
-      console.log(`⚠️ [WEBHOOK] Duplicate event ignored: ${event.id}`);
-      return { received: true };
-    }
-
-    if (event.type === 'checkout.session.completed' || event.type === 'payment_intent.succeeded') {
-      const session = event.data.object as any;
-      console.log(`📦 [WEBHOOK] Processing payload for ${event.type}:`, {
-        metadata: session.metadata,
-        amount_total: session.amount_total,
-        subscription: session.subscription
-      });
-      
-      const invoiceId = session.metadata?.invoiceId;
-      const bookingId = session.metadata?.bookingId;
-      const planId = session.metadata?.planId;
-      const userId = session.metadata?.userId;
-      const stripeSubId = session.subscription as string;
-      const amountPaid = (session.amount_total || 0) / 100;
-
-      // 1. Handle Booking Payments
-      if (invoiceId || bookingId) {
-        const txResult = await this.prisma.$transaction(async (tx) => {
-          let djEmail = null;
-          let clientEmail = null;
-          let djName = "DJ";
-          let eventType = "Event";
-          let clientName = "Client";
-          let eventDate = new Date().toISOString();
-          let resolvedBookingId = bookingId;
-
-          const payment = await tx.bookingPayment.findFirst({
-            where: {
-              OR: [
-                ...(invoiceId ? [{ id: invoiceId }] : []),
-                ...(resolvedBookingId ? [{ bookingId: resolvedBookingId }] : []),
-              ]
-            }
-          });
-            
-          if (payment && payment.status !== BookingPaymentStatus.paid) {
-            // Attempt to extract card details if they exist in the session object
-            const card = (session as any).payment_method_details?.card || (session as any).charges?.data?.[0]?.payment_method_details?.card;
-            await tx.bookingPayment.update({
-              where: { id: payment.id },
-              data: { 
-                status: BookingPaymentStatus.paid,
-                method: BookingPaymentMethod.STRIPE,
-                cardBrand: card?.brand || null,
-                cardLast4: card?.last4 || null
-              }
-            });
-          } else {
-            console.warn(`⚠️ [WEBHOOK] Stripe Payment not found or already paid for invoiceId: ${invoiceId}, bookingId: ${resolvedBookingId}`);
-          }
-
-          resolvedBookingId = resolvedBookingId || payment?.bookingId;
-
-          if (resolvedBookingId) {
-            const booking = await tx.booking.findUnique({ where: { id: resolvedBookingId }, include: { client: true } });
-            if (booking && booking.status !== BookingStatus.completed) {
-              await tx.booking.update({
-                where: { id: resolvedBookingId },
-                data: { status: BookingStatus.completed }
-              });
-
-              eventType = booking.eventType || "Event";
-              clientName = booking.client?.name || "Client";
-              clientEmail = booking.client?.email || null;
-              eventDate = booking.eventDate?.toISOString() || new Date().toISOString();
-
-              if (booking.tenantId) {
-                const tenant = await tx.tenant.findUnique({ where: { id: booking.tenantId }, include: { user: true } });
-                if (tenant) {
-                  djName = tenant.stageName || tenant.user?.firstName || "DJ";
-                  if (tenant.user) {
-                    djEmail = tenant.user.email;
-                    await tx.notification.create({
-                      data: {
-                        userId: tenant.user.id,
-                        title: 'Payment Received',
-                        message: `Payment received for booking ${eventType} from ${clientName}.`,
-                        type: NotificationType.payment,
-                        referenceId: payment?.id || resolvedBookingId,
-                      }
-                    });
-                  }
-                }
-              }
-            }
-          }
-          return { djEmail, clientEmail, djName, eventType, clientName, eventDate, resolvedBookingId, paymentId: payment?.id };
-        });
-
-        // Send Emails outside transaction
-        let pdfBuffer: Buffer | undefined;
-        if ((txResult.djEmail || txResult.clientEmail) && txResult.paymentId) {
-          try {
-            const invoiceService = new InvoiceServices(this.prisma, this.emailProvider);
-            pdfBuffer = await invoiceService.generateInvoicePdf(txResult.paymentId);
-          } catch (error) {
-            console.error("Failed to generate PDF receipt", error);
-          }
-        }
-
-        const attachments = (pdfBuffer && txResult.paymentId) ? [{
-          filename: `Receipt-${txResult.paymentId.split('-')[0].toUpperCase()}.pdf`,
-          content: pdfBuffer,
-          contentType: 'application/pdf'
-        }] : undefined;
-
-        if (txResult.djEmail) {
-          this.emailProvider.sendEmail(
-            txResult.djEmail,
-            "Payment Received! 🎉 - UpBeat Africa",
-            EmailTemplates.getPaymentReceivedAlertTemplate(txResult.clientName, amountPaid),
-            attachments
-          );
-        }
-
-        if (txResult.clientEmail && txResult.resolvedBookingId) {
-          this.emailProvider.sendEmail(
-            txResult.clientEmail,
-            "Payment Receipt - UpBeat Africa",
-            EmailTemplates.getPaymentReceiptTemplate(
-              amountPaid, 
-              txResult.eventType,
-              txResult.djName,
-              txResult.eventDate,
-              "Paystack",
-              txResult.resolvedBookingId
-            ),
-            attachments
-          );
-        }
-      }
-    }
-
-    return { received: true };
-  }
+  // Stripe webhook handling was removed.
 
   async handlePaystackWebhook(signature: string, rawBody: Buffer | string | any) {
     const secret = process.env.PAYSTACK_SECRET_KEY;
@@ -238,15 +73,28 @@ export class WebhookServices {
             }
           });
 
-          await tx.subscriptionInvoice.create({
+          const newInvoice = await tx.invoice.create({
             data: {
               userId,
               planId: parseInt(planId, 10),
               amount: amountPaid,
-              status: SubscriptionInvoiceStatus.paid,
-              stripeInvoiceId: data.reference || 'paystack_mock',
+              status: 'PAID',
+              type: 'SUBSCRIPTION'
+            }
+          });
+
+          await tx.transaction.create({
+            data: {
+              invoiceId: newInvoice.id,
+              userId,
+              amount: amountPaid,
+              gateway: 'PAYSTACK',
+              channel: data.authorization?.channel?.toUpperCase() || 'CARD',
+              status: 'SUCCESS',
+              gatewayReference: data.reference,
               cardBrand: data.authorization?.card_type || data.authorization?.brand || null,
-              cardLast4: data.authorization?.last4 || null
+              cardLast4: data.authorization?.last4 || null,
+              bankName: data.authorization?.bank || null,
             }
           });
 
@@ -272,21 +120,21 @@ export class WebhookServices {
 
           this.emailProvider.sendEmail(
             config.defaultAdmin?.email || "admin@upbeatafrica.com",
-            "New Subscription Alert 💸 - UpBeat Africa",
+            "New Subscription Alert - UpBeat Africa",
             EmailTemplates.getNewSubscriptionAdminAlertTemplate(user.email, parseInt(planId, 10))
           );
         }
       } else if (invoiceId || bookingId) {
         const txResult = await this.prisma.$transaction(async (tx) => {
-          let djEmail = null;
-          let clientEmail = null;
-          let djName = "DJ";
           let eventType = "Event";
           let clientName = "Client";
           let eventDate = new Date().toISOString();
           let resolvedBookingId = bookingId;
+          let djEmail: string | null = null;
+          let clientEmail: string | null = null;
+          let djName: string | null = null;
 
-          const payment = await tx.bookingPayment.findFirst({
+          const invoice = await tx.invoice.findFirst({
             where: {
               OR: [
                 ...(invoiceId ? [{ id: invoiceId }] : []),
@@ -295,21 +143,31 @@ export class WebhookServices {
             }
           });
             
-          if (payment && payment.status !== BookingPaymentStatus.paid) {
-            await tx.bookingPayment.update({
-              where: { id: payment.id },
-              data: { 
-                status: BookingPaymentStatus.paid,
-                method: BookingPaymentMethod.PAYSTACK,
-                cardBrand: data.authorization?.card_type || data.authorization?.brand || data.authorization?.bank || null,
-                cardLast4: data.authorization?.last4 || null
+          if (invoice && invoice.status !== 'PAID') {
+            await tx.invoice.update({
+              where: { id: invoice.id },
+              data: { status: 'PAID' }
+            });
+
+            await tx.transaction.create({
+              data: {
+                invoiceId: invoice.id,
+                tenantId: invoice.tenantId,
+                amount: amountPaid,
+                gateway: 'PAYSTACK',
+                channel: data.authorization?.channel?.toUpperCase() || 'CARD',
+                status: 'SUCCESS',
+                gatewayReference: data.reference,
+                cardBrand: data.authorization?.card_type || data.authorization?.brand || null,
+                cardLast4: data.authorization?.last4 || null,
+                bankName: data.authorization?.bank || null,
               }
             });
           } else {
-            console.warn(`⚠️ [WEBHOOK] Payment not found or already paid for invoiceId: ${invoiceId}, bookingId: ${resolvedBookingId}`);
+            console.warn(`⚠️ [WEBHOOK] Invoice not found or already paid for invoiceId: ${invoiceId}, bookingId: ${resolvedBookingId}`);
           }
 
-          resolvedBookingId = resolvedBookingId || payment?.bookingId;
+          resolvedBookingId = resolvedBookingId || invoice?.bookingId;
 
           if (resolvedBookingId) {
             const booking = await tx.booking.findUnique({ where: { id: resolvedBookingId }, include: { client: true } });
@@ -336,7 +194,7 @@ export class WebhookServices {
                         title: 'Payment Received via Paystack',
                         message: `Payment received for booking ${eventType} from ${clientName}.`,
                         type: NotificationType.payment,
-                        referenceId: payment?.id || resolvedBookingId,
+                        referenceId: invoice?.id || resolvedBookingId,
                       }
                     });
                   }
@@ -344,10 +202,8 @@ export class WebhookServices {
               }
             }
           }
-          return { djEmail, clientEmail, djName, eventType, clientName, eventDate, resolvedBookingId, paymentId: payment?.id };
+          return { djEmail, clientEmail, djName, eventType, clientName, eventDate, resolvedBookingId, paymentId: invoice?.id };
         });
-
-        // Send Emails outside transaction
         if (txResult.djEmail) {
           this.emailProvider.sendEmail(
             txResult.djEmail,
@@ -363,7 +219,7 @@ export class WebhookServices {
             EmailTemplates.getPaymentReceiptTemplate(
               amountPaid, 
               txResult.eventType,
-              txResult.djName,
+              txResult.djName || "DJ",
               txResult.eventDate,
               "Paystack",
               txResult.resolvedBookingId
