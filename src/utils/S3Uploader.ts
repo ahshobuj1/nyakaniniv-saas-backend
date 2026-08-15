@@ -52,7 +52,10 @@ export class S3Uploader implements IFileUploader {
       );
 
       // Construct a public URL
-      if (config.s3.endpoint) {
+      if (config.s3.publicEndpoint) {
+        const endpoint = config.s3.publicEndpoint.replace(/\/$/, '');
+        return `${endpoint}/${config.s3.bucket}/${key}`;
+      } else if (config.s3.endpoint) {
         const endpoint = config.s3.endpoint.replace(/\/$/, '');
         return `${endpoint}/${config.s3.bucket}/${key}`;
       }
