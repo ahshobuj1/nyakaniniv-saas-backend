@@ -271,14 +271,20 @@ export class BookingServices {
       throw new BadRequestError('Payment record not found');
     }
 
-    // Update first transaction method to CASH (assuming manual flow)
-    const tx = booking.invoice.transactions?.[0];
-    if (tx) {
-      await this.prisma.transaction.update({
-        where: { id: tx.id },
-        data: { channel: PaymentChannel.CASH }
-      });
-    }
+    // Create a new PENDING transaction for CASH
+    await this.prisma.transaction.create({
+      data: {
+        invoiceId: booking.invoice.id,
+        userId: booking.tenant?.userId || null,
+        tenantId: booking.tenantId,
+        amount: booking.invoice.amount,
+        currency: 'KES',
+        gateway: 'CASH',
+        channel: PaymentChannel.CASH,
+        status: 'PENDING',
+        metadata: { cashRequested: true, cashApproved: false }
+      }
+    });
 
     // Notify DJ that client requested cash payment
     if (booking.tenant?.userId) {
@@ -332,5 +338,67 @@ export class BookingServices {
     }
 
     return { success: true, message: 'Payment reminder sent successfully' };
+  }
+
+  async handleCashRequestDecision(userId: string, id: string, decision: 'approve' | 'reject') {
+    const tenantId = await this.getTenantIdByUserId(userId);
+    const booking = await this.prisma.booking.findFirst({
+      where: { id, tenantId },
+      include: { invoice: { include: { transactions: true } } }
+    });
+
+    if (!booking || !booking.invoice) {
+      throw new NotFoundError('Booking or payment not found');
+    }
+
+    const cashTx = booking.invoice.transactions.find(tx => tx.gateway === 'CASH' && tx.status === 'PENDING');
+    if (!cashTx) {
+      throw new BadRequestError('No pending cash request found');
+    }
+
+    if (decision === 'reject') {
+      await this.prisma.transaction.update({
+        where: { id: cashTx.id },
+        data: { status: 'FAILED' }
+      });
+      // Optionally notify client to pay online
+      return { success: true, message: 'Cash request rejected' };
+    } else {
+      await this.prisma.transaction.update({
+        where: { id: cashTx.id },
+        data: { metadata: { ...cashTx.metadata as any, cashApproved: true } }
+      });
+      return { success: true, message: 'Cash request approved' };
+    }
+  }
+
+  async markCashAsPaid(userId: string, id: string) {
+    const tenantId = await this.getTenantIdByUserId(userId);
+    const booking = await this.prisma.booking.findFirst({
+      where: { id, tenantId },
+      include: { invoice: { include: { transactions: true } } }
+    });
+
+    if (!booking || !booking.invoice) {
+      throw new NotFoundError('Booking or payment not found');
+    }
+
+    const cashTx = booking.invoice.transactions.find(tx => tx.gateway === 'CASH' && (tx.status === 'PENDING' || tx.status === 'SUCCESS'));
+    if (!cashTx) {
+      throw new BadRequestError('No valid cash transaction found');
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.transaction.update({
+        where: { id: cashTx.id },
+        data: { status: 'SUCCESS' }
+      }),
+      this.prisma.invoice.update({
+        where: { id: booking.invoice.id },
+        data: { status: InvoiceStatus.PAID }
+      })
+    ]);
+
+    return { success: true, message: 'Cash payment confirmed and invoice marked as paid' };
   }
 }

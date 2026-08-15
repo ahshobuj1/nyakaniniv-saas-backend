@@ -92,5 +92,21 @@ export class BookingModule extends BaseModule {
       "/:id/request-cash-redirect",
       controller.requestCashRedirect.bind(controller),
     );
+
+    // DJ Action: Approve/Reject cash payment
+    this.router.post(
+      "/:id/cash-decision",
+      authenticateUser,
+      authorizeRole([UserRole.DJ]),
+      controller.handleCashRequestDecision.bind(controller),
+    );
+
+    // DJ Action: Mark cash as paid (fulfill)
+    this.router.post(
+      "/:id/mark-cash-paid",
+      authenticateUser,
+      authorizeRole([UserRole.DJ]),
+      controller.markCashAsPaid.bind(controller),
+    );
   }
 }
