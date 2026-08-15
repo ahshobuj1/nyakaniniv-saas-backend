@@ -56,8 +56,9 @@ export class ClientServices {
       where: { id, tenantId: tenant.id },
       include: {
         bookings: {
-          include: { payment: true },
-          orderBy: { createdAt: 'desc' }
+          include: {
+          invoice: true,
+        },  orderBy: { createdAt: 'desc' }
         }
       }
     });

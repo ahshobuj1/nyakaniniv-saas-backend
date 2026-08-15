@@ -1,4 +1,4 @@
-import { PrismaClient, BookingStatus, SubscriptionStatus } from '@/prisma/generated/client';
+import { PrismaClient, BookingStatus, SubscriptionStatus, InvoiceStatus, InvoiceType } from '@/prisma/generated/client';
 
 export class AnalyticsServices {
   constructor(private prisma: PrismaClient) {}
@@ -15,9 +15,9 @@ export class AnalyticsServices {
       this.prisma.user.count(),
       this.prisma.tenant.count(),
       this.prisma.booking.count(),
-      this.prisma.subscriptionInvoice.aggregate({
+      this.prisma.invoice.aggregate({
         _sum: { amount: true },
-        where: { status: 'paid' }
+        where: { status: InvoiceStatus.PAID, type: InvoiceType.SUBSCRIPTION }
       }),
       this.prisma.subscription.groupBy({
         by: ['status'],
@@ -31,9 +31,9 @@ export class AnalyticsServices {
     ]);
 
     const subscriptions = {
-      active: subscriptionStats.find(s => s.status === SubscriptionStatus.active)?._count || 0,
-      canceled: subscriptionStats.find(s => s.status === SubscriptionStatus.canceled)?._count || 0,
-      pastDue: subscriptionStats.find(s => s.status === SubscriptionStatus.past_due)?._count || 0,
+      active: subscriptionStats.find((s: any) => s.status === SubscriptionStatus.active)?._count || 0,
+      canceled: subscriptionStats.find((s: any) => s.status === SubscriptionStatus.canceled)?._count || 0,
+      pastDue: subscriptionStats.find((s: any) => s.status === SubscriptionStatus.past_due)?._count || 0,
     };
 
     return {
@@ -56,13 +56,13 @@ export class AnalyticsServices {
       bookingStats,
       recentRequests
     ] = await Promise.all([
-      this.prisma.bookingPayment.aggregate({
+      this.prisma.invoice.aggregate({
         _sum: { amount: true },
-        where: { tenantId: tenant.id, status: 'paid' }
+        where: { tenantId: tenant.id, status: InvoiceStatus.PAID, type: InvoiceType.BOOKING }
       }),
-      this.prisma.bookingPayment.aggregate({
+      this.prisma.invoice.aggregate({
         _sum: { amount: true },
-        where: { tenantId: tenant.id, status: 'unpaid' }
+        where: { tenantId: tenant.id, status: InvoiceStatus.UNPAID, type: InvoiceType.BOOKING }
       }),
       this.prisma.booking.groupBy({
         by: ['status'],
@@ -73,14 +73,14 @@ export class AnalyticsServices {
         where: { tenantId: tenant.id },
         take: 10,
         orderBy: { createdAt: 'desc' },
-        include: { client: true, payment: true }
+        include: { client: true, invoice: true }
       })
     ]);
 
     const bookings = {
-      pending: bookingStats.find(s => s.status === BookingStatus.pending)?._count || 0,
-      accepted: bookingStats.find(s => s.status === BookingStatus.accepted)?._count || 0,
-      completed: bookingStats.find(s => s.status === BookingStatus.completed)?._count || 0,
+      pending: bookingStats.find((s: any) => s.status === BookingStatus.pending)?._count || 0,
+      accepted: bookingStats.find((s: any) => s.status === BookingStatus.accepted)?._count || 0,
+      completed: bookingStats.find((s: any) => s.status === BookingStatus.completed)?._count || 0,
     };
 
     return {
@@ -94,8 +94,8 @@ export class AnalyticsServices {
   async getAdminCharts() {
     const revenueChart = await this.prisma.$queryRaw`
       SELECT to_char(DATE_TRUNC('month', created_at), 'YYYY-MM') as month, COALESCE(SUM(amount), 0)::float as amount
-      FROM subscription_invoices
-      WHERE status = 'paid' AND created_at >= CURRENT_DATE - INTERVAL '12 months'
+      FROM invoices
+      WHERE status = 'PAID' AND type = 'SUBSCRIPTION' AND created_at >= CURRENT_DATE - INTERVAL '12 months'
       GROUP BY month
       ORDER BY month ASC;
     `;
@@ -117,8 +117,8 @@ export class AnalyticsServices {
 
     const earningsChart = await this.prisma.$queryRaw`
       SELECT to_char(DATE_TRUNC('month', created_at), 'YYYY-MM') as month, COALESCE(SUM(amount), 0)::float as amount
-      FROM booking_payments
-      WHERE tenant_id = CAST(${tenant.id} AS UUID) AND status = 'paid' AND created_at >= CURRENT_DATE - INTERVAL '12 months'
+      FROM invoices
+      WHERE tenant_id = CAST(${tenant.id} AS UUID) AND status = 'PAID' AND type = 'BOOKING' AND created_at >= CURRENT_DATE - INTERVAL '12 months'
       GROUP BY month
       ORDER BY month ASC;
     `;

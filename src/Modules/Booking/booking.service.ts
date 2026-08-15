@@ -1,4 +1,4 @@
-import { PrismaClient, BookingStatus, BookingPaymentMethod, BookingPaymentStatus, NotificationType } from '@/prisma/generated/client';
+import { PrismaClient, BookingStatus, InvoiceStatus, InvoiceType, NotificationType, PaymentChannel } from '@/prisma/generated/client';
 import Stripe from 'stripe';
 import { config } from '@/core/config';
 
@@ -108,7 +108,7 @@ export class BookingServices {
 
     if (!bookingQuery.prismaArgs.select) {
       bookingQuery.prismaArgs.include = {
-        payment: true,
+        invoice: true,
         client: true,
       };
     }
@@ -123,7 +123,7 @@ export class BookingServices {
     const tenantId = await this.getTenantIdByUserId(userId);
     const booking = await this.prisma.booking.findFirst({
       where: { id, tenantId },
-      include: { payment: true, client: true },
+      include: { invoice: true, client: true },
     });
 
     if (!booking) {
@@ -160,17 +160,18 @@ export class BookingServices {
         });
 
         // Create Payment
-        const payment = await tx.bookingPayment.create({
+        const invoice = await tx.invoice.create({
           data: {
             tenantId,
             bookingId: id,
-            amount: data.totalAmount,
+            amount: data.totalAmount || 0,
             // method is not set initially; it will be set by the respective webhook (Stripe/Paystack) upon payment
-            status: BookingPaymentStatus.unpaid,
+            status: InvoiceStatus.UNPAID,
+            type: InvoiceType.BOOKING,
           }
         });
 
-        return { updatedBooking, paymentId: payment.id };
+        return { updatedBooking, invoiceId: invoice.id };
       });
 
       const checkoutRedirectUrl = `${config.apiUrl}/bookings/v1/${id}/checkout-redirect`;
@@ -189,7 +190,7 @@ export class BookingServices {
         );
       }
 
-      return { ...txResult.updatedBooking, paymentId: txResult.paymentId };
+      return { ...txResult.updatedBooking, paymentId: txResult.invoiceId };
     }
 
     // Otherwise just update status
@@ -229,25 +230,25 @@ export class BookingServices {
   async getBookingPaymentLink(id: string) {
     const booking = await this.prisma.booking.findUnique({
       where: { id },
-      include: { tenant: true, payment: true, client: true }
+      include: { tenant: true, invoice: true, client: true }
     });
 
     if (booking && booking.status === BookingStatus.completed) {
       throw new BadRequestError('Booking is already paid');
     }
 
-    if (!booking || booking.status !== BookingStatus.accepted || !booking.totalAmount) {
+    if (!booking || booking.status !== BookingStatus.accepted) {
       throw new BadRequestError('Booking is not ready for payment or already paid');
     }
 
-    if (booking.payment && booking.payment.status === BookingPaymentStatus.paid) {
+    if (booking.invoice && booking.invoice.status === InvoiceStatus.PAID) {
       throw new BadRequestError('Booking is already paid');
     }
 
-    const paymentId = booking.payment ? booking.payment.id : id; // fallback to booking id if no payment record
+    const paymentId = booking.invoice ? booking.invoice.id : id; // fallback to booking id if no invoice record
 
     // Determine the correct payment provider based on the DJ's country
-    const paymentProvider = PaymentProviderFactory.getProvider(booking.tenant?.country);
+    const paymentProvider = PaymentProviderFactory.getProvider(booking.tenantId);
 
     return paymentProvider.getPaymentLink(booking as any, paymentId);
   }
@@ -255,26 +256,29 @@ export class BookingServices {
   async requestCashPayment(id: string) {
     const booking = await this.prisma.booking.findUnique({
       where: { id },
-      include: { payment: true, tenant: { include: { user: true } }, client: true }
+      include: { invoice: { include: { transactions: true } }, tenant: { include: { user: true } }, client: true }
     });
 
     if (!booking || booking.status !== BookingStatus.accepted) {
       throw new BadRequestError('Booking is not ready for payment');
     }
 
-    if (booking.payment && booking.payment.status === BookingPaymentStatus.paid) {
+    if (booking.invoice && booking.invoice.status === InvoiceStatus.PAID) {
       throw new BadRequestError('Booking is already paid');
     }
 
-    if (!booking.payment) {
+    if (!booking.invoice) {
       throw new BadRequestError('Payment record not found');
     }
 
-    // Update payment method to CASH
-    await this.prisma.bookingPayment.update({
-      where: { id: booking.payment.id },
-      data: { method: BookingPaymentMethod.CASH }
-    });
+    // Update first transaction method to CASH (assuming manual flow)
+    const tx = booking.invoice.transactions?.[0];
+    if (tx) {
+      await this.prisma.transaction.update({
+        where: { id: tx.id },
+        data: { channel: PaymentChannel.CASH }
+      });
+    }
 
     // Notify DJ that client requested cash payment
     if (booking.tenant?.userId) {
