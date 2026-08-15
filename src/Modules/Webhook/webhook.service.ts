@@ -212,6 +212,16 @@ export class WebhookServices {
           );
         }
 
+        let invoicePdfBuffer: Buffer | undefined;
+        if (txResult.paymentId) {
+          try {
+            const invoiceService = new InvoiceServices(this.prisma);
+            invoicePdfBuffer = await invoiceService.generateInvoicePdf(txResult.paymentId);
+          } catch (error) {
+            AppLogger.error('[WEBHOOK] Failed to generate invoice PDF for email', { error });
+          }
+        }
+
         if (txResult.clientEmail && txResult.resolvedBookingId) {
           this.emailProvider.sendEmail(
             txResult.clientEmail,
@@ -223,7 +233,12 @@ export class WebhookServices {
               txResult.eventDate,
               "Paystack",
               txResult.resolvedBookingId
-            )
+            ),
+            invoicePdfBuffer ? [{
+              filename: `UpBeat-Africa-Receipt-${txResult.paymentId?.split('-')[0].toUpperCase()}.pdf`,
+              content: invoicePdfBuffer,
+              contentType: 'application/pdf'
+            }] : undefined
           );
         }
       }
