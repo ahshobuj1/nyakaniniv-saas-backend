@@ -369,7 +369,9 @@ model LandingPageHero {
   id          Int      @id @default(autoincrement())
   title       String?  @db.VarChar(255)
   description String?  @db.Text
-  imageUrl    String?  @map("image_url") @db.VarChar(255)
+  imageUrl1   String?  @map("image_url_1") @db.VarChar(255)
+  imageUrl2   String?  @map("image_url_2") @db.VarChar(255)
+  imageUrl3   String?  @map("image_url_3") @db.VarChar(255)
   isActive    Boolean? @default(false) @map("is_active")
 
   @@map("landing_page_heroes")
@@ -404,10 +406,13 @@ model LandingPageFaq {
   @@map("landing_page_faqs")
 }
 
-model LandingPageMarquee {
-  id       Int     @id @default(autoincrement())
-  imageUrl String? @map("image_url") @db.VarChar(255)
+model LandingPageSocial {
+  id       Int      @id @default(autoincrement())
+  platform String   @db.VarChar(50)
+  url      String   @db.VarChar(255)
+  icon     String?  @db.VarChar(50)
+  isActive Boolean? @default(true) @map("is_active")
   order    Int?
 
-  @@map("landing_page_marquees")
+  @@map("landing_page_socials")
 }

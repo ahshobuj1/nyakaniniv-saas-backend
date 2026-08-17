@@ -14,15 +14,15 @@ export class LandingPageController extends BaseController {
 
   // --- Hero ---
   public async createHero(req: Request, res: Response): Promise<void> {
-    const file = req.file;
-    const hero = await this.landingPageService.createHero(req.body, file);
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+    const hero = await this.landingPageService.createHero(req.body, files);
     this.sendCreatedResponse(req, res, hero, 'Hero created successfully');
   }
 
   public async updateHero(req: Request, res: Response): Promise<void> {
     const id = String(req.params.id);
-    const file = req.file;
-    const hero = await this.landingPageService.updateHero(Number(id), req.body, file);
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+    const hero = await this.landingPageService.updateHero(Number(id), req.body, files);
     this.sendResponse(req, res, 'Hero updated successfully', undefined, hero);
   }
 
@@ -90,23 +90,21 @@ export class LandingPageController extends BaseController {
     this.sendResponse(req, res, 'FAQ deleted successfully', undefined, null);
   }
 
-  // --- Marquee ---
-  public async createMarquee(req: Request, res: Response): Promise<void> {
-    const file = req.file;
-    const marquee = await this.landingPageService.createMarquee(req.body, file);
-    this.sendCreatedResponse(req, res, marquee, 'Marquee created successfully');
+  // --- Social ---
+  public async createSocial(req: Request, res: Response): Promise<void> {
+    const social = await this.landingPageService.createSocial(req.body);
+    this.sendCreatedResponse(req, res, social, 'Social link created successfully');
   }
 
-  public async updateMarquee(req: Request, res: Response): Promise<void> {
+  public async updateSocial(req: Request, res: Response): Promise<void> {
     const id = String(req.params.id);
-    const file = req.file;
-    const marquee = await this.landingPageService.updateMarquee(Number(id), req.body, file);
-    this.sendResponse(req, res, 'Marquee updated successfully', undefined, marquee);
+    const social = await this.landingPageService.updateSocial(Number(id), req.body);
+    this.sendResponse(req, res, 'Social link updated successfully', undefined, social);
   }
 
-  public async deleteMarquee(req: Request, res: Response): Promise<void> {
+  public async deleteSocial(req: Request, res: Response): Promise<void> {
     const id = String(req.params.id);
-    await this.landingPageService.deleteMarquee(Number(id));
-    this.sendResponse(req, res, 'Marquee deleted successfully', undefined, null);
+    await this.landingPageService.deleteSocial(Number(id));
+    this.sendResponse(req, res, 'Social link deleted successfully', undefined, null);
   }
 }
