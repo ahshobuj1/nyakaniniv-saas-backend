@@ -43,8 +43,8 @@ export class LandingPageModule extends BaseModule {
     ];
 
     // --- Hero ---
-    this.router.post("/hero", ...adminMiddleware, upload.single('image'), controller.createHero.bind(controller));
-    this.router.patch("/hero/:id", ...adminMiddleware, upload.single('image'), controller.updateHero.bind(controller));
+    this.router.post("/hero", ...adminMiddleware, upload.fields([{name: 'image1', maxCount: 1}, {name: 'image2', maxCount: 1}, {name: 'image3', maxCount: 1}]), controller.createHero.bind(controller));
+    this.router.patch("/hero/:id", ...adminMiddleware, upload.fields([{name: 'image1', maxCount: 1}, {name: 'image2', maxCount: 1}, {name: 'image3', maxCount: 1}]), controller.updateHero.bind(controller));
     this.router.delete("/hero/:id", ...adminMiddleware, controller.deleteHero.bind(controller));
 
     // --- Step ---
@@ -62,9 +62,9 @@ export class LandingPageModule extends BaseModule {
     this.router.patch("/faq/:id", ...adminMiddleware, controller.updateFaq.bind(controller));
     this.router.delete("/faq/:id", ...adminMiddleware, controller.deleteFaq.bind(controller));
 
-    // --- Marquee ---
-    this.router.post("/marquee", ...adminMiddleware, upload.single('image'), controller.createMarquee.bind(controller));
-    this.router.patch("/marquee/:id", ...adminMiddleware, upload.single('image'), controller.updateMarquee.bind(controller));
-    this.router.delete("/marquee/:id", ...adminMiddleware, controller.deleteMarquee.bind(controller));
+    // --- Social ---
+    this.router.post("/social", ...adminMiddleware, controller.createSocial.bind(controller));
+    this.router.patch("/social/:id", ...adminMiddleware, controller.updateSocial.bind(controller));
+    this.router.delete("/social/:id", ...adminMiddleware, controller.deleteSocial.bind(controller));
   }
 }
