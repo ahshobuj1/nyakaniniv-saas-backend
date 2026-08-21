@@ -328,8 +328,8 @@ export class InvoiceServices {
 
         let currentY = boxY;
 
-        // Header (UpBeat Africa & PAID/UNPAID Badge)
-        doc.font('Helvetica-Bold').fontSize(24).fillColor(primary).text('UpBeat Africa', boxX, currentY);
+        // Header (UpBeat Entertainment Africa & PAID/UNPAID Badge)
+        doc.font('Helvetica-Bold').fontSize(20).fillColor(primary).text('UpBeat Entertainment Africa', boxX, currentY);
         if (invoice.status === 'PAID') {
           doc.rect(boxX + boxW - 70, currentY, 70, 24).fill('#DEF7EC');
           doc.font('Helvetica-Bold').fontSize(11).fillColor('#03543F').text('PAID', boxX + boxW - 70, currentY + 6, { width: 70, align: 'center' });
@@ -372,8 +372,8 @@ export class InvoiceServices {
         currentY += 20;
 
         // Parties Info
-        let billedFromName = 'UpBeat Africa';
-        let billedFromDesc = 'UpBeat Africa';
+        let billedFromName = 'UpBeat Entertainment Africa';
+        let billedFromDesc = 'UpBeat Entertainment Africa';
         let billedFromEmail = 'hello@upbeatafrica.com';
         
         let clientName = 'Valued Client';
@@ -456,7 +456,7 @@ export class InvoiceServices {
           doc.font('Helvetica').fontSize(12).fillColor('#991B1B').text('Payment Pending', boxX, currentY, { align: 'center', width: boxW });
         }
         currentY += 30;
-        doc.font('Helvetica').fontSize(11).fillColor(textMuted).text('Thank you for choosing UpBeat Africa.', boxX, currentY, { align: 'center', width: boxW });
+        doc.font('Helvetica').fontSize(11).fillColor(textMuted).text('Thank you for choosing UpBeat Entertainment Africa.', boxX, currentY, { align: 'center', width: boxW });
         currentY += 16;
         doc.font('Helvetica-Bold').fontSize(11).fillColor(textMuted).text('upbeat.africa', boxX, currentY, { align: 'center', width: boxW });
         

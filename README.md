@@ -1,8 +1,8 @@
 <div align="center">
-  <img src="./public/upbeat.png" alt="UpBeat Africa Logo" width="150" />
+  <img src="./public/upbeat.png" alt="UpBeat Entertainment Africa Logo" width="150" />
   
-  # 🌍 UpBeat Africa SaaS Backend
-  **A scalable, modular, and multi-tenant backend platform powering the UpBeat Africa DJ ecosystem.**
+  # 🌍 UpBeat Entertainment Africa SaaS Backend
+  **A scalable, modular, and multi-tenant backend platform powering the UpBeat Entertainment Africa DJ ecosystem.**
 
   [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
   [![Express.js](https://img.shields.io/badge/Express.js-404D59?style=for-the-badge)](https://expressjs.com/)

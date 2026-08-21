@@ -217,7 +217,7 @@ export class SubscriptionServices {
     if (user && user.email) {
       this.emailProvider.sendEmail(
         user.email,
-        "Subscription Canceled - UpBeat Africa",
+        "Subscription Canceled - UpBeat Entertainment Africa",
         EmailTemplates.getSubscriptionCanceledTemplate()
       );
     }

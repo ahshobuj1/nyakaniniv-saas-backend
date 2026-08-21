@@ -75,7 +75,7 @@ export class BookingServices {
       if (tenant.user && tenant.user.email) {
         this.emailProvider.sendEmail(
           tenant.user.email,
-          "New Booking Request - UpBeat Africa",
+          "New Booking Request - UpBeat Entertainment Africa",
           EmailTemplates.getNewBookingAlertTemplate(data.clientName, data.eventType || "Event", data.eventDate || new Date().toISOString())
         );
       }
@@ -84,7 +84,7 @@ export class BookingServices {
     // Auto-reply to Client
     this.emailProvider.sendEmail(
       data.clientEmail,
-      "Booking Request Received - UpBeat Africa",
+      "Booking Request Received - UpBeat Entertainment Africa",
       EmailTemplates.getBookingAutoReplyTemplate(tenant.stageName || tenant.user?.firstName || "DJ", data.eventType || "Event")
     );
 
@@ -180,7 +180,7 @@ export class BookingServices {
       if (booking.client?.email) {
         this.emailProvider.sendEmail(
           booking.client.email,
-          "Booking Request Accepted! - UpBeat Africa",
+          "Booking Request Accepted! - UpBeat Entertainment Africa",
           EmailTemplates.getBookingAcceptedTemplate(
             booking.tenant?.stageName || booking.tenant?.user?.firstName || "DJ",
             txResult.updatedBooking.eventType || "Event",
@@ -205,7 +205,7 @@ export class BookingServices {
     if (((data.status as any) === 'canceled' || (data.status as any) === 'rejected') && booking.client?.email) {
       this.emailProvider.sendEmail(
         booking.client.email,
-        "Booking Canceled - UpBeat Africa",
+        "Booking Canceled - UpBeat Entertainment Africa",
         EmailTemplates.getBookingRejectedTemplate(
           booking.tenant?.stageName || booking.tenant?.user?.firstName || "DJ",
           booking.eventType || "Event"
@@ -215,7 +215,7 @@ export class BookingServices {
       // If just a regular update (not canceled, not accepted), consider it an update email
       this.emailProvider.sendEmail(
         booking.client.email,
-        "Booking Details Updated - UpBeat Africa",
+        "Booking Details Updated - UpBeat Entertainment Africa",
         EmailTemplates.getBookingUpdatedTemplate(
           booking.tenant?.stageName || booking.tenant?.user?.firstName || "DJ",
           updatedBooking.eventType || "Event",
@@ -307,7 +307,7 @@ export class BookingServices {
       if (booking.tenant.user?.email) {
         this.emailProvider.sendEmail(
           booking.tenant.user.email,
-          "Cash Payment Requested - UpBeat Africa",
+          "Cash Payment Requested - UpBeat Entertainment Africa",
           EmailTemplates.getCashPaymentRequestedTemplate(
             booking.client?.name || 'Client',
             booking.eventType || 'Event'
@@ -334,7 +334,7 @@ export class BookingServices {
       const checkoutRedirectUrl = `${config.apiUrl}/bookings/v1/${id}/checkout-redirect`;
       this.emailProvider.sendEmail(
         booking.client.email,
-        "Payment Reminder for DJ Booking - UpBeat Africa",
+        "Payment Reminder for DJ Booking - UpBeat Entertainment Africa",
         EmailTemplates.getPaymentReminderTemplate(
           booking.tenant?.stageName || booking.tenant?.user?.firstName || "DJ",
           booking.eventType || "Event",

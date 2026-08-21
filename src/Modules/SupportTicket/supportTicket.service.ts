@@ -35,7 +35,7 @@ export class SupportTicketServices {
     if (data.email) {
       this.emailProvider.sendEmail(
         data.email,
-        "Support Ticket Received - UpBeat Africa",
+        "Support Ticket Received - UpBeat Entertainment Africa",
         EmailTemplates.getSupportTicketReceivedTemplate(data.subject)
       );
     }
@@ -99,7 +99,7 @@ export class SupportTicketServices {
     if (data.status === TicketStatus.resolved && updated.email) {
       this.emailProvider.sendEmail(
         updated.email,
-        "Support Ticket Resolved ✅ - UpBeat Africa",
+        "Support Ticket Resolved ✅ - UpBeat Entertainment Africa",
         EmailTemplates.getSupportTicketResolvedTemplate(updated.subject || "Your Ticket")
       );
     }
