@@ -55,7 +55,7 @@ export class AuthServices {
     //  this.emailProvider.sendEmail
     this.emailProvider.sendEmail(
       email,
-      "Verify Email - UpBeat Africa",
+      "Verify Email - UpBeat Entertainment Africa",
       EmailTemplates.getOtpTemplate(otp)
     );
 
@@ -94,7 +94,7 @@ export class AuthServices {
     // Send Welcome Email
     this.emailProvider.sendEmail(
       updatedUser.email,
-      "Welcome to UpBeat Africa!",
+      "Welcome to UpBeat Entertainment Africa!",
       EmailTemplates.getWelcomeTemplate(updatedUser.firstName || "DJ")
     );
 
@@ -128,7 +128,7 @@ export class AuthServices {
     // Send Email
     this.emailProvider.sendEmail(
       email,
-      "New Verification Code - UpBeat Africa",
+      "New Verification Code - UpBeat Entertainment Africa",
       EmailTemplates.getOtpTemplate(otp)
     );
 
@@ -176,7 +176,7 @@ export class AuthServices {
     // Send Email
     this.emailProvider.sendEmail(
       email,
-      "Password Reset Request - UpBeat Africa",
+      "Password Reset Request - UpBeat Entertainment Africa",
       EmailTemplates.getPasswordResetTemplate(`https://upbeat.africa/auth/reset-password?otp=${otp}&email=${encodeURIComponent(email)}`)
     );
 
