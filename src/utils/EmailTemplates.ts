@@ -15,7 +15,7 @@ export class EmailTemplates {
                 <!-- Header -->
                 <tr>
                   <td style="background-color: #dc2626; padding: 30px 20px; text-align: center;">
-                    <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: bold; letter-spacing: 1px;">UpBeat Africa</h1>
+                    <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: bold; letter-spacing: 1px;">UpBeat Entertainment Africa</h1>
                   </td>
                 </tr>
                 <!-- Body -->
@@ -27,7 +27,7 @@ export class EmailTemplates {
                 <!-- Footer -->
                 <tr>
                   <td style="background-color: #f1f5f9; padding: 20px; text-align: center; color: #64748b; font-size: 14px; border-top: 1px solid #e2e8f0;">
-                    <p style="margin: 0;">&copy; ${new Date().getFullYear()} UpBeat Africa. All rights reserved.</p>
+                    <p style="margin: 0;">&copy; ${new Date().getFullYear()} UpBeat Entertainment Africa. All rights reserved.</p>
                   </td>
                 </tr>
               </table>
@@ -54,19 +54,19 @@ export class EmailTemplates {
   // Case 2: Successful Verification (Welcome Email)
   static getWelcomeTemplate(name: string): string {
     const content = `
-      <p>Your email has been successfully verified, and your account is now active on <strong>UpBeat Africa</strong>.</p>
+      <p>Your email has been successfully verified, and your account is now active on <strong>UpBeat Entertainment Africa</strong>.</p>
       <p>Log in to your DJ dashboard to set up your portfolio, manage themes, and start taking bookings.</p>
       <div style="text-align: center; margin-top: 30px;">
         <a href="https://deejay.africa/login" style="display: inline-block; padding: 12px 24px; background-color: #dc2626; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">Go to Dashboard</a>
       </div>
     `;
-    return this.getHtmlShell("Welcome to UpBeat Africa", content);
+    return this.getHtmlShell("Welcome to UpBeat Entertainment Africa", content);
   }
 
   // Case 4: Forgot Password Request
   static getPasswordResetTemplate(link: string): string {
     const content = `
-      <p>You recently requested to reset your password for your UpBeat Africa account.</p>
+      <p>You recently requested to reset your password for your UpBeat Entertainment Africa account.</p>
       <p>Click the <strong>Reset Password</strong> button below to create a new password.</p>
       <div style="text-align: center; margin-top: 30px; margin-bottom: 30px;">
         <a href="${link}" style="display: inline-block; padding: 12px 24px; background-color: #dc2626; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">Reset Password</a>
@@ -95,7 +95,7 @@ export class EmailTemplates {
   // Case 6: Auto-reply to Client for New Booking Request
   static getBookingAutoReplyTemplate(djName: string, eventType: string): string {
     const content = `
-      <p>Thank you for submitting your booking request for <strong>${djName}</strong> on UpBeat Africa.</p>
+      <p>Thank you for submitting your booking request for <strong>${djName}</strong> on UpBeat Entertainment Africa.</p>
       <p>Your request for a <strong>${eventType}</strong> is currently pending review.</p>
       <p>The DJ will review your request and get back to you shortly.</p>
     `;
@@ -119,7 +119,7 @@ export class EmailTemplates {
   static getBookingRejectedTemplate(djName: string, eventType: string): string {
     const content = `
       <p>Unfortunately, <strong>${djName}</strong> is unable to accept your booking request for a <strong>${eventType}</strong> at this time.</p>
-      <p>We encourage you to explore other talented DJs on UpBeat Africa for your event.</p>
+      <p>We encourage you to explore other talented DJs on UpBeat Entertainment Africa for your event.</p>
     `;
     return this.getHtmlShell("Booking Update", content);
   }
@@ -140,7 +140,7 @@ export class EmailTemplates {
   static getCashPaymentRequestedTemplate(clientName: string, eventType: string): string {
     const content = `
       <p><strong>${clientName}</strong> has requested a cash payment for their <strong>${eventType}</strong> booking.</p>
-      <p>Once you receive the cash payment, you can mark the booking as paid from your UpBeat Africa dashboard.</p>
+      <p>Once you receive the cash payment, you can mark the booking as paid from your UpBeat Entertainment Africa dashboard.</p>
     `;
     return this.getHtmlShell("Cash Payment Requested", content);
   }
@@ -199,7 +199,7 @@ export class EmailTemplates {
   // Case 14: Subscription Activated
   static getSubscriptionActivatedTemplate(planName: string, nextBillingDate: string): string {
     const content = `
-      <p>Thank you for subscribing to the <strong>${planName}</strong> plan on UpBeat Africa.</p>
+      <p>Thank you for subscribing to the <strong>${planName}</strong> plan on UpBeat Entertainment Africa.</p>
       <p>Your premium features are now unlocked.</p>
       <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 20px; margin: 20px 0;">
         <p style="margin: 0;"><strong>Next Billing Date:</strong> ${new Date(nextBillingDate).toLocaleDateString()}</p>
@@ -211,7 +211,7 @@ export class EmailTemplates {
   // Case 15: New Subscription Alert for Admin
   static getNewSubscriptionAdminAlertTemplate(djEmail: string, planId: number): string {
     const content = `
-      <p>A DJ (<strong>${djEmail}</strong>) has successfully subscribed on UpBeat Africa.</p>
+      <p>A DJ (<strong>${djEmail}</strong>) has successfully subscribed on UpBeat Entertainment Africa.</p>
       <p><strong>Plan ID:</strong> ${planId}</p>
     `;
     return this.getHtmlShell("New Subscription Alert", content);

@@ -3,7 +3,7 @@ import { prisma } from '../lib/prisma';
 const defaultFeaturesData = [
   {
     title: 'Personal DJ Website',
-    description: 'Stop juggling tools. UpBeat Africa brings everything together — your website, bookings, music, and payments.',
+    description: 'Stop juggling tools. UpBeat Entertainment Africa brings everything together — your website, bookings, music, and payments.',
     order: 1,
   },
   {
@@ -56,8 +56,8 @@ const defaultSteps = [
 
 const defaultFaqsData = [
   {
-    question: '1. What is UpBeat Africa and how does it work?',
-    answer: 'UpBeat Africa is a platform that helps DJs create their own professional website and manage their business in one place. After signing up, a DJ can choose a subscription plan and instantly get access to a personal dashboard.',
+    question: '1. What is UpBeat Entertainment Africa and how does it work?',
+    answer: 'UpBeat Entertainment Africa is a platform that helps DJs create their own professional website and manage their business in one place. After signing up, a DJ can choose a subscription plan and instantly get access to a personal dashboard.',
     order: 1,
   },
   {

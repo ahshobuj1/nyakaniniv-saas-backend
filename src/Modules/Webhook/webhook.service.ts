@@ -114,13 +114,13 @@ export class WebhookServices {
           
           this.emailProvider.sendEmail(
             user.email,
-            "Subscription Activated 🚀 - UpBeat Africa",
+            "Subscription Activated 🚀 - UpBeat Entertainment Africa",
             EmailTemplates.getSubscriptionActivatedTemplate(`Plan ${planId}`, nextBilling)
           );
 
           this.emailProvider.sendEmail(
             config.defaultAdmin?.email || "admin@upbeatafrica.com",
-            "New Subscription Alert - UpBeat Africa",
+            "New Subscription Alert - UpBeat Entertainment Africa",
             EmailTemplates.getNewSubscriptionAdminAlertTemplate(user.email, parseInt(planId, 10))
           );
         }
@@ -208,7 +208,7 @@ export class WebhookServices {
         if (txResult.djEmail) {
           this.emailProvider.sendEmail(
             txResult.djEmail,
-            "Payment Received! 💰 - UpBeat Africa",
+            "Payment Received! 💰 - UpBeat Entertainment Africa",
             EmailTemplates.getPaymentReceivedAlertTemplate(txResult.clientName, amountPaid)
           );
         }
@@ -226,7 +226,7 @@ export class WebhookServices {
         if (txResult.clientEmail && txResult.resolvedBookingId) {
           this.emailProvider.sendEmail(
             txResult.clientEmail,
-            "Payment Receipt - UpBeat Africa",
+            "Payment Receipt - UpBeat Entertainment Africa",
             EmailTemplates.getPaymentReceiptTemplate(
               amountPaid, 
               txResult.eventType,
@@ -236,7 +236,7 @@ export class WebhookServices {
               txResult.resolvedBookingId
             ),
             invoicePdfBuffer ? [{
-              filename: `UpBeat-Africa-Receipt-${txResult.paymentId?.split('-')[0].toUpperCase()}.pdf`,
+              filename: `UpBeat-Entertainment-Africa-Receipt-${txResult.paymentId?.split('-')[0].toUpperCase()}.pdf`,
               content: invoicePdfBuffer,
               contentType: 'application/pdf'
             }] : undefined

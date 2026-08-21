@@ -5,7 +5,7 @@ const options: swaggerJsdoc.Options = {
   definition: {
     openapi: "3.0.0",
     info: {
-      title: "UpbeatAfrica Devscout API Documentation",
+      title: "UpBeat Entertainment Africa API Documentation",
       version: "1.0.0",
       description: "API documentation for the backend application",
     },

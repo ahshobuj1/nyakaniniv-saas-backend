@@ -38,7 +38,7 @@ const replacementBlockStripe = `// Send Emails outside transaction
         if (txResult.djEmail) {
           this.emailProvider.sendEmail(
             txResult.djEmail,
-            "Payment Received! 🎉 - UpBeat Africa",
+            "Payment Received! 🎉 - UpBeat Entertainment Africa",
             EmailTemplates.getPaymentReceivedAlertTemplate(txResult.clientName, amountPaid),
             attachments
           );
@@ -47,7 +47,7 @@ const replacementBlockStripe = `// Send Emails outside transaction
         if (txResult.clientEmail && txResult.resolvedBookingId) {
           this.emailProvider.sendEmail(
             txResult.clientEmail,
-            "Payment Receipt - UpBeat Africa",
+            "Payment Receipt - UpBeat Entertainment Africa",
             EmailTemplates.getPaymentReceiptTemplate(
               amountPaid, 
               txResult.eventType,
@@ -83,7 +83,7 @@ const replacementBlockPaystack = `// Send Emails outside transaction
         if (txResult.djEmail) {
           this.emailProvider.sendEmail(
             txResult.djEmail,
-            "Payment Received! 🎉 - UpBeat Africa",
+            "Payment Received! 🎉 - UpBeat Entertainment Africa",
             EmailTemplates.getPaymentReceivedAlertTemplate(txResult.clientName, amountPaid),
             attachments
           );
@@ -92,7 +92,7 @@ const replacementBlockPaystack = `// Send Emails outside transaction
         if (txResult.clientEmail && txResult.resolvedBookingId) {
           this.emailProvider.sendEmail(
             txResult.clientEmail,
-            "Payment Receipt - UpBeat Africa",
+            "Payment Receipt - UpBeat Entertainment Africa",
             EmailTemplates.getPaymentReceiptTemplate(
               amountPaid, 
               txResult.eventType,
