@@ -6,28 +6,37 @@ export class EmailTemplates {
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>${title}</title>
       </head>
-      <body style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f9fafb; margin: 0; padding: 0;">
-        <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f9fafb; padding: 20px 0;">
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f3f4f6; margin: 0; padding: 0; -webkit-font-smoothing: antialiased;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f3f4f6; padding: 30px 15px;">
           <tr>
             <td align="center">
-              <table width="100%" max-width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); max-width: 600px; margin: 0 auto; overflow: hidden;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05); max-width: 600px; margin: 0 auto; overflow: hidden; border: 1px solid #e5e7eb;">
                 <!-- Header -->
                 <tr>
-                  <td style="background-color: #dc2626; padding: 30px 20px; text-align: center;">
-                    <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: bold; letter-spacing: 1px;">UpBeat Entertainment Africa</h1>
+                  <td style="background-color: #111827; padding: 30px 24px; text-align: center; border-bottom: 3px solid #dc2626;">
+                    <table width="100%" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td align="center">
+                          <img src="cid:upbeat-logo" alt="UpBeat Entertainment Africa" style="height: 46px; max-height: 46px; width: auto; display: block; margin: 0 auto 10px auto;" />
+                          <h1 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: 0.5px;">UpBeat Entertainment Africa</h1>
+                        </td>
+                      </tr>
+                    </table>
                   </td>
                 </tr>
                 <!-- Body -->
                 <tr>
-                  <td style="padding: 40px 30px; color: #333333; line-height: 1.6; font-size: 16px;">
+                  <td style="padding: 36px 30px; color: #374151; line-height: 1.65; font-size: 15px;">
                     ${content}
                   </td>
                 </tr>
                 <!-- Footer -->
                 <tr>
-                  <td style="background-color: #f1f5f9; padding: 20px; text-align: center; color: #64748b; font-size: 14px; border-top: 1px solid #e2e8f0;">
-                    <p style="margin: 0;">&copy; ${new Date().getFullYear()} UpBeat Entertainment Africa. All rights reserved.</p>
+                  <td style="background-color: #f9fafb; padding: 24px 20px; text-align: center; color: #6b7280; font-size: 13px; border-top: 1px solid #e5e7eb;">
+                    <p style="margin: 0 0 6px 0; font-weight: 600; color: #111827;">UpBeat Entertainment Africa</p>
+                    <p style="margin: 0; line-height: 1.4;">&copy; ${new Date().getFullYear()} UpBeat Entertainment Africa. All rights reserved.</p>
                   </td>
                 </tr>
               </table>

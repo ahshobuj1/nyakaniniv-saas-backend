@@ -62,7 +62,7 @@ export class TenantModule extends BaseModule {
     this.router.get(
       '/',
       authenticateUser,
-      authorizeRole([UserRole.SUPER_ADMIN, UserRole.DJ]),
+      authorizeRole([UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.DJ]),
       controller.getAllTenants.bind(controller),
     );
 
@@ -92,7 +92,7 @@ export class TenantModule extends BaseModule {
     this.router.patch(
       '/:id/status',
       authenticateUser,
-      authorizeRole([UserRole.SUPER_ADMIN]),
+      authorizeRole([UserRole.SUPER_ADMIN, UserRole.ADMIN]),
       validateRequest(updateTenantStatusSchema),
       controller.updateTenantStatus.bind(controller),
     );

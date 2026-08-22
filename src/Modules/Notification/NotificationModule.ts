@@ -34,7 +34,7 @@ export class NotificationModule extends BaseModule {
     this.router.post(
       "/broadcast",
       authenticateUser,
-      authorizeRole([UserRole.SUPER_ADMIN]),
+      authorizeRole([UserRole.SUPER_ADMIN, UserRole.ADMIN]),
       validateRequest(createNotificationSchema),
       controller.broadcast.bind(controller),
     );

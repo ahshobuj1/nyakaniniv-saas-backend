@@ -39,7 +39,7 @@ export class LandingPageModule extends BaseModule {
     // Common Admin Middleware
     const adminMiddleware = [
       authenticateUser,
-      authorizeRole([UserRole.SUPER_ADMIN]),
+      authorizeRole([UserRole.SUPER_ADMIN, UserRole.ADMIN]),
     ];
 
     // --- Hero ---
