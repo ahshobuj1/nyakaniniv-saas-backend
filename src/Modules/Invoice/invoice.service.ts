@@ -3,6 +3,8 @@ import { NotFoundError, BadRequestError, AuthorizationError } from '@/core/error
 import { PayInvoiceDTO } from './InvoiceDTO';
 import { QueryBuilder } from '@/utils/QueryBuilder';
 import PDFDocument from 'pdfkit';
+import path from 'path';
+import fs from 'fs';
 
 export class InvoiceServices {
   constructor(private prisma: PrismaClient) {}
@@ -328,8 +330,18 @@ export class InvoiceServices {
 
         let currentY = boxY;
 
+        const logoPath = path.resolve(process.cwd(), 'public/logo.png');
+        if (fs.existsSync(logoPath)) {
+          try {
+            doc.image(logoPath, boxX, currentY, { height: 32 });
+            currentY += 40;
+          } catch (err) {
+            // fallback
+          }
+        }
+
         // Header (UpBeat Entertainment Africa & PAID/UNPAID Badge)
-        doc.font('Helvetica-Bold').fontSize(20).fillColor(primary).text('UpBeat Entertainment Africa', boxX, currentY);
+        doc.font('Helvetica-Bold').fontSize(18).fillColor(primary).text('UpBeat Entertainment Africa', boxX, currentY);
         if (invoice.status === 'PAID') {
           doc.rect(boxX + boxW - 70, currentY, 70, 24).fill('#DEF7EC');
           doc.font('Helvetica-Bold').fontSize(11).fillColor('#03543F').text('PAID', boxX + boxW - 70, currentY + 6, { width: 70, align: 'center' });

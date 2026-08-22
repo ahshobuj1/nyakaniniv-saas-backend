@@ -46,14 +46,14 @@ export class SupportTicketModule extends BaseModule {
     this.router.get(
       "/all",
       authenticateUser,
-      authorizeRole([UserRole.SUPER_ADMIN]),
+      authorizeRole([UserRole.SUPER_ADMIN, UserRole.ADMIN]),
       controller.getAllTickets.bind(controller),
     );
 
     this.router.patch(
       "/:id/status",
       authenticateUser,
-      authorizeRole([UserRole.SUPER_ADMIN]),
+      authorizeRole([UserRole.SUPER_ADMIN, UserRole.ADMIN]),
       validateRequest(updateTicketStatusSchema),
       controller.updateTicketStatus.bind(controller),
     );

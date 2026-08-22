@@ -30,7 +30,7 @@ export class SubscriptionModule extends BaseModule {
   protected async setupRoutes(): Promise<void> {
     const controller = this.getController<SubscriptionController>("SubscriptionController");
 
-    // Admin Routes for Plans
+    // Admin Routes for Plans (Super Admin Only)
     this.router.post(
       "/plans",
       authenticateUser,

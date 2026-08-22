@@ -7,6 +7,7 @@ import { generateToken } from "@/utils/jwt";
 import { generateOtp } from "@/utils/otp";
 import { IEmailProvider } from "@/providers/EmailProvider";
 import { EmailTemplates } from "@/utils/EmailTemplates";
+import config from "@/core/config";
 
 export class AuthServices {
   private logger = new AppLogger("AuthServices");
@@ -177,7 +178,7 @@ export class AuthServices {
     this.emailProvider.sendEmail(
       email,
       "Password Reset Request - UpBeat Entertainment Africa",
-      EmailTemplates.getPasswordResetTemplate(`https://upbeat.africa/auth/reset-password?otp=${otp}&email=${encodeURIComponent(email)}`)
+      EmailTemplates.getPasswordResetTemplate(`${config.clientUrl}/auth/reset-password?otp=${otp}&email=${encodeURIComponent(email)}`)
     );
 
     return { otp };

@@ -9,6 +9,7 @@ datasource db {
 
 enum UserRole {
   SUPER_ADMIN
+  ADMIN
   DJ
 }
 
@@ -212,6 +213,7 @@ model Event {
   title        String?      @db.VarChar(255)
   description  String?      @db.Text
   eventDate    DateTime?    @map("event_date")
+  eventTime    String?      @map("event_time") @db.VarChar(50)
   venueName    String?      @map("venue_name") @db.VarChar(255)
   venueAddress String?      @map("venue_address") @db.VarChar(255)
   capacity     Int?

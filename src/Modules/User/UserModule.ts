@@ -33,7 +33,10 @@ export class UserModule extends BaseModule {
     const upload = multer({ dest: 'tmp/' });
 
     // Current user profile routes
-    this.router.get('/me', authenticateUser, controller.getMe.bind(controller));
+    this.router.get('/me', 
+      authenticateUser, 
+      controller.getMe.bind(controller));
+      
     this.router.patch(
       '/me', 
       authenticateUser, 
@@ -43,9 +46,24 @@ export class UserModule extends BaseModule {
     );
 
     // Admin routes
-    this.router.get('/', authenticateUser, authorizeRole([UserRole.SUPER_ADMIN]), controller.getAllUsers.bind(controller));
-    this.router.patch('/:id/status', authenticateUser, authorizeRole([UserRole.SUPER_ADMIN]), validateRequest(UpdateUserStatusDTOSchema), controller.updateUserStatus.bind(controller));
-    this.router.patch('/:id/role', authenticateUser, authorizeRole([UserRole.SUPER_ADMIN]), validateRequest(UpdateUserRoleDTOSchema), controller.updateUserRole.bind(controller));
-    this.router.delete('/:id', authenticateUser, authorizeRole([UserRole.SUPER_ADMIN]), controller.deleteUser.bind(controller));
+    this.router.get('/',
+      authenticateUser,
+      authorizeRole([UserRole.SUPER_ADMIN, UserRole.ADMIN]),
+      controller.getAllUsers.bind(controller));
+
+    this.router.patch('/:id/status', 
+      authenticateUser, authorizeRole([UserRole.SUPER_ADMIN]), validateRequest(UpdateUserStatusDTOSchema), controller.updateUserStatus.bind(controller));
+
+
+    this.router.patch('/:id/role', 
+      authenticateUser, 
+      authorizeRole([UserRole.SUPER_ADMIN]), 
+      validateRequest(UpdateUserRoleDTOSchema), 
+      controller.updateUserRole.bind(controller));
+
+
+    this.router.delete('/:id', authenticateUser, 
+      authorizeRole([UserRole.SUPER_ADMIN]), 
+      controller.deleteUser.bind(controller));
   }
 }
