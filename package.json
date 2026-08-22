@@ -14,7 +14,7 @@
         "db:seed": "bun run src/prisma/seed.ts",
         "db:studio": "prisma studio",
         "db:push": "prisma db push",
-        "setup": "bun install && bun run db:generate && bun run db:migrate",
+        "setup": "bun install && bun run db:generate && bun run db:push",
         "reset": "bun run db:reset && bun run db:seed",
         "clean": "rm -rf dist node_modules .next",
         "type-check": "tsc --noEmit",

@@ -2,6 +2,7 @@
 import { IgnitorApp } from "./core/IgnitorApp";
 import { AppLogger } from "./core/logging/logger";
 import { config } from "./core/config";
+import { seedSuperAdmin } from "./scripts/seedSuperAdmin";
 
 // Providers (Infrastructure)
 import { PrismaProvider } from "./providers/PrismaProvider";
@@ -59,7 +60,10 @@ async function bootstrap() {
     app.registerModule(new ClientModule());
     AppLogger.info("✔ All modules registered successfully");
 
-    // 4. Spark the server!
+    // 4. Seed default Super Admin if not existing
+    await seedSuperAdmin();
+
+    // 5. Spark the server!
     await app.spark(config.server.port);
 
     AppLogger.info("✷ Ignitor sparked successfully");

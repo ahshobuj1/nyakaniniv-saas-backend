@@ -111,7 +111,7 @@
  *             properties:
  *               role:
  *                 type: string
- *                 enum: [SUPER_ADMIN, DJ]
+ *                 enum: [SUPER_ADMIN, ADMIN, DJ]
  *     responses:
  *       200:
  *         description: Role updated successfully

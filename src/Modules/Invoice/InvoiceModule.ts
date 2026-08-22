@@ -34,7 +34,7 @@ export class InvoiceModule extends BaseModule {
     this.router.get(
       "/all",
       authenticateUser,
-      authorizeRole([UserRole.SUPER_ADMIN]),
+      authorizeRole([UserRole.SUPER_ADMIN, UserRole.ADMIN]),
       controller.getAllInvoices.bind(controller),
     );
 

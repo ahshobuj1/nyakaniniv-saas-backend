@@ -10,6 +10,7 @@ export class AnalyticsServices {
       totalBookings,
       revenueInvoices,
       subscriptionStats,
+      subscriptionPlans,
       recentBookings
     ] = await Promise.all([
       this.prisma.user.count(),
@@ -23,17 +24,81 @@ export class AnalyticsServices {
         by: ['status'],
         _count: true
       }),
+      this.prisma.subscriptionPlan.findMany({
+        select: {
+          id: true,
+          name: true,
+          priceMonthly: true,
+          priceAnnually: true,
+          isActive: true,
+          subscriptions: {
+            select: {
+              status: true
+            }
+          }
+        },
+        orderBy: { priceMonthly: 'asc' }
+      }),
       this.prisma.booking.findMany({
         take: 10,
         orderBy: { createdAt: 'desc' },
-        include: { tenant: { include: { user: { select: { firstName: true, lastName: true } } } } }
+        select: {
+          id: true,
+          eventType: true,
+          eventDate: true,
+          address: true,
+          status: true,
+          totalAmount: true,
+          createdAt: true,
+          client: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+            },
+          },
+          tenant: {
+            select: {
+              id: true,
+              subdomain: true,
+              user: {
+                select: {
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                },
+              },
+            },
+          },
+        },
       })
     ]);
 
+    const activeCount = subscriptionStats.find((s: any) => s.status === SubscriptionStatus.active)?._count || 0;
+    const canceledCount = subscriptionStats.find((s: any) => s.status === SubscriptionStatus.canceled)?._count || 0;
+    const pastDueCount = subscriptionStats.find((s: any) => s.status === SubscriptionStatus.past_due)?._count || 0;
+
+    const byPlan = subscriptionPlans.map((plan) => {
+      const activeSubscribers = plan.subscriptions.filter((s: any) => s.status === SubscriptionStatus.active).length;
+      const totalPurchases = plan.subscriptions.length;
+      return {
+        planId: plan.id,
+        planName: plan.name || 'Unnamed Plan',
+        priceMonthly: Number(plan.priceMonthly || 0),
+        priceAnnually: Number(plan.priceAnnually || 0),
+        isActive: plan.isActive,
+        activeSubscribers,
+        totalPurchases
+      };
+    });
+
     const subscriptions = {
-      active: subscriptionStats.find((s: any) => s.status === SubscriptionStatus.active)?._count || 0,
-      canceled: subscriptionStats.find((s: any) => s.status === SubscriptionStatus.canceled)?._count || 0,
-      pastDue: subscriptionStats.find((s: any) => s.status === SubscriptionStatus.past_due)?._count || 0,
+      active: activeCount,
+      canceled: canceledCount,
+      pastDue: pastDueCount,
+      total: activeCount + canceledCount + pastDueCount,
+      byPlan
     };
 
     return {

@@ -130,6 +130,14 @@ export class UserServices {
       throw new NotFoundError('User not found');
     }
 
+    if (user.role === 'SUPER_ADMIN') {
+      throw new BadRequestError('Cannot change the role of a Super Admin');
+    }
+
+    if (data.role === 'SUPER_ADMIN') {
+      throw new BadRequestError('Cannot assign Super Admin role. Super Admin is created automatically.');
+    }
+
     return this.prisma.user.update({
       where: { id: userId },
       data: {
@@ -145,8 +153,10 @@ export class UserServices {
       throw new NotFoundError('User not found');
     }
 
-    // Attempting a hard delete - note this might fail if there are FK constraints.
-    // A soft delete might be preferred for production, but this aligns with the requirement.
+    if (user.role === 'SUPER_ADMIN') {
+      throw new BadRequestError('Cannot delete a Super Admin');
+    }
+
     await this.prisma.user.delete({
       where: { id: userId }
     });
