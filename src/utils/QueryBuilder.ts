@@ -24,11 +24,11 @@ export class QueryBuilder<T> {
   }
 
   search(searchableFields: string[]) {
-    const searchTerm = this.query?.searchTerm as string;
+    const searchTerm = (this.query?.searchTerm || this.query?.search || this.query?.q) as string;
 
-    if (searchTerm) {
+    if (searchTerm && typeof searchTerm === 'string' && searchTerm.trim() !== '') {
       this.prismaArgs.where.OR = searchableFields.map((field) => ({
-        [field]: { contains: searchTerm, mode: "insensitive" },
+        [field]: { contains: searchTerm.trim(), mode: "insensitive" },
       }));
     }
 
@@ -37,9 +37,29 @@ export class QueryBuilder<T> {
 
   filter() {
     const filterQueryObj = { ...this.query };
-    const excludeFields = ["searchTerm", "sort", "limit", "page", "fields"];
+    const excludeFields = [
+      "searchTerm",
+      "search",
+      "q",
+      "sort",
+      "sortBy",
+      "sortOrder",
+      "order",
+      "orderBy",
+      "limit",
+      "page",
+      "fields",
+    ];
 
     excludeFields.forEach((field) => delete filterQueryObj[field]);
+
+    // Remove empty strings, undefined, null, or 'all' values
+    Object.keys(filterQueryObj).forEach((key) => {
+      const val = filterQueryObj[key];
+      if (val === undefined || val === null || val === "" || val === "all") {
+        delete filterQueryObj[key];
+      }
+    });
 
     // Add remaining exact matches to the where clause
     Object.assign(this.prismaArgs.where, filterQueryObj);
@@ -48,6 +68,14 @@ export class QueryBuilder<T> {
   }
 
   sort() {
+    const sortBy = this.query?.sortBy as string;
+    const sortOrder = (this.query?.sortOrder as string)?.toLowerCase() === "asc" ? "asc" : "desc";
+
+    if (sortBy) {
+      this.prismaArgs.orderBy = [{ [sortBy]: sortOrder }];
+      return this;
+    }
+
     const sortParams = (this.query?.sort as string)?.split(",")?.join(" ") || "-createdAt";
     
     // Convert Mongoose sort strings ("-createdAt name") to Prisma format
@@ -63,6 +91,7 @@ export class QueryBuilder<T> {
 
     return this;
   }
+
 
   pagination() {
     const page = Number(this.query?.page) || 1;

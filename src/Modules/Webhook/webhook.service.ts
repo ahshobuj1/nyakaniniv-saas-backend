@@ -149,6 +149,19 @@ export class WebhookServices {
               data: { status: 'PAID' }
             });
 
+            // If there were any pending CASH requests for this invoice, mark them as superseded/failed
+            await tx.transaction.updateMany({
+              where: {
+                invoiceId: invoice.id,
+                gateway: 'CASH',
+                status: 'PENDING'
+              },
+              data: {
+                status: 'FAILED',
+                metadata: { supersededByOnlinePayment: true }
+              }
+            });
+
             await tx.transaction.create({
               data: {
                 invoiceId: invoice.id,

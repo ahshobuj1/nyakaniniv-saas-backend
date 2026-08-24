@@ -2,6 +2,7 @@ import { PrismaClient } from '@/prisma/generated/client';
 import { NotFoundError, BadRequestError, AuthorizationError } from '@/core/errors/AppError';
 import { IFileUploader } from '@/utils/IFileUploader';
 import { CreateMixTapeDTO, UpdateMixTapeDTO, ReorderMixTapesDTO } from './MixTapeDTO';
+import { isValidUuid } from '@/utils/uuid';
 
 export class MixTapeServices {
   constructor(
@@ -10,6 +11,9 @@ export class MixTapeServices {
   ) { }
 
   private async getTenantIdByUserId(userId: string): Promise<string> {
+    if (!isValidUuid(userId)) {
+      throw new AuthorizationError();
+    }
     const tenant = await this.prisma.tenant.findUnique({ where: { userId } });
     if (!tenant) {
       throw new AuthorizationError();
@@ -45,6 +49,9 @@ export class MixTapeServices {
   }
 
   async getTenantMixTapes(tenantId: string) {
+    if (!isValidUuid(tenantId)) {
+      return [];
+    }
     return this.prisma.mixTape.findMany({
       where: { tenantId },
       orderBy: { order: 'asc' },
@@ -73,6 +80,9 @@ export class MixTapeServices {
   }
 
   async updateMixTape(userId: string, id: string, data: UpdateMixTapeDTO, coverFile?: Express.Multer.File) {
+    if (!isValidUuid(id)) {
+      throw new NotFoundError('MixTape not found');
+    }
     const tenantId = await this.getTenantIdByUserId(userId);
     const existing = await this.prisma.mixTape.findFirst({
       where: { id, tenantId },
@@ -99,6 +109,9 @@ export class MixTapeServices {
   }
 
   async deleteMixTape(userId: string, id: string) {
+    if (!isValidUuid(id)) {
+      throw new NotFoundError('MixTape not found');
+    }
     const tenantId = await this.getTenantIdByUserId(userId);
     const existing = await this.prisma.mixTape.findFirst({
       where: { id, tenantId },
