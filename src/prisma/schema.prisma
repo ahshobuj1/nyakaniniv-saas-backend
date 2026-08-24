@@ -418,3 +418,14 @@ model LandingPageSocial {
 
   @@map("landing_page_socials")
 }
+
+model LandingPageSetting {
+  id            Int       @id @default(autoincrement())
+  headerLogoUrl String?   @map("header_logo_url") @db.VarChar(255)
+  footerLogoUrl String?   @map("footer_logo_url") @db.VarChar(255)
+  siteName      String?   @default("UpBeat Africa") @map("site_name") @db.VarChar(255)
+  updatedAt     DateTime? @default(now()) @updatedAt @map("updated_at")
+
+  @@map("landing_page_settings")
+}
+

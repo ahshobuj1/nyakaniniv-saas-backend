@@ -78,3 +78,28 @@ export const authorizeRole = (roles: string[]) => {
     next();
   };
 };
+
+/**
+ * Optional authentication middleware.
+ * If a valid token is present, attaches user to req.user.
+ * If not present or invalid, continues without setting req.user.
+ */
+export const optionalAuth = (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      if (token) {
+        const decoded = verifyToken(token);
+        req.user = decoded;
+      }
+    }
+  } catch {
+    // Token invalid or expired — ignore, proceed as unauthenticated
+  }
+  next();
+};

@@ -7,6 +7,9 @@ import { authenticateUser, authorizeRole } from "@/middleware/auth";
 import { UserRole } from "@/prisma/generated/client";
 import {
   createBookingSchema,
+  initiateBookingSchema,
+  verifyBookingOtpSchema,
+  resendBookingOtpSchema,
   updateBookingStatusSchema,
 } from "./BookingDTO";
 
@@ -32,7 +35,26 @@ export class BookingModule extends BaseModule {
   protected async setupRoutes(): Promise<void> {
     const controller = this.getController<BookingController>("BookingController");
 
-    // Public Route (Client submitting a booking request)
+    // Public Routes for Booking Client Verification & Submission
+    this.router.post(
+      "/initiate",
+      validateRequest(initiateBookingSchema),
+      controller.initiateBooking.bind(controller),
+    );
+
+    this.router.post(
+      "/verify-otp",
+      validateRequest(verifyBookingOtpSchema),
+      controller.verifyBookingOtp.bind(controller),
+    );
+
+    this.router.post(
+      "/resend-otp",
+      validateRequest(resendBookingOtpSchema),
+      controller.resendBookingOtp.bind(controller),
+    );
+
+    // Direct create route (fallback)
     this.router.post(
       "/",
       validateRequest(createBookingSchema),

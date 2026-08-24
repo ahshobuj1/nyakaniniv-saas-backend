@@ -5,12 +5,13 @@ export class LandingPageServices {
   constructor(private prisma: PrismaClient, private fileUploader: IFileUploader) {}
 
   async getLandingPageContent() {
-    const [heroes, steps, services, faqs, socials] = await Promise.all([
+    const [heroes, steps, services, faqs, socials, settings] = await Promise.all([
       this.prisma.landingPageHero.findMany({ where: { isActive: true } }),
       this.prisma.landingPageStep.findMany({ orderBy: { order: 'asc' } }),
       this.prisma.landingPageService.findMany({ orderBy: { order: 'asc' } }),
       this.prisma.landingPageFaq.findMany({ orderBy: { order: 'asc' } }),
       this.prisma.landingPageSocial.findMany({ orderBy: { order: 'asc' } }),
+      (this.prisma as any).landingPageSetting?.findFirst?.().catch(() => null) || null,
     ]);
 
     return {
@@ -19,6 +20,7 @@ export class LandingPageServices {
       services,
       faqs,
       socials,
+      settings: settings || null,
     };
   }
 
@@ -183,4 +185,41 @@ export class LandingPageServices {
     await this.prisma.landingPageSocial.delete({ where: { id } });
     return { success: true };
   }
+
+  // --- Settings / Branding (Logos) ---
+  async updateSettings(data: any, files?: { [fieldname: string]: Express.Multer.File[] }) {
+    let headerLogoUrl = data.defaultHeaderLogoUrl || undefined;
+    let footerLogoUrl = data.defaultFooterLogoUrl || undefined;
+
+    if (files) {
+      if (files['headerLogo'] && files['headerLogo'][0]) {
+        headerLogoUrl = await this.fileUploader.upload(files['headerLogo'][0]);
+      }
+      if (files['footerLogo'] && files['footerLogo'][0]) {
+        footerLogoUrl = await this.fileUploader.upload(files['footerLogo'][0]);
+      }
+    }
+
+    const existing = await (this.prisma as any).landingPageSetting.findFirst().catch(() => null);
+    const updateData: any = {};
+    if (data.siteName !== undefined) updateData.siteName = data.siteName;
+    if (headerLogoUrl !== undefined) updateData.headerLogoUrl = headerLogoUrl;
+    if (footerLogoUrl !== undefined) updateData.footerLogoUrl = footerLogoUrl;
+
+    if (existing) {
+      return (this.prisma as any).landingPageSetting.update({
+        where: { id: existing.id },
+        data: updateData,
+      });
+    } else {
+      return (this.prisma as any).landingPageSetting.create({
+        data: {
+          siteName: data.siteName || 'UpBeat Africa',
+          headerLogoUrl: headerLogoUrl || null,
+          footerLogoUrl: footerLogoUrl || null,
+        },
+      });
+    }
+  }
 }
+

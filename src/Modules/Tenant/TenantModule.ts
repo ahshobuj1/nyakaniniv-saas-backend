@@ -62,7 +62,7 @@ export class TenantModule extends BaseModule {
     this.router.get(
       '/',
       authenticateUser,
-      authorizeRole([UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.DJ]),
+      authorizeRole([UserRole.SUPER_ADMIN, UserRole.ADMIN]),
       controller.getAllTenants.bind(controller),
     );
 

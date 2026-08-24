@@ -138,7 +138,16 @@ export class AnalyticsServices {
         where: { tenantId: tenant.id },
         take: 10,
         orderBy: { createdAt: 'desc' },
-        include: { client: true, invoice: true }
+        include: { 
+          client: true, 
+          invoice: {
+            include: {
+              transactions: {
+                orderBy: { createdAt: 'desc' }
+              }
+            }
+          } 
+        }
       })
     ]);
 

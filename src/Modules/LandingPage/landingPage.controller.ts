@@ -107,4 +107,12 @@ export class LandingPageController extends BaseController {
     await this.landingPageService.deleteSocial(Number(id));
     this.sendResponse(req, res, 'Social link deleted successfully', undefined, null);
   }
+
+  // --- Settings / Branding (Logos) ---
+  public async updateSettings(req: Request, res: Response): Promise<void> {
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+    const settings = await this.landingPageService.updateSettings(req.body, files);
+    this.sendResponse(req, res, 'Settings updated successfully', undefined, settings);
+  }
 }
+

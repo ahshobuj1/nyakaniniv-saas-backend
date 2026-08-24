@@ -60,11 +60,11 @@ export class ThemeModule extends BaseModule {
       next();
     };
 
-    // Admin Routes
+    // Admin Routes (Admin & Super Admin only)
     this.router.post(
       "/",
       authenticateUser,
-      authorizeRole([UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.DJ]),
+      authorizeRole([UserRole.SUPER_ADMIN, UserRole.ADMIN]),
       upload.single('previewImage'),
       parseFormDataJson,
       validateRequest(createThemeSchema),
@@ -74,7 +74,7 @@ export class ThemeModule extends BaseModule {
     this.router.patch(
       "/:id",
       authenticateUser,
-      authorizeRole([UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.DJ]),
+      authorizeRole([UserRole.SUPER_ADMIN, UserRole.ADMIN]),
       upload.single('previewImage'),
       parseFormDataJson,
       validateRequest(updateThemeSchema),
@@ -84,7 +84,7 @@ export class ThemeModule extends BaseModule {
     this.router.delete(
       "/:id",
       authenticateUser,
-      authorizeRole([UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.DJ]),
+      authorizeRole([UserRole.SUPER_ADMIN, UserRole.ADMIN]),
       controller.deleteTheme.bind(controller),
     );
   }

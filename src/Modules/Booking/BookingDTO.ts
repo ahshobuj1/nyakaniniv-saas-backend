@@ -14,6 +14,21 @@ export const createBookingSchema = {
   }),
 };
 
+export const initiateBookingSchema = createBookingSchema;
+
+export const verifyBookingOtpSchema = {
+  body: z.object({
+    verificationToken: z.string().min(10, "Invalid verification token"),
+    otp: z.string().length(6, "Verification code must be 6 digits"),
+  }),
+};
+
+export const resendBookingOtpSchema = {
+  body: z.object({
+    verificationToken: z.string().min(10, "Invalid verification token"),
+  }),
+};
+
 export const updateBookingStatusSchema = {
   body: z.object({
     status: z.nativeEnum(BookingStatus),
@@ -25,4 +40,7 @@ export const updateBookingStatusSchema = {
 };
 
 export type CreateBookingDTO = z.infer<typeof createBookingSchema.body>;
+export type InitiateBookingDTO = CreateBookingDTO;
+export type VerifyBookingOtpDTO = z.infer<typeof verifyBookingOtpSchema.body>;
+export type ResendBookingOtpDTO = z.infer<typeof resendBookingOtpSchema.body>;
 export type UpdateBookingStatusDTO = z.infer<typeof updateBookingStatusSchema.body>;

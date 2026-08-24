@@ -60,6 +60,21 @@ export class EmailTemplates {
     return this.getHtmlShell("Verify your Email Address", content);
   }
 
+  // Booking Client Verification OTP
+  static getBookingVerificationOtpTemplate(clientName: string, otp: string, djName: string, eventType: string): string {
+    const content = `
+      <p>Hello <strong>${clientName}</strong>,</p>
+      <p>Thank you for initiating a booking request for <strong>${djName}</strong> (${eventType}).</p>
+      <p>To verify your email address and confirm your booking request, please enter the 6-digit verification code below:</p>
+      <div style="background-color: #f3f4f6; padding: 18px; text-align: center; border-radius: 8px; margin: 25px 0; border: 1px dashed #dc2626;">
+        <span style="color: #dc2626; font-size: 34px; font-weight: 800; letter-spacing: 6px;">${otp}</span>
+      </div>
+      <p style="font-size: 14px; color: #4b5563;">This code is valid for <strong>10 minutes</strong>. Once verified, your booking request will be officially submitted to ${djName}.</p>
+      <p style="font-size: 13px; color: #9ca3af; margin-top: 20px;">If you did not initiate this booking, please disregard this email.</p>
+    `;
+    return this.getHtmlShell("Verify Your DJ Booking Request - UpBeat Entertainment Africa", content);
+  }
+
   // Case 2: Successful Verification (Welcome Email)
   static getWelcomeTemplate(name: string): string {
     const content = `

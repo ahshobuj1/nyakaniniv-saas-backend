@@ -1,6 +1,7 @@
 import { PrismaClient } from '@/prisma/generated/client';
 import { NotFoundError, BadRequestError } from '@/core/errors/AppError';
 import { UpdateProfileDTO, UpdateUserRoleDTO, UpdateUserStatusDTO } from './UserDTO';
+import { isValidUuid } from '@/utils/uuid';
 
 export class UserServices {
   constructor(private prisma: PrismaClient) {}
@@ -34,6 +35,7 @@ export class UserServices {
           firstName: true,
           lastName: true,
           role: true,
+          profileImg: true,
           isVerified: true,
           createdAt: true,
         },
@@ -57,6 +59,10 @@ export class UserServices {
   }
 
   async getUserProfile(userId: string) {
+    if (!isValidUuid(userId)) {
+      throw new NotFoundError('User not found');
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -86,6 +92,10 @@ export class UserServices {
   }
 
   async updateProfile(userId: string, data: UpdateProfileDTO) {
+    if (!isValidUuid(userId)) {
+      throw new NotFoundError('User not found');
+    }
+
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       throw new NotFoundError('User not found');
@@ -110,6 +120,10 @@ export class UserServices {
   }
 
   async updateUserStatus(userId: string, data: UpdateUserStatusDTO) {
+    if (!isValidUuid(userId)) {
+      throw new NotFoundError('User not found');
+    }
+
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       throw new NotFoundError('User not found');
@@ -125,6 +139,10 @@ export class UserServices {
   }
 
   async updateUserRole(userId: string, data: UpdateUserRoleDTO) {
+    if (!isValidUuid(userId)) {
+      throw new NotFoundError('User not found');
+    }
+
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       throw new NotFoundError('User not found');
@@ -148,6 +166,10 @@ export class UserServices {
   }
 
   async deleteUser(userId: string) {
+    if (!isValidUuid(userId)) {
+      throw new NotFoundError('User not found');
+    }
+
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       throw new NotFoundError('User not found');

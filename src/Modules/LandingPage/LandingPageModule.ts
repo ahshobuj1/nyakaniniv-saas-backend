@@ -66,5 +66,9 @@ export class LandingPageModule extends BaseModule {
     this.router.post("/social", ...adminMiddleware, controller.createSocial.bind(controller));
     this.router.patch("/social/:id", ...adminMiddleware, controller.updateSocial.bind(controller));
     this.router.delete("/social/:id", ...adminMiddleware, controller.deleteSocial.bind(controller));
+
+    // --- Settings / Branding (Logos) ---
+    this.router.patch("/settings", ...adminMiddleware, upload.fields([{name: 'headerLogo', maxCount: 1}, {name: 'footerLogo', maxCount: 1}]), controller.updateSettings.bind(controller));
+    this.router.post("/settings", ...adminMiddleware, upload.fields([{name: 'headerLogo', maxCount: 1}, {name: 'footerLogo', maxCount: 1}]), controller.updateSettings.bind(controller));
   }
 }
