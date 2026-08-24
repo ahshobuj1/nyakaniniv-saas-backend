@@ -77,23 +77,11 @@ export class ThemeServices {
       throw new NotFoundError('Theme not found');
     }
 
-    if (data.slug && data.slug !== theme.slug) {
-      const existingTheme = await this.prisma.theme.findFirst({
-        where: { slug: data.slug },
-      });
-
-      if (existingTheme) {
-        throw new ConflictError('Theme with this slug already exists');
-      }
-    }
-
     const updatedTheme = await this.prisma.theme.update({
       where: { id },
       data: {
-        name: data.name,
-        slug: data.slug,
-        previewImageUrl: data.previewImageUrl,
-        defaultConfig: data.defaultConfig as any,
+        ...(data.name !== undefined && { name: data.name }),
+        ...(data.previewImageUrl !== undefined && { previewImageUrl: data.previewImageUrl }),
       },
     });
 

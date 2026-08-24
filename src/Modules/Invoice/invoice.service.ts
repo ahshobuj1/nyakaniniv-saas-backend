@@ -2,6 +2,7 @@ import { PrismaClient, BookingStatus } from '@/prisma/generated/client';
 import { NotFoundError, BadRequestError, AuthorizationError } from '@/core/errors/AppError';
 import { PayInvoiceDTO } from './InvoiceDTO';
 import { QueryBuilder } from '@/utils/QueryBuilder';
+import { isValidUuid } from '@/utils/uuid';
 import PDFDocument from 'pdfkit';
 import path from 'path';
 import fs from 'fs';
@@ -10,6 +11,9 @@ export class InvoiceServices {
   constructor(private prisma: PrismaClient) {}
 
   private async getTenantIdByUserId(userId: string): Promise<string> {
+    if (!isValidUuid(userId)) {
+      throw new AuthorizationError();
+    }
     const tenant = await this.prisma.tenant.findUnique({ where: { userId } });
     if (!tenant) {
       throw new AuthorizationError();
@@ -31,9 +35,19 @@ export class InvoiceServices {
       ]
     };
 
-    const [total, txs] = await Promise.all([
-      this.prisma.transaction.count({ where: whereClause }),
-      this.prisma.transaction.findMany({
+    const status = query?.status as string;
+    if (status && status !== 'all') {
+      whereClause.status = status.toUpperCase();
+    }
+
+    const type = query?.type as string;
+    if (type && type !== 'all') {
+      whereClause.type = type.toUpperCase();
+    }
+
+    const [total, invoiceRecords] = await Promise.all([
+      this.prisma.invoice.count({ where: whereClause }),
+      this.prisma.invoice.findMany({
         where: whereClause,
         skip,
         take: limit,
@@ -41,31 +55,34 @@ export class InvoiceServices {
         include: {
           user: { select: { email: true, firstName: true, lastName: true } },
           tenant: { select: { subdomain: true, stageName: true } },
-          invoice: {
-            include: {
-              plan: { select: { name: true } },
-              booking: { include: { client: { select: { name: true, email: true } } } }
-            }
+          plan: { select: { name: true } },
+          booking: { include: { client: { select: { name: true, email: true } } } },
+          transactions: {
+            orderBy: { createdAt: 'desc' },
+            take: 1
           }
         }
       })
     ]);
 
-    const invoices = txs.map(tx => ({
-      id: tx.invoice?.id || tx.id,
-      transactionId: tx.id,
-      amount: Number(tx.amount),
-      status: tx.invoice?.status || (tx.status === 'SUCCESS' ? 'PAID' : tx.status),
-      method: tx.channel,
-      gateway: tx.gateway,
-      type: tx.invoice?.type || 'UNKNOWN',
-      createdAt: tx.createdAt,
-      user: tx.user ? { email: tx.user.email, firstName: tx.user.firstName, lastName: tx.user.lastName } : 
-            tx.invoice?.booking?.client ? { email: tx.invoice.booking.client.email, firstName: tx.invoice.booking.client.name, lastName: '' } : null,
-      plan: tx.invoice?.plan ? { name: tx.invoice.plan.name } : null,
-      tenant: tx.tenant ? { subdomain: tx.tenant.subdomain, stageName: tx.tenant.stageName } : null,
-      booking: tx.invoice?.booking || null
-    }));
+    const invoices = invoiceRecords.map(inv => {
+      const latestTx = inv.transactions[0];
+      return {
+        id: inv.id,
+        transactionId: latestTx?.id || inv.id,
+        amount: Number(inv.amount),
+        status: inv.status,
+        method: latestTx?.channel || 'UNKNOWN',
+        gateway: latestTx?.gateway || null,
+        type: inv.type || 'UNKNOWN',
+        createdAt: inv.createdAt,
+        user: inv.user ? { email: inv.user.email, firstName: inv.user.firstName, lastName: inv.user.lastName } : 
+              inv.booking?.client ? { email: inv.booking.client.email, firstName: inv.booking.client.name, lastName: '' } : null,
+        plan: inv.plan ? { name: inv.plan.name } : null,
+        tenant: inv.tenant ? { subdomain: inv.tenant.subdomain, stageName: inv.tenant.stageName } : null,
+        booking: inv.booking || null
+      };
+    });
 
     const totalPages = Math.ceil(total / limit);
 
@@ -76,7 +93,7 @@ export class InvoiceServices {
   }
 
   async getAllInvoices(query: Record<string, unknown> = {}) {
-    const txQuery = new QueryBuilder(this.prisma.transaction, query)
+    const invQuery = new QueryBuilder(this.prisma.invoice, query)
       .search(['id'])
       .filter()
       .sort()
@@ -85,64 +102,81 @@ export class InvoiceServices {
     // 1. Complex Search
     const searchTerm = (query?.searchTerm as string || query?.search as string)?.toLowerCase();
     if (searchTerm) {
-      txQuery.prismaArgs.where.OR = [
+      invQuery.prismaArgs.where.OR = [
         { id: { contains: searchTerm, mode: 'insensitive' } },
         { user: { email: { contains: searchTerm, mode: 'insensitive' } } },
-        { invoice: { booking: { client: { email: { contains: searchTerm, mode: 'insensitive' } } } } }
+        { booking: { client: { email: { contains: searchTerm, mode: 'insensitive' } } } },
+        { booking: { client: { name: { contains: searchTerm, mode: 'insensitive' } } } },
       ];
     }
 
     // 2. Filter by status
     const status = query?.status as string || query?.paymentStatus as string;
     if (status && status !== 'all') {
-      txQuery.prismaArgs.where.status = status.toUpperCase();
+      invQuery.prismaArgs.where.status = status.toUpperCase();
     }
 
-    // 3. Includes
-    txQuery.prismaArgs.include = {
+    // 3. Filter by invoice type (SUBSCRIPTION or BOOKING)
+    const invoiceType = query?.type as string;
+    if (invoiceType && invoiceType !== 'all') {
+      invQuery.prismaArgs.where.type = invoiceType.toUpperCase();
+    }
+
+    // 4. Includes
+    invQuery.prismaArgs.include = {
       user: { select: { email: true, firstName: true, lastName: true } },
       tenant: { select: { subdomain: true, stageName: true } },
-      invoice: {
-        include: {
-          plan: { select: { name: true } },
-          booking: { include: { client: { select: { name: true, email: true } } } }
-        }
+      plan: { select: { name: true } },
+      booking: { include: { client: { select: { name: true, email: true } } } },
+      transactions: {
+        orderBy: { createdAt: 'desc' },
+        take: 1
       }
     };
 
-    // 4. Cleanup query builder filter artifacts
-    delete txQuery.prismaArgs.where.search;
-    delete txQuery.prismaArgs.where.sortBy;
-    delete txQuery.prismaArgs.where.sortOrder;
-    delete txQuery.prismaArgs.where.paymentStatus;
+    // 5. Cleanup query builder filter artifacts
+    delete invQuery.prismaArgs.where.search;
+    delete invQuery.prismaArgs.where.searchTerm;
+    delete invQuery.prismaArgs.where.sortBy;
+    delete invQuery.prismaArgs.where.sortOrder;
+    delete invQuery.prismaArgs.where.paymentStatus;
 
-    const transactionsData = await txQuery.model.findMany(txQuery.prismaArgs);
-    const meta = await txQuery.countTotal();
+    const invoicesData = await invQuery.model.findMany(invQuery.prismaArgs);
+    const meta = await invQuery.countTotal();
 
-    const invoices = transactionsData.map((tx: any) => ({
-      id: tx.invoice?.id || tx.id,
-      transactionId: tx.id,
-      amount: Number(tx.amount),
-      status: tx.invoice?.status || (tx.status === 'SUCCESS' ? 'PAID' : tx.status),
-      method: tx.channel,
-      gateway: tx.gateway,
-      type: tx.invoice?.type || 'UNKNOWN',
-      createdAt: tx.createdAt,
-      user: tx.user ? { email: tx.user.email, firstName: tx.user.firstName, lastName: tx.user.lastName } : 
-            tx.invoice?.booking?.client ? { email: tx.invoice.booking.client.email, firstName: tx.invoice.booking.client.name, lastName: '' } : null,
-      plan: tx.invoice?.plan ? { name: tx.invoice.plan.name } : null,
-      tenant: tx.tenant ? { subdomain: tx.tenant.subdomain, stageName: tx.tenant.stageName } : null,
-      booking: tx.invoice?.booking || null
-    }));
+    const invoices = invoicesData.map((inv: any) => {
+      const latestTx = inv.transactions?.[0];
+      return {
+        id: inv.id,
+        transactionId: latestTx?.id || inv.id,
+        amount: Number(inv.amount),
+        status: inv.status,
+        method: latestTx?.channel || (inv.status === 'PAID' ? 'ONLINE' : 'PENDING'),
+        gateway: latestTx?.gateway || null,
+        type: inv.type || 'UNKNOWN',
+        createdAt: inv.createdAt,
+        user: inv.user ? { email: inv.user.email, firstName: inv.user.firstName, lastName: inv.user.lastName } : 
+              inv.booking?.client ? { email: inv.booking.client.email, firstName: inv.booking.client.name, lastName: '' } : null,
+        plan: inv.plan ? { name: inv.plan.name } : null,
+        tenant: inv.tenant ? { subdomain: inv.tenant.subdomain, stageName: inv.tenant.stageName } : null,
+        booking: inv.booking || null
+      };
+    });
 
     return { invoices, meta };
   }
 
   async getInvoiceById(userId: string, id: string) {
+    if (!isValidUuid(id)) {
+      throw new NotFoundError('Invoice not found');
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
     const tenantId = await this.getTenantIdByUserId(userId).catch(() => null);
 
     const invoice = await this.prisma.invoice.findFirst({
-      where: {
+      where: isAdmin ? { id } : {
         id,
         OR: [
           { userId },
@@ -197,6 +231,10 @@ export class InvoiceServices {
   }
 
   async markAsPaid(userId: string, id: string) {
+    if (!isValidUuid(id)) {
+      throw new NotFoundError('Invoice not found');
+    }
+
     const tenantId = await this.getTenantIdByUserId(userId);
     const invoice = await this.prisma.invoice.findFirst({
       where: { id, tenantId },
@@ -242,6 +280,10 @@ export class InvoiceServices {
   }
 
   async payInvoice(id: string, data: PayInvoiceDTO) {
+    if (!isValidUuid(id)) {
+      throw new NotFoundError('Invoice not found');
+    }
+
     const invoice = await this.prisma.invoice.findUnique({
       where: { id },
       include: { booking: { include: { client: true, tenant: true } }, tenant: true }
@@ -283,6 +325,10 @@ export class InvoiceServices {
   }
 
   async generateInvoicePdf(id: string): Promise<Buffer> {
+    if (!isValidUuid(id)) {
+      throw new NotFoundError('Invoice not found');
+    }
+
     const invoice = await this.prisma.invoice.findUnique({
       where: { id },
       include: {

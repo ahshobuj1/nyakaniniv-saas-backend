@@ -3,7 +3,7 @@ import { AppLogger } from "@/core/logging/logger";
 import { SupportTicketServices } from "./supportTicket.service";
 import { SupportTicketController } from "./supportTicket.controller";
 import { validateRequest } from "@/middleware/validation";
-import { authenticateUser, authorizeRole } from "@/middleware/auth";
+import { authenticateUser, authorizeRole, optionalAuth } from "@/middleware/auth";
 import { UserRole } from "@/prisma/generated/client";
 import {
   createSupportTicketSchema,
@@ -34,10 +34,10 @@ export class SupportTicketModule extends BaseModule {
   protected async setupRoutes(): Promise<void> {
     const controller = this.getController<SupportTicketController>("SupportTicketController");
 
-    // We can use a try-catch approach for optional auth, or just a custom middleware
-    // For now, let's keep it entirely public to submit tickets
+    // Public route - optional auth to capture userId if logged in
     this.router.post(
       "/",
+      optionalAuth,
       validateRequest(createSupportTicketSchema),
       controller.createTicket.bind(controller),
     );

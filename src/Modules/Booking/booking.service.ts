@@ -11,6 +11,17 @@ import { QueryBuilder } from '@/utils/QueryBuilder';
 import { IEmailProvider } from '@/providers/EmailProvider';
 import { EmailTemplates } from '@/utils/EmailTemplates';
 import { PaymentProviderFactory } from '@/providers/PaymentProvider/PaymentProviderFactory';
+import { isValidUuid } from '@/utils/uuid';
+import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
+
+const JWT_SECRET = config.security.jwt.secret || 'default_secret_key';
+
+interface BookingVerificationPayload {
+  bookingData: CreateBookingDTO;
+  otpHash: string;
+  stageName: string;
+}
 
 export class BookingServices {
   constructor(
@@ -18,7 +29,115 @@ export class BookingServices {
     private emailProvider: IEmailProvider
   ) { }
 
+  async initiateBooking(data: CreateBookingDTO) {
+    if (!isValidUuid(data.tenantId)) {
+      throw new NotFoundError('Tenant not found');
+    }
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: data.tenantId },
+      include: { user: true },
+    });
+    if (!tenant) {
+      throw new NotFoundError('DJ Profile not found');
+    }
+
+    const stageName = tenant.stageName || tenant.user?.firstName || 'DJ';
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
+
+    const verificationToken = jwt.sign(
+      {
+        bookingData: data,
+        otpHash,
+        stageName,
+      },
+      JWT_SECRET,
+      { expiresIn: '10m' }
+    );
+
+    // Send OTP to client
+    await this.emailProvider.sendEmail(
+      data.clientEmail,
+      `Verify Your DJ Booking Request (${otp}) - UpBeat Entertainment Africa`,
+      EmailTemplates.getBookingVerificationOtpTemplate(
+        data.clientName,
+        otp,
+        stageName,
+        data.eventType
+      )
+    );
+
+    return {
+      verificationToken,
+      clientEmail: data.clientEmail,
+      expiresIn: 600,
+    };
+  }
+
+  async verifyBookingOtp(verificationToken: string, otp: string) {
+    let decoded: BookingVerificationPayload;
+    try {
+      decoded = jwt.verify(verificationToken, JWT_SECRET) as BookingVerificationPayload;
+    } catch {
+      throw new BadRequestError('Verification code has expired or is invalid. Please request a new code.');
+    }
+
+    const submittedHash = crypto.createHash('sha256').update(otp.trim()).digest('hex');
+    if (submittedHash !== decoded.otpHash) {
+      throw new BadRequestError('Invalid 6-digit verification code. Please check your email and try again.');
+    }
+
+    // OTP is valid -> proceed to create actual booking in database
+    return this.createBooking(decoded.bookingData);
+  }
+
+  async resendBookingOtp(verificationToken: string) {
+    let decoded: BookingVerificationPayload;
+    try {
+      decoded = jwt.decode(verificationToken) as BookingVerificationPayload;
+      if (!decoded || !decoded.bookingData) {
+        throw new Error('Invalid token');
+      }
+    } catch {
+      throw new BadRequestError('Invalid verification session. Please submit your booking again.');
+    }
+
+    const stageName = decoded.stageName || 'DJ';
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
+
+    const newVerificationToken = jwt.sign(
+      {
+        bookingData: decoded.bookingData,
+        otpHash,
+        stageName,
+      },
+      JWT_SECRET,
+      { expiresIn: '10m' }
+    );
+
+    await this.emailProvider.sendEmail(
+      decoded.bookingData.clientEmail,
+      `Verify Your DJ Booking Request (${otp}) - UpBeat Entertainment Africa`,
+      EmailTemplates.getBookingVerificationOtpTemplate(
+        decoded.bookingData.clientName,
+        otp,
+        stageName,
+        decoded.bookingData.eventType
+      )
+    );
+
+    return {
+      verificationToken: newVerificationToken,
+      clientEmail: decoded.bookingData.clientEmail,
+      expiresIn: 600,
+    };
+  }
+
   private async getTenantIdByUserId(userId: string): Promise<string> {
+    if (!isValidUuid(userId)) {
+      throw new AuthorizationError();
+    }
     const tenant = await this.prisma.tenant.findUnique({ where: { userId } });
     if (!tenant) {
       throw new AuthorizationError();
@@ -27,6 +146,9 @@ export class BookingServices {
   }
 
   async createBooking(data: CreateBookingDTO) {
+    if (!isValidUuid(data.tenantId)) {
+      throw new NotFoundError('Tenant not found');
+    }
     const tenant = await this.prisma.tenant.findUnique({ 
       where: { id: data.tenantId },
       include: { user: true }
@@ -95,23 +217,45 @@ export class BookingServices {
     const tenantId = await this.getTenantIdByUserId(userId);
 
     const bookingQuery = new QueryBuilder(this.prisma.booking, query)
-      .search(['clientName', 'clientEmail', 'status', 'eventType'])
+      .search(['eventType', 'address'])
       .filter()
       .sort()
-      .pagination()
-      .fields();
+      .pagination();
 
     bookingQuery.prismaArgs.where = {
       ...bookingQuery.prismaArgs.where,
       tenantId,
     };
 
-    if (!bookingQuery.prismaArgs.select) {
-      bookingQuery.prismaArgs.include = {
-        invoice: { include: { transactions: true } },
-        client: true,
-      };
-    }
+    bookingQuery.prismaArgs.include = {
+      client: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+        }
+      },
+      invoice: {
+        select: {
+          id: true,
+          amount: true,
+          status: true,
+          transactions: {
+            select: {
+              id: true,
+              amount: true,
+              gateway: true,
+              channel: true,
+              status: true,
+              metadata: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: 'desc' },
+          }
+        }
+      }
+    };
 
     const bookings = await bookingQuery.model.findMany(bookingQuery.prismaArgs);
     const meta = await bookingQuery.countTotal();
@@ -120,10 +264,22 @@ export class BookingServices {
   }
 
   async getBookingById(userId: string, id: string) {
+    if (!isValidUuid(id)) {
+      throw new NotFoundError('Booking not found');
+    }
     const tenantId = await this.getTenantIdByUserId(userId);
     const booking = await this.prisma.booking.findFirst({
       where: { id, tenantId },
-      include: { invoice: { include: { transactions: true } }, client: true },
+      include: { 
+        invoice: { 
+          include: { 
+            transactions: {
+              orderBy: { createdAt: 'desc' }
+            } 
+          } 
+        }, 
+        client: true 
+      },
     });
 
     if (!booking) {
@@ -133,6 +289,9 @@ export class BookingServices {
   }
 
   async updateBookingStatus(userId: string, id: string, data: UpdateBookingStatusDTO) {
+    if (!isValidUuid(id)) {
+      throw new NotFoundError('Booking not found');
+    }
     const tenantId = await this.getTenantIdByUserId(userId);
     const booking = await this.prisma.booking.findFirst({
       where: { id, tenantId },
@@ -159,13 +318,18 @@ export class BookingServices {
           },
         });
 
-        // Create Payment
-        const invoice = await tx.invoice.create({
-          data: {
+        // Create or update invoice for this booking
+        const invoice = await tx.invoice.upsert({
+          where: { bookingId: id },
+          update: {
+            amount: data.totalAmount || 0,
+            status: InvoiceStatus.UNPAID,
+            tenantId,
+          },
+          create: {
             tenantId,
             bookingId: id,
             amount: data.totalAmount || 0,
-            // method is not set initially; it will be set by the respective webhook (Stripe/Paystack) upon payment
             status: InvoiceStatus.UNPAID,
             type: InvoiceType.BOOKING,
           }
@@ -228,6 +392,9 @@ export class BookingServices {
   }
 
   async getBookingPaymentLink(id: string) {
+    if (!isValidUuid(id)) {
+      throw new NotFoundError('Booking not found');
+    }
     const booking = await this.prisma.booking.findUnique({
       where: { id },
       include: { tenant: true, invoice: true, client: true }
@@ -316,7 +483,12 @@ export class BookingServices {
       }
     }
 
-    return { success: true, message: 'Cash payment requested successfully' };
+    return { 
+      success: true, 
+      message: 'Cash payment requested successfully',
+      subdomain: booking.tenant?.subdomain || 'demo',
+      stageName: booking.tenant?.stageName || 'DJ'
+    };
   }
 
   async resendPaymentReminder(userId: string, id: string) {
@@ -367,7 +539,6 @@ export class BookingServices {
         where: { id: cashTx.id },
         data: { status: 'FAILED' }
       });
-      // Optionally notify client to pay online
       return { success: true, message: 'Cash request rejected' };
     } else {
       await this.prisma.transaction.update({
@@ -389,6 +560,17 @@ export class BookingServices {
       throw new NotFoundError('Booking or payment not found');
     }
 
+    if (booking.invoice.status === InvoiceStatus.PAID) {
+      // If already paid via Paystack or another gateway, just ensure booking is completed
+      if (booking.status !== BookingStatus.completed) {
+        await this.prisma.booking.update({
+          where: { id: booking.id },
+          data: { status: BookingStatus.completed }
+        });
+      }
+      return { success: true, message: 'Invoice was already paid online and booking is marked as completed' };
+    }
+
     const cashTx = booking.invoice.transactions.find(tx => tx.gateway === 'CASH' && (tx.status === 'PENDING' || tx.status === 'SUCCESS'));
     if (!cashTx) {
       throw new BadRequestError('No valid cash transaction found');
@@ -402,9 +584,13 @@ export class BookingServices {
       this.prisma.invoice.update({
         where: { id: booking.invoice.id },
         data: { status: InvoiceStatus.PAID }
+      }),
+      this.prisma.booking.update({
+        where: { id: booking.id },
+        data: { status: BookingStatus.completed }
       })
     ]);
 
-    return { success: true, message: 'Cash payment confirmed and invoice marked as paid' };
+    return { success: true, message: 'Cash payment confirmed, invoice marked as paid, and booking completed' };
   }
 }

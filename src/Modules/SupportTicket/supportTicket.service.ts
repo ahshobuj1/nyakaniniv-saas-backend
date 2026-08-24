@@ -6,6 +6,8 @@ import { IEmailProvider } from '@/providers/EmailProvider';
 import { EmailTemplates } from '@/utils/EmailTemplates';
 import { config } from '@/core/config';
 
+import { isValidUuid } from '@/utils/uuid';
+
 export class SupportTicketServices {
   constructor(
     private prisma: PrismaClient,
@@ -13,6 +15,9 @@ export class SupportTicketServices {
   ) { }
 
   async createTicket(data: CreateSupportTicketDTO, userId?: string) {
+    if (userId && !isValidUuid(userId)) {
+      userId = undefined;
+    }
     const ticket = await this.prisma.supportTicket.create({
       data: {
         userId, // optional
@@ -45,7 +50,7 @@ export class SupportTicketServices {
 
   async getAllTickets(query: Record<string, unknown> = {}) {
     const ticketQuery = new QueryBuilder(this.prisma.supportTicket, query)
-      .search(['fullName', 'email', 'subject', 'issue', 'status'])
+      .search(['fullName', 'email', 'subject', 'issue'])
       .filter()
       .sort()
       .pagination()
@@ -64,8 +69,11 @@ export class SupportTicketServices {
   }
 
   async getMyTickets(userId: string, query: Record<string, unknown> = {}) {
+    if (!isValidUuid(userId)) {
+      return { tickets: [], meta: { total: 0, page: 1, limit: 10, totalPages: 0, hasNext: false, hasPrevious: false } };
+    }
     const ticketQuery = new QueryBuilder(this.prisma.supportTicket, query)
-      .search(['fullName', 'email', 'subject', 'issue', 'status'])
+      .search(['fullName', 'email', 'subject', 'issue'])
       .filter()
       .sort()
       .pagination()
@@ -83,6 +91,9 @@ export class SupportTicketServices {
   }
 
   async updateTicketStatus(id: string, data: UpdateTicketStatusDTO) {
+    if (!isValidUuid(id)) {
+      throw new NotFoundError('Ticket not found');
+    }
     const existing = await this.prisma.supportTicket.findUnique({
       where: { id },
     });

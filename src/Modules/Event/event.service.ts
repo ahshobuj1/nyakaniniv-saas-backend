@@ -4,6 +4,8 @@ import { NotFoundError, ConflictError } from '@/core/errors/AppError';
 import { CreateEventDTO, UpdateEventDTO } from './EventDTO';
 import { QueryBuilder } from '@/utils/QueryBuilder';
 
+import { isValidUuid } from '@/utils/uuid';
+
 export class EventServices {
   private logger = new AppLogger('EventServices');
 
@@ -61,6 +63,10 @@ export class EventServices {
   public async getTenantEvents(tenantId: string, query: Record<string, unknown>) {
     this.logger.info('Fetching tenant events', { tenantId, query });
 
+    if (!isValidUuid(tenantId)) {
+      return { events: [], meta: { total: 0, page: 1, limit: 10, totalPages: 0, hasNext: false, hasPrevious: false } };
+    }
+
     // Ensure we only fetch events for this tenant
     const safeQuery = { ...query, tenantId };
 
@@ -83,6 +89,10 @@ export class EventServices {
   public async getEventById(id: string) {
     this.logger.info('Fetching event by ID', { id });
 
+    if (!isValidUuid(id)) {
+      throw new NotFoundError('Event not found');
+    }
+
     const event = await this.prisma.event.findUnique({
       where: { id },
     });
@@ -96,6 +106,10 @@ export class EventServices {
 
   public async updateEvent(userId: string, id: string, data: UpdateEventDTO) {
     this.logger.info('Updating event', { id, userId });
+
+    if (!isValidUuid(id)) {
+      throw new NotFoundError('Event not found');
+    }
 
     const tenant = await this.prisma.tenant.findUnique({
       where: { userId },
@@ -138,6 +152,10 @@ export class EventServices {
 
   public async deleteEvent(userId: string, id: string) {
     this.logger.info('Deleting event', { id, userId });
+
+    if (!isValidUuid(id)) {
+      throw new NotFoundError('Event not found');
+    }
 
     const tenant = await this.prisma.tenant.findUnique({
       where: { userId },
