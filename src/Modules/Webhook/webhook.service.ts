@@ -1,263 +1,308 @@
-import { PrismaClient, BookingStatus, NotificationType, InvoiceStatus, InvoiceType } from '@/prisma/generated/client';
+import {
+  PrismaClient,
+  BookingStatus,
+  NotificationType,
+  InvoiceStatus,
+  InvoiceType,
+  PaymentGateway,
+  PaymentChannel,
+  TransactionStatus,
+  SubscriptionStatus,
+} from '@/prisma/generated/client';
 import { BadRequestError } from '@/core/errors/AppError';
-import Stripe from 'stripe';
 import { IEmailProvider } from '@/providers/EmailProvider';
 import { EmailTemplates } from '@/utils/EmailTemplates';
 import { InvoiceServices } from '../Invoice/invoice.service';
-import { config } from '@/core/config';
 import { AppLogger } from '@/core/logging/logger';
-import crypto from 'crypto';
+import { PaymentProviderResolver } from '@/Modules/PaymentProvider/PaymentProviderResolver';
+import { BookingStatusService } from '@/Modules/Booking/booking-status.service';
 
 export class WebhookServices {
-  private stripe: any = null;
+  private logger = new AppLogger('WebhookServices');
+  private bookingStatusService: BookingStatusService;
 
   constructor(
     private prisma: PrismaClient,
     private emailProvider: IEmailProvider
   ) {
-    if (process.env.STRIPE_SECRET_KEY) {
-      this.stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-        apiVersion: '2024-04-10' as any,
-      });
-    }
+    this.bookingStatusService = new BookingStatusService(prisma, emailProvider);
   }
 
-  // Stripe webhook handling was removed.
+  /**
+   * Universal idempotent webhook processor
+   */
+  private async processPaymentSuccess(params: {
+    reference: string;
+    gateway: PaymentGateway;
+    gatewayEventId: string;
+    amountPaid: number;
+    currency: string;
+    channel?: PaymentChannel;
+    metadata?: any;
+    paidAt?: Date;
+    rawPayload: any;
+  }) {
+    // 1. Check idempotency in WebhookEvent
+    const existingEvent = await this.prisma.webhookEvent.findUnique({
+      where: { gatewayEventId: params.gatewayEventId },
+    });
 
-  async handlePaystackWebhook(signature: string, rawBody: Buffer | string | any) {
-    const secret = process.env.PAYSTACK_SECRET_KEY;
-    if (!secret) {
-      console.error('❌ [WEBHOOK] Paystack not configured');
-      throw new BadRequestError('Paystack not configured');
+    if (existingEvent) {
+      this.logger.info(`Webhook event ${params.gatewayEventId} already processed. Skipping.`);
+      return { received: true, message: 'Already processed' };
     }
 
-    const payload = typeof rawBody === 'string' || Buffer.isBuffer(rawBody) 
-      ? rawBody 
-      : JSON.stringify(rawBody);
+    // 2. Locate Transaction and Invoice
+    let transaction = await this.prisma.transaction.findFirst({
+      where: {
+        OR: [
+          { gatewayReference: params.reference },
+          { idempotencyKey: params.reference },
+          { id: params.reference },
+        ],
+      },
+      include: { invoice: { include: { booking: { include: { client: true } } } } },
+    });
 
-    const hash = crypto.createHmac('sha512', secret).update(payload).digest('hex');
+    let invoice = transaction?.invoice;
 
-    if (hash !== signature) {
-      console.error('❌ [WEBHOOK] Invalid Paystack Signature');
-      console.error(`Expected: ${hash}`);
-      console.error(`Received: ${signature}`);
-      throw new BadRequestError('Invalid Paystack Signature');
+    if (!invoice) {
+      // Try to find invoice by reference prefix
+      const cleanRef = params.reference.replace(/^bk_/, '').replace(/^sub_/, '').split('_')[0];
+      invoice = await this.prisma.invoice.findFirst({
+        where: {
+          OR: [
+            { id: cleanRef },
+            { bookingId: cleanRef },
+          ],
+        },
+        include: { booking: { include: { client: true } } },
+      });
     }
 
-    const event = typeof rawBody === 'string' || Buffer.isBuffer(rawBody) 
-      ? JSON.parse(rawBody.toString()) 
-      : rawBody;
+    // Record webhook event to guarantee idempotency
+    await this.prisma.webhookEvent.create({
+      data: {
+        gateway: params.gateway,
+        gatewayEventId: params.gatewayEventId,
+        type: 'charge.success',
+        status: 'PROCESSED',
+        payload: params.rawPayload,
+      },
+    });
 
-    console.log(`✅ [WEBHOOK] Verified Paystack event: ${event.event} [ID: ${event.data?.id}]`);
+    if (!invoice) {
+      this.logger.warn(`No invoice found for reference ${params.reference}. Logged event for reconciliation.`);
+      return { received: true, message: 'Invoice not found' };
+    }
 
-    if (event.event === 'charge.success') {
-      const data = event.data;
-      const metadata = typeof data.metadata === 'string' ? JSON.parse(data.metadata) : data.metadata || {};
-      const invoiceId = metadata.invoiceId;
-      const bookingId = metadata.bookingId;
-      const amountPaid = (data.amount || 0) / 100;
-      const type = metadata.type;
-      const userId = metadata.userId;
-      const planId = metadata.planId;
+    const amountPaid = params.amountPaid || Number(invoice.amount);
+    const currency = params.currency || invoice.currencyCode || 'KES';
 
-      if (type === 'subscription' && userId && planId) {
-        // Handle Subscription Payments
-        await this.prisma.$transaction(async (tx) => {
-          await tx.subscription.create({
-            data: {
-              userId,
-              planId: parseInt(planId, 10),
-              stripeSubId: 'paystack_sub_' + (data.reference || Date.now()), // storing reference
-              status: 'active',
-              periodEnd: new Date(Date.now() + (data.metadata?.billingCycle === 'monthly' ? 30 : 365) * 24 * 60 * 60 * 1000)
-            }
-          });
+    // 3. Atomic financial update: Invoice -> PAID, Transaction -> SUCCEEDED
+    await this.prisma.$transaction(async (tx) => {
+      await tx.invoice.update({
+        where: { id: invoice.id },
+        data: { status: InvoiceStatus.PAID },
+      });
 
-          const newInvoice = await tx.invoice.create({
-            data: {
-              userId,
-              planId: parseInt(planId, 10),
-              amount: amountPaid,
-              status: 'PAID',
-              type: 'SUBSCRIPTION'
-            }
-          });
+      if (transaction) {
+        await tx.transaction.update({
+          where: { id: transaction.id },
+          data: {
+            status: TransactionStatus.SUCCEEDED,
+            channel: params.channel || transaction.channel || PaymentChannel.UNKNOWN,
+            gatewayReference: params.reference,
+            grossAmount: amountPaid,
+            djNetEarning: amountPaid,
+            remainingAmount: amountPaid,
+          },
+        });
+      } else {
+        transaction = await tx.transaction.create({
+          data: {
+            invoiceId: invoice.id,
+            userId: invoice.userId,
+            tenantId: invoice.tenantId,
+            amount: amountPaid,
+            currency,
+            gateway: params.gateway,
+            channel: params.channel || PaymentChannel.UNKNOWN,
+            status: TransactionStatus.SUCCEEDED,
+            gatewayReference: params.reference,
+            idempotencyKey: params.reference,
+            grossAmount: amountPaid,
+            djNetEarning: amountPaid,
+            remainingAmount: amountPaid,
+            metadata: params.metadata,
+          },
+          include: { invoice: { include: { booking: { include: { client: true } } } } },
+        });
+      }
 
-          await tx.transaction.create({
-            data: {
-              invoiceId: newInvoice.id,
-              userId,
-              amount: amountPaid,
-              gateway: 'PAYSTACK',
-              channel: data.authorization?.channel?.toUpperCase() || 'CARD',
-              status: 'SUCCESS',
-              gatewayReference: data.reference,
-              cardBrand: data.authorization?.card_type || data.authorization?.brand || null,
-              cardLast4: data.authorization?.last4 || null,
-              bankName: data.authorization?.bank || null,
-            }
-          });
+      // Handle Subscription activation
+      if (invoice.type === InvoiceType.SUBSCRIPTION && invoice.userId && invoice.planId) {
+        await tx.subscription.upsert({
+          where: { id: invoice.id },
+          update: {
+            status: SubscriptionStatus.active,
+            periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          },
+          create: {
+            userId: invoice.userId,
+            planId: invoice.planId,
+            status: SubscriptionStatus.active,
+            periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          },
+        });
+      }
+    });
 
-          await tx.tenant.updateMany({
-            where: { userId },
-            data: {
-              activePlanId: parseInt(planId, 10),
-              subscriptionStatus: 'active'
-            }
-          });
+    // 4. Handle Booking Confirmation & Escrow Credit
+    if (invoice.bookingId && invoice.type === InvoiceType.BOOKING) {
+      try {
+        // Transition booking to CONFIRMED (Spec: Never COMPLETED on payment!)
+        await this.bookingStatusService.transition({
+          bookingId: invoice.bookingId,
+          targetStatus: BookingStatus.CONFIRMED,
+          reason: `Payment verified via ${params.gateway}`,
         });
 
-        // Send Emails for Subscription
-        const user = await this.prisma.user.findUnique({ where: { id: userId } });
-        if (user && user.email) {
-          const nextBilling = new Date(Date.now() + (data.metadata?.billingCycle === 'monthly' ? 30 : 365) * 24 * 60 * 60 * 1000).toISOString();
-          
-          this.emailProvider.sendEmail(
-            user.email,
-            "Subscription Activated 🚀 - UpBeat Entertainment Africa",
-            EmailTemplates.getSubscriptionActivatedTemplate(`Plan ${planId}`, nextBilling)
-          );
-
-          this.emailProvider.sendEmail(
-            config.defaultAdmin?.email || "admin@upbeatafrica.com",
-            "New Subscription Alert - UpBeat Entertainment Africa",
-            EmailTemplates.getNewSubscriptionAdminAlertTemplate(user.email, parseInt(planId, 10))
+        // Credit Escrow in DJ Wallet
+        if (invoice.tenantId) {
+          const { WalletService } = await import('@/Modules/Wallet/wallet.service');
+          const walletService = new WalletService(this.prisma);
+          await walletService.creditBookingEscrow(
+            invoice.tenantId,
+            invoice.bookingId,
+            amountPaid,
+            currency,
+            0,
+            transaction?.id
           );
         }
-      } else if (invoiceId || bookingId) {
-        const txResult = await this.prisma.$transaction(async (tx) => {
-          let eventType = "Event";
-          let clientName = "Client";
-          let eventDate = new Date().toISOString();
-          let resolvedBookingId = bookingId;
-          let djEmail: string | null = null;
-          let clientEmail: string | null = null;
-          let djName: string | null = null;
-
-          const invoice = await tx.invoice.findFirst({
-            where: {
-              OR: [
-                ...(invoiceId ? [{ id: invoiceId }] : []),
-                ...(resolvedBookingId ? [{ bookingId: resolvedBookingId }] : []),
-              ]
-            }
-          });
-            
-          if (invoice && invoice.status !== 'PAID') {
-            await tx.invoice.update({
-              where: { id: invoice.id },
-              data: { status: 'PAID' }
-            });
-
-            // If there were any pending CASH requests for this invoice, mark them as superseded/failed
-            await tx.transaction.updateMany({
-              where: {
-                invoiceId: invoice.id,
-                gateway: 'CASH',
-                status: 'PENDING'
-              },
-              data: {
-                status: 'FAILED',
-                metadata: { supersededByOnlinePayment: true }
-              }
-            });
-
-            await tx.transaction.create({
-              data: {
-                invoiceId: invoice.id,
-                tenantId: invoice.tenantId,
-                amount: amountPaid,
-                currency: data.currency || 'KES',
-                gateway: 'PAYSTACK',
-                channel: data.authorization?.channel?.toUpperCase() || 'CARD',
-                status: 'SUCCESS',
-                gatewayReference: data.reference,
-                cardBrand: data.authorization?.card_type || data.authorization?.brand || null,
-                cardLast4: data.authorization?.last4 || null,
-                bankName: data.authorization?.bank || null,
-              }
-            });
-          } else {
-            console.warn(`⚠️ [WEBHOOK] Invoice not found or already paid for invoiceId: ${invoiceId}, bookingId: ${resolvedBookingId}`);
-          }
-
-          resolvedBookingId = resolvedBookingId || invoice?.bookingId;
-
-          if (resolvedBookingId) {
-            const booking = await tx.booking.findUnique({ where: { id: resolvedBookingId }, include: { client: true } });
-            if (booking && booking.status !== BookingStatus.completed) {
-              await tx.booking.update({
-                where: { id: resolvedBookingId },
-                data: { status: BookingStatus.completed }
-              });
-
-              eventType = booking.eventType || "Event";
-              clientName = booking.client?.name || "Client";
-              clientEmail = booking.client?.email || null;
-              eventDate = booking.eventDate?.toISOString() || new Date().toISOString();
-
-              if (booking.tenantId) {
-                const tenant = await tx.tenant.findUnique({ where: { id: booking.tenantId }, include: { user: true } });
-                if (tenant) {
-                  djName = tenant.stageName || tenant.user?.firstName || "DJ";
-                  if (tenant.user) {
-                    djEmail = tenant.user.email;
-                    await tx.notification.create({
-                      data: {
-                        userId: tenant.user.id,
-                        title: 'Payment Received via Paystack',
-                        message: `Payment received for booking ${eventType} from ${clientName}.`,
-                        type: NotificationType.payment,
-                        referenceId: invoice?.id || resolvedBookingId,
-                      }
-                    });
-                  }
-                }
-              }
-            }
-          }
-          return { djEmail, clientEmail, djName, eventType, clientName, eventDate, resolvedBookingId, paymentId: invoice?.id };
-        });
-        if (txResult.djEmail) {
-          this.emailProvider.sendEmail(
-            txResult.djEmail,
-            "Payment Received! 💰 - UpBeat Entertainment Africa",
-            EmailTemplates.getPaymentReceivedAlertTemplate(txResult.clientName, amountPaid)
-          );
-        }
-
-        let invoicePdfBuffer: Buffer | undefined;
-        if (txResult.paymentId) {
-          try {
-            const invoiceService = new InvoiceServices(this.prisma);
-            invoicePdfBuffer = await invoiceService.generateInvoicePdf(txResult.paymentId);
-          } catch (error) {
-            AppLogger.error('[WEBHOOK] Failed to generate invoice PDF for email', { error });
-          }
-        }
-
-        if (txResult.clientEmail && txResult.resolvedBookingId) {
-          this.emailProvider.sendEmail(
-            txResult.clientEmail,
-            "Payment Receipt - UpBeat Entertainment Africa",
-            EmailTemplates.getPaymentReceiptTemplate(
-              amountPaid, 
-              txResult.eventType,
-              txResult.djName || "DJ",
-              txResult.eventDate,
-              "Paystack",
-              txResult.resolvedBookingId
-            ),
-            invoicePdfBuffer ? [{
-              filename: `UpBeat-Entertainment-Africa-Receipt-${txResult.paymentId?.split('-')[0].toUpperCase()}.pdf`,
-              content: invoicePdfBuffer,
-              contentType: 'application/pdf'
-            }] : undefined
-          );
-        }
+      } catch (err: any) {
+        this.logger.error(`Failed to transition booking #${invoice.bookingId} to CONFIRMED:`, err);
       }
     }
 
+    return { received: true, success: true };
+  }
+
+  public async handlePaystackWebhook(signature: string, rawBody: Buffer | string | any) {
+    const provider = PaymentProviderResolver.getGatewayProvider(PaymentGateway.PAYSTACK);
+    const bodyObj = typeof rawBody === 'string' || Buffer.isBuffer(rawBody) ? JSON.parse(rawBody.toString()) : rawBody;
+
+    const webhookResult = await provider.handleWebhook(bodyObj, signature);
+
+    if (!webhookResult.isValid) {
+      this.logger.error(`Invalid Paystack webhook signature: ${webhookResult.failureReason}`);
+      throw new BadRequestError(webhookResult.failureReason || 'Invalid webhook signature');
+    }
+
+    // Handle Transfer / Payout events
+    if (webhookResult.operation === 'PAYOUT' && webhookResult.reference) {
+      const { WalletService } = await import('@/Modules/Wallet/wallet.service');
+      const walletService = new WalletService(this.prisma);
+
+      const payout = await this.prisma.payoutRequest.findFirst({
+        where: { transferReference: webhookResult.reference },
+      });
+
+      if (payout) {
+        if (webhookResult.status === 'PAID') {
+          await walletService.handleTransferSuccess(payout.id);
+        } else if (webhookResult.status === 'FAILED') {
+          await walletService.handleTransferFailure(payout.id, webhookResult.failureReason || 'Transfer failed');
+        }
+      }
+      return { received: true };
+    }
+
+    if (webhookResult.operation === 'COLLECTION' && webhookResult.reference) {
+      return this.processPaymentSuccess({
+        reference: webhookResult.reference,
+        gateway: PaymentGateway.PAYSTACK,
+        gatewayEventId: webhookResult.gatewayEventId,
+        amountPaid: webhookResult.amount || 0,
+        currency: webhookResult.currency || 'KES',
+        paidAt: webhookResult.paidAt,
+        metadata: webhookResult.metadata,
+        rawPayload: bodyObj,
+      });
+    }
+
     return { received: true };
+  }
+
+  public async handleFlutterwaveWebhook(signature: string, rawBody: Buffer | string | any, headers?: any) {
+    const provider = PaymentProviderResolver.getGatewayProvider(PaymentGateway.FLUTTERWAVE);
+    const bodyObj = typeof rawBody === 'string' || Buffer.isBuffer(rawBody) ? JSON.parse(rawBody.toString()) : rawBody;
+
+    const webhookResult = await provider.handleWebhook(bodyObj, signature, headers);
+
+    if (!webhookResult.isValid) {
+      this.logger.error(`Invalid Flutterwave webhook hash: ${webhookResult.failureReason}`);
+      throw new BadRequestError(webhookResult.failureReason || 'Invalid Flutterwave webhook signature');
+    }
+
+    if (webhookResult.operation === 'PAYOUT' && webhookResult.reference) {
+      const { WalletService } = await import('@/Modules/Wallet/wallet.service');
+      const walletService = new WalletService(this.prisma);
+
+      const payout = await this.prisma.payoutRequest.findFirst({
+        where: { transferReference: webhookResult.reference },
+      });
+
+      if (payout) {
+        if (webhookResult.status === 'PAID') {
+          await walletService.handleTransferSuccess(payout.id);
+        } else if (webhookResult.status === 'FAILED') {
+          await walletService.handleTransferFailure(payout.id, webhookResult.failureReason || 'Transfer failed');
+        }
+      }
+      return { received: true };
+    }
+
+    if (webhookResult.operation === 'COLLECTION' && webhookResult.reference) {
+      return this.processPaymentSuccess({
+        reference: webhookResult.reference,
+        gateway: PaymentGateway.FLUTTERWAVE,
+        gatewayEventId: webhookResult.gatewayEventId,
+        amountPaid: webhookResult.amount || 0,
+        currency: webhookResult.currency || 'KES',
+        paidAt: webhookResult.paidAt,
+        metadata: webhookResult.metadata,
+        rawPayload: bodyObj,
+      });
+    }
+
+    return { received: true };
+  }
+
+  public async handlePesapalIPN(orderTrackingId: string, orderMerchantReference?: string) {
+    this.logger.info(`Processing Pesapal IPN with orderTrackingId: ${orderTrackingId}`);
+    const provider = PaymentProviderResolver.getGatewayProvider(PaymentGateway.PESAPAL);
+
+    const verification = await provider.verifyPayment(orderTrackingId);
+    const isCompleted = verification.status === 'PAID';
+
+    if (!isCompleted) {
+      this.logger.warn(`Pesapal payment not completed for ${orderTrackingId}. Status: ${verification.status}`);
+      return { received: true, status: verification.status };
+    }
+
+    const reference = orderMerchantReference || verification.reference || orderTrackingId;
+
+    return this.processPaymentSuccess({
+      reference,
+      gateway: PaymentGateway.PESAPAL,
+      gatewayEventId: `pesapal_${orderTrackingId}`,
+      amountPaid: verification.amount,
+      currency: verification.currency,
+      paidAt: verification.paidAt,
+      metadata: verification.metadata,
+      rawPayload: { orderTrackingId, orderMerchantReference, verification },
+    });
   }
 }

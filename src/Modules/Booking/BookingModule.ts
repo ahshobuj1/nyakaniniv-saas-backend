@@ -3,7 +3,7 @@ import { AppLogger } from "@/core/logging/logger";
 import { BookingServices } from "./booking.service";
 import { BookingController } from "./booking.controller";
 import { validateRequest } from "@/middleware/validation";
-import { authenticateUser, authorizeRole } from "@/middleware/auth";
+import { authenticateUser, authorizeRole, optionalAuth } from "@/middleware/auth";
 import { UserRole } from "@/prisma/generated/client";
 import {
   createBookingSchema,
@@ -71,8 +71,7 @@ export class BookingModule extends BaseModule {
 
     this.router.get(
       "/:id",
-      authenticateUser,
-      authorizeRole([UserRole.DJ]),
+      optionalAuth,
       controller.getBookingById.bind(controller),
     );
 

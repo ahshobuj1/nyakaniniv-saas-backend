@@ -27,5 +27,8 @@ export class WebhookModule extends BaseModule {
     const controller = this.getController<WebhookController>('WebhookController');
 
     this.router.post('/paystack', controller.paystackWebhook.bind(controller));
+    this.router.post('/flutterwave', controller.flutterwaveWebhook.bind(controller));
+    this.router.get('/pesapal/ipn', controller.pesapalIPN.bind(controller));
+    this.router.post('/pesapal/ipn', controller.pesapalIPN.bind(controller));
   }
 }

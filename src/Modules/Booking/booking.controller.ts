@@ -37,7 +37,7 @@ export class BookingController extends BaseController {
   }
 
   public async getBookingById(req: Request, res: Response): Promise<void> {
-    const userId = req.user!.id;
+    const userId = req.user?.id;
     const id = String(req.params.id);
     const booking = await this.bookingService.getBookingById(userId, id);
     this.sendResponse(req, res, 'Booking retrieved successfully', undefined, booking);
@@ -52,7 +52,8 @@ export class BookingController extends BaseController {
 
   public async getPaymentLink(req: Request, res: Response): Promise<void> {
     const id = String(req.params.id);
-    const result = await this.bookingService.getBookingPaymentLink(id);
+    const gateway = req.query.gateway as string | undefined;
+    const result = await this.bookingService.getBookingPaymentLink(id, gateway);
     this.sendResponse(req, res, 'Payment link generated successfully', undefined, result);
   }
 
@@ -72,7 +73,8 @@ export class BookingController extends BaseController {
   public async checkoutRedirect(req: Request, res: Response): Promise<void> {
     try {
       const id = String(req.params.id);
-      const result = await this.bookingService.getBookingPaymentLink(id);
+      const gateway = req.query.gateway as string | undefined;
+      const result = await this.bookingService.getBookingPaymentLink(id, gateway);
       if (!result.checkoutUrl) {
         throw new Error('Failed to generate payment link');
       }

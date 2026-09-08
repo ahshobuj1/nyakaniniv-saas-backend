@@ -25,6 +25,8 @@ import { UserModule } from "./Modules/User/UserModule";
 import { WebhookModule } from "./Modules/Webhook/WebhookModule";
 import { AnalyticsModule } from "./Modules/Analytics/AnalyticsModule";
 import { ClientModule } from "./Modules/Client/ClientModule";
+import { WalletModule } from "./Modules/Wallet/WalletModule";
+import { PaystackConnectModule } from "./Modules/PayoutAccount/PayoutAccountModule";
 
 // Modules (Business Logic)
 
@@ -58,6 +60,8 @@ async function bootstrap() {
     app.registerModule(new WebhookModule());
     app.registerModule(new AnalyticsModule());
     app.registerModule(new ClientModule());
+    app.registerModule(new WalletModule());
+    app.registerModule(new PaystackConnectModule());
     AppLogger.info("✔ All modules registered successfully");
 
     // 4. Seed default Super Admin if not existing

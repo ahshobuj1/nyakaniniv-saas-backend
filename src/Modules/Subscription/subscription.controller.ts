@@ -49,14 +49,14 @@ export class SubscriptionController extends BaseController {
     this.sendResponse(req, res, 'Subscription canceled successfully', undefined, result);
   }
 
-  public async handleWebhook(req: Request, res: Response): Promise<void> {
-    const signature = req.headers['stripe-signature'] as string;
+  public async getAvailableGateways(req: Request, res: Response): Promise<void> {
+    const country = (req.query.country as string) || (req.user as any)?.country;
+    const gateways = this.subscriptionService.getAvailableGateways(country);
+    this.sendResponse(req, res, 'Available gateways retrieved successfully', undefined, gateways);
+  }
 
-    // Express raw body required here, assumes middleware is setup for '/webhook' 
-    // to provide raw body in req.body or similar, but for simplicity:
-    const rawBody = (req as any).rawBody || req.body;
-
-    const result = await this.subscriptionService.handleStripeWebhook(signature, rawBody);
-    this.sendResponse(req, res, undefined, undefined, result);
+  public async validatePayout(req: Request, res: Response): Promise<void> {
+    const result = await this.subscriptionService.validatePayoutAccount(req.body);
+    this.sendResponse(req, res, result.valid ? 'Account validated' : (result.message || 'Validation failed'), undefined, result);
   }
 }

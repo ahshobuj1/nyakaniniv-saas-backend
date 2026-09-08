@@ -8,11 +8,9 @@ async function main() {
     {
       id: 1,
       name: 'Starter',
-      priceMonthly: 15.00,
-      priceAnnually: 150.00, // example 2 months free
+      priceMonthly: 500.00,
+      priceAnnually: 5000.00,
       discountPercentage: 16,
-      stripeMonthlyPriceId: 'price_starter_monthly_mock',
-      stripeAnnualPriceId: 'price_starter_annual_mock',
       features: {
         CUSTOM_SUBDOMAIN: true,
         BASIC_PROFILE: true,
@@ -23,11 +21,9 @@ async function main() {
     {
       id: 2,
       name: 'Pro',
-      priceMonthly: 39.00,
-      priceAnnually: 390.00,
+      priceMonthly: 750.00,
+      priceAnnually: 7500.00,
       discountPercentage: 16,
-      stripeMonthlyPriceId: 'price_pro_monthly_mock',
-      stripeAnnualPriceId: 'price_pro_annual_mock',
       features: {
         CUSTOM_SUBDOMAIN: true,
         BASIC_PROFILE: true,
@@ -43,11 +39,9 @@ async function main() {
     {
       id: 3,
       name: 'Elite',
-      priceMonthly: 79.00,
-      priceAnnually: 790.00,
+      priceMonthly: 950.00,
+      priceAnnually: 9500.00,
       discountPercentage: 16,
-      stripeMonthlyPriceId: 'price_elite_monthly_mock',
-      stripeAnnualPriceId: 'price_elite_annual_mock',
       features: {
         CUSTOM_SUBDOMAIN: true,
         BASIC_PROFILE: true,
@@ -74,11 +68,85 @@ async function main() {
         priceMonthly: plan.priceMonthly,
         priceAnnually: plan.priceAnnually,
         discountPercentage: plan.discountPercentage,
-        stripeMonthlyPriceId: plan.stripeMonthlyPriceId,
-        stripeAnnualPriceId: plan.stripeAnnualPriceId,
         features: plan.features,
       },
       create: plan,
+    });
+  }
+
+  // Seed Currencies
+  const currencies = [
+    { code: 'KES', name: 'Kenyan Shilling', symbol: 'KSh', decimals: 2 },
+    { code: 'NGN', name: 'Nigerian Naira', symbol: '₦', decimals: 2 },
+    { code: 'GHS', name: 'Ghanaian Cedi', symbol: 'GH₵', decimals: 2 },
+    { code: 'ZAR', name: 'South African Rand', symbol: 'R', decimals: 2 },
+    { code: 'UGX', name: 'Ugandan Shilling', symbol: 'USh', decimals: 0 },
+    { code: 'TZS', name: 'Tanzanian Shilling', symbol: 'TSh', decimals: 0 },
+    { code: 'RWF', name: 'Rwandan Franc', symbol: 'FRw', decimals: 0 },
+    { code: 'USD', name: 'US Dollar', symbol: '$', decimals: 2 },
+  ];
+
+  for (const c of currencies) {
+    await prisma.currency.upsert({
+      where: { code: c.code },
+      update: { name: c.name, symbol: c.symbol, decimals: c.decimals, isActive: true },
+      create: { code: c.code, name: c.name, symbol: c.symbol, decimals: c.decimals, isActive: true },
+    });
+  }
+
+  // Seed African Countries
+  const countries = [
+    { code: 'KE', name: 'Kenya', currencyCode: 'KES', timezone: 'Africa/Nairobi' },
+    { code: 'NG', name: 'Nigeria', currencyCode: 'NGN', timezone: 'Africa/Lagos' },
+    { code: 'GH', name: 'Ghana', currencyCode: 'GHS', timezone: 'Africa/Accra' },
+    { code: 'ZA', name: 'South Africa', currencyCode: 'ZAR', timezone: 'Africa/Johannesburg' },
+    { code: 'UG', name: 'Uganda', currencyCode: 'UGX', timezone: 'Africa/Kampala' },
+    { code: 'TZ', name: 'Tanzania', currencyCode: 'TZS', timezone: 'Africa/Dar_es_Salaam' },
+    { code: 'RW', name: 'Rwanda', currencyCode: 'RWF', timezone: 'Africa/Kigali' },
+  ];
+
+  for (const country of countries) {
+    await prisma.country.upsert({
+      where: { code: country.code },
+      update: { name: country.name, currencyCode: country.currencyCode, timezone: country.timezone, isActive: true },
+      create: { code: country.code, name: country.name, currencyCode: country.currencyCode, timezone: country.timezone, isActive: true },
+    });
+  }
+
+  // Seed Themes
+  const themes = [
+    {
+      id: 1,
+      name: 'Azura Theme',
+      slug: 'azura',
+      previewImageUrl: 'https://additional-user.s3.eu-north-1.amazonaws.com/uploads/387c7d25-307e-47e1-aeca-0313af334094.png',
+      defaultConfig: {},
+    },
+    {
+      id: 3,
+      name: 'Kenzo Theme',
+      slug: 'kenzo',
+      previewImageUrl: 'https://additional-user.s3.eu-north-1.amazonaws.com/uploads/08dcaa73-2f26-417d-894b-fbe3c9fbe26a.png',
+      defaultConfig: {},
+    },
+  ];
+
+  for (const theme of themes) {
+    await prisma.theme.upsert({
+      where: { id: theme.id },
+      update: {
+        name: theme.name,
+        slug: theme.slug,
+        previewImageUrl: theme.previewImageUrl,
+        defaultConfig: theme.defaultConfig,
+      },
+      create: {
+        id: theme.id,
+        name: theme.name,
+        slug: theme.slug,
+        previewImageUrl: theme.previewImageUrl,
+        defaultConfig: theme.defaultConfig,
+      },
     });
   }
 

@@ -1,4 +1,5 @@
-import { PrismaClient, BookingStatus } from '@/prisma/generated/client';
+import { PrismaClient, BookingStatus, TransactionStatus, PaymentStatus } from '@/prisma/generated/client';
+import { config } from '@/core/config';
 import { NotFoundError, BadRequestError, AuthorizationError } from '@/core/errors/AppError';
 import { PayInvoiceDTO } from './InvoiceDTO';
 import { QueryBuilder } from '@/utils/QueryBuilder';
@@ -262,14 +263,14 @@ export class InvoiceServices {
           amount: invoice.amount,
           gateway: 'MANUAL',
           channel: 'CASH',
-          status: 'SUCCESS'
+          status: TransactionStatus.SUCCEEDED
         }
       });
 
       if (invoice.bookingId) {
         await tx.booking.update({
           where: { id: invoice.bookingId },
-          data: { status: BookingStatus.completed }
+          data: { status: BookingStatus.COMPLETED, paymentStatus: PaymentStatus.PAID }
         });
       }
 
@@ -286,7 +287,29 @@ export class InvoiceServices {
 
     const invoice = await this.prisma.invoice.findUnique({
       where: { id },
-      include: { booking: { include: { client: true, tenant: true } }, tenant: true }
+      include: {
+        booking: {
+          include: {
+            client: true,
+            tenant: {
+              include: {
+                paymentAccounts: {
+                  where: { isActive: true },
+                  orderBy: { updatedAt: 'desc' }
+                }
+              }
+            }
+          }
+        },
+        tenant: {
+          include: {
+            paymentAccounts: {
+              where: { isActive: true },
+              orderBy: { updatedAt: 'desc' }
+            }
+          }
+        }
+      }
     });
 
     if (!invoice) {
@@ -302,9 +325,7 @@ export class InvoiceServices {
     }
 
     const { PaymentProviderFactory } = await import('@/providers/PaymentProvider/PaymentProviderFactory');
-    // Using Paystack by default for now if no specific country is found
-    const country = invoice.tenant?.country || invoice.booking?.tenant?.country || 'NG';
-    const paymentProvider = PaymentProviderFactory.getProvider(country);
+    const paymentProvider = PaymentProviderFactory.getProvider((invoice.booking || invoice.tenant) as any);
     
     try {
       // Mocking payment link generation if booking doesn't exist (e.g. for subscription)
@@ -313,8 +334,23 @@ export class InvoiceServices {
       }
 
       if (invoice.booking) {
-        const { checkoutUrl } = await paymentProvider.getPaymentLink(invoice.booking, invoice.id);
-        return { url: checkoutUrl };
+        const clientEmail = (invoice.booking as any).client?.email || (invoice.booking as any).customerEmail || (invoice.tenant as any)?.user?.email || 'customer@example.com';
+        const reference = `inv_${invoice.id}_${Date.now()}`;
+        const paymentResult = await paymentProvider.initializePayment({
+          amount: Number(invoice.amount),
+          currency: (invoice.booking as any).currency || 'NGN',
+          email: clientEmail,
+          reference,
+          description: `Payment for invoice #${invoice.id.slice(0, 8)}`,
+          callbackUrl: `${config.clientUrl}/payment-success?reference=${reference}`,
+          paymentType: 'BOOKING',
+          metadata: {
+            invoiceId: invoice.id,
+            bookingId: invoice.booking.id,
+            tenantId: invoice.tenantId,
+          },
+        });
+        return { url: paymentResult.checkoutUrl };
       }
       
       throw new BadRequestError("Cannot generate link for this invoice type");

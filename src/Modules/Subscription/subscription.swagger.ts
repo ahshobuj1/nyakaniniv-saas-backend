@@ -27,10 +27,6 @@
  *                 type: number
  *               priceAnnually:
  *                 type: number
- *               stripeMonthlyPriceId:
- *                 type: string
- *               stripeAnnualPriceId:
- *                 type: string
  *               discountPercentage:
  *                 type: number
  *               features:
