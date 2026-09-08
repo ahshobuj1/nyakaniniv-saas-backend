@@ -72,11 +72,29 @@ export const config = {
     level: process.env.LOG_LEVEL || "info",
     path: process.env.LOG_FILE_PATH || "logs/app.log",
   },
-  stripe: {
-    secretKey: process.env.STRIPE_SECRET_KEY,
-    publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
-    clientId: process.env.STRIPE_CLIENT_ID,
-    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+  paystack: {
+    secretKey: process.env.PAYSTACK_SECRET_KEY,
+    publicKey: process.env.PAYSTACK_PUBLIC_KEY,
+  },
+  flutterwave: {
+    secretKey: process.env.FLUTTERWAVE_SECRET_KEY,
+    publicKey: process.env.FLUTTERWAVE_PUBLIC_KEY,
+    webhookSecret: process.env.FLUTTERWAVE_WEBHOOK_SECRET,
+  },
+  payout: {
+    enabled: process.env.PAYOUT_ENABLED !== 'false',
+    delayHours: parseInt(process.env.PAYOUT_DELAY_HOURS || '0'),
+  },
+  pesapal: {
+    consumerKey: process.env.PESAPAL_CONSUMER_KEY,
+    consumerSecret: process.env.PESAPAL_CONSUMER_SECRET,
+    ipnId: process.env.PESAPAL_IPN_ID,
+    sandbox: process.env.PESAPAL_SANDBOX !== "false",
+    // Keep this disabled until the webhook and end-to-end sandbox test are complete.
+    enabledCountries: (process.env.PESAPAL_ENABLED_COUNTRIES || "")
+      .split(",")
+      .map((country) => country.trim().toUpperCase())
+      .filter(Boolean),
   },
   clientUrl: process.env.CLIENT_URL || "http://localhost:3000",
   apiUrl: process.env.API_URL || (process.env.NODE_ENV === "production" ? "https://api.upbeat.africa" : `http://localhost:${process.env.PORT || 3030}`),

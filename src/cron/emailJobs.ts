@@ -44,7 +44,7 @@ export class EmailCronJobs {
 
     const upcomingBookings = await this.prisma.booking.findMany({
       where: {
-        status: BookingStatus.completed,
+        status: BookingStatus.CONFIRMED,
         eventDate: {
           gte: tomorrowStart,
           lte: tomorrowEnd

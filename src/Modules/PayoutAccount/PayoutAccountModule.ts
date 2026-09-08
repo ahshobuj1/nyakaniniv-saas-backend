@@ -1,7 +1,7 @@
 import { BaseModule } from "@/core/BaseModule";
 import { AppLogger } from "@/core/logging/logger";
-import { PaystackConnectService } from "./paystack-connect.service";
-import { PaystackConnectController } from "./paystack-connect.controller";
+import { PaystackConnectService } from "./payout-account.service";
+import { PaystackConnectController } from "./payout-account.controller";
 import { authenticateUser } from "@/middleware/auth";
 
 export class PaystackConnectModule extends BaseModule {
@@ -41,6 +41,23 @@ export class PaystackConnectModule extends BaseModule {
       "/banks",
       authenticateUser,
       controller.getBanks.bind(controller)
+    );
+
+    this.router.post(
+      "/validate",
+      authenticateUser,
+      controller.validate.bind(controller)
+    );
+
+    this.router.get(
+      "/oauth/url",
+      authenticateUser,
+      controller.getConnectOAuthUrl.bind(controller)
+    );
+
+    this.router.get(
+      "/oauth/callback",
+      controller.handleOAuthCallback.bind(controller)
     );
 
     this.router.delete(

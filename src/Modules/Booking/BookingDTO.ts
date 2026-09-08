@@ -10,6 +10,8 @@ export const createBookingSchema = {
     eventDetails: z.string().optional(),
     clientPhone: z.string().optional(),
     eventDate: z.string().datetime("Invalid event date format"),
+    eventTimezone: z.string().optional(),
+    currencyCode: z.string().length(3).optional(),
     address: z.string().min(5, "Address must be at least 5 characters"),
   }),
 };
@@ -29,10 +31,22 @@ export const resendBookingOtpSchema = {
   }),
 };
 
+const bookingStatusEnum = z.preprocess((val) => {
+  if (typeof val === 'string') {
+    const u = val.trim().toUpperCase();
+    if (u === 'ACCEPTED') return BookingStatus.AWAITING_PAYMENT;
+    if (u === 'CANCELED') return BookingStatus.CANCELLED;
+    return u;
+  }
+  return val;
+}, z.nativeEnum(BookingStatus));
+
 export const updateBookingStatusSchema = {
   body: z.object({
-    status: z.nativeEnum(BookingStatus),
+    status: bookingStatusEnum,
     totalAmount: z.number().positive("Total amount must be positive").optional(),
+    currencyCode: z.string().length(3).optional(),
+    reason: z.string().optional(),
   }),
   params: z.object({
     id: z.string().uuid("Invalid Booking ID"),

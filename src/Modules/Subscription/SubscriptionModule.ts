@@ -62,6 +62,17 @@ export class SubscriptionModule extends BaseModule {
 
     // DJ Routes for Subscription
     this.router.get(
+      "/gateways",
+      controller.getAvailableGateways.bind(controller),
+    );
+
+    this.router.post(
+      "/validate-payout",
+      authenticateUser,
+      controller.validatePayout.bind(controller),
+    );
+
+    this.router.get(
       "/my-subscription",
       authenticateUser,
       authorizeRole([UserRole.DJ]),

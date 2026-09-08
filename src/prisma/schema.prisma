@@ -7,100 +7,26 @@ datasource db {
   provider = "postgresql"
 }
 
-enum UserRole {
-  SUPER_ADMIN
-  ADMIN
-  DJ
-}
-
-enum SubscriptionStatus {
-  active
-  past_due
-  canceled
-}
-
-enum EventStatus {
-  upcoming
-  completed
-  canceled
-}
-
-enum BookingStatus {
-  pending
-  accepted
-  completed
-  canceled
-  rejected
-}
-
-enum TicketStatus {
-  open
-  in_progress
-  resolved
-}
-
-enum NotificationType {
-  booking_request
-  payment
-  system
-}
-
-// Enterprise Payment Enums
-enum InvoiceType {
-  SUBSCRIPTION
-  BOOKING
-}
-
-enum InvoiceStatus {
-  PAID
-  UNPAID
-  OVERDUE
-}
-
-enum PaymentGateway {
-  PAYSTACK
-  STRIPE
-  CASH
-  MANUAL
-}
-
-enum PaymentChannel {
-  CARD
-  BANK_TRANSFER
-  MOBILE_MONEY
-  USSD
-  CASH
-  UNKNOWN
-}
-
-enum TransactionStatus {
-  PENDING
-  SUCCESS
-  FAILED
-  REFUNDED
-}
-
 model User {
-  id         String    @id @default(uuid()) @db.Uuid
-  firstName  String?   @map("first_name") @db.VarChar(255)
-  lastName   String?   @map("last_name") @db.VarChar(255)
-  email      String    @unique @db.VarChar(255)
-  password   String    @db.VarChar(255)
-  role       UserRole
-  profileImg String?   @map("profile_img") @db.VarChar(255)
-  isVerified Boolean?  @default(false) @map("is_verified")
-  otp        String?   @db.VarChar(255)
-  otpExpiry  DateTime? @map("otp_expiry")
-  createdAt  DateTime? @default(now()) @map("created_at")
-  updatedAt  DateTime? @default(now()) @updatedAt @map("updated_at")
-
-  tenant         Tenant?
-  subscriptions  Subscription[]
-  invoices       Invoice[]
-  transactions   Transaction[]
+  id             String          @id @default(uuid()) @db.Uuid
+  firstName      String?         @map("first_name") @db.VarChar(255)
+  lastName       String?         @map("last_name") @db.VarChar(255)
+  email          String          @unique @db.VarChar(255)
+  password       String          @db.VarChar(255)
+  role           UserRole
+  profileImg     String?         @map("profile_img") @db.VarChar(255)
+  isVerified     Boolean?        @default(false) @map("is_verified")
+  otp            String?         @db.VarChar(255)
+  otpExpiry      DateTime?       @map("otp_expiry")
+  createdAt      DateTime?       @default(now()) @map("created_at")
+  updatedAt      DateTime?       @default(now()) @updatedAt @map("updated_at")
   auditLogs      AuditLog[]
-  supportTickets SupportTicket[]
+  invoices       Invoice[]
   notifications  Notification[]
+  subscriptions  Subscription[]
+  supportTickets SupportTicket[]
+  tenant         Tenant?
+  transactions   Transaction[]
 
   @@map("users")
 }
@@ -113,64 +39,60 @@ model Theme {
   defaultConfig   Json?     @map("default_config")
   createdAt       DateTime? @default(now()) @map("created_at")
   updatedAt       DateTime? @default(now()) @updatedAt @map("updated_at")
-
-  tenants Tenant[]
+  tenants         Tenant[]
 
   @@map("themes")
 }
 
 model Tenant {
-  id                      String              @id @default(uuid()) @db.Uuid
-  userId                  String?             @unique @map("user_id") @db.Uuid
-  subdomain               String?             @unique @db.VarChar(255)
-  stageName               String?             @map("stage_name") @db.VarChar(255)
-  country                 String?             @db.VarChar(255)
-  city                    String?             @db.VarChar(255)
+  id                      String                 @id @default(uuid()) @db.Uuid
+  userId                  String?                @unique @map("user_id") @db.Uuid
+  subdomain               String?                @unique @db.VarChar(255)
+  stageName               String?                @map("stage_name") @db.VarChar(255)
+  country                 String?                @db.VarChar(255)
+  city                    String?                @db.VarChar(255)
   genres                  Json?
-  themeId                 Int?                @map("theme_id")
-  logoUrl                 String?             @map("logo_url") @db.VarChar(255)
-  bio                     String?             @db.Text
-  timezone                String?             @db.VarChar(255)
-  isActive                Boolean?            @map("is_active")
-  socialLinks             Json?               @map("social_links")
+  themeId                 Int?                   @map("theme_id")
+  logoUrl                 String?                @map("logo_url") @db.VarChar(255)
+  bio                     String?
+  timezone                String?                @db.VarChar(255)
+  isActive                Boolean?               @map("is_active")
+  socialLinks             Json?                  @map("social_links")
   config                  Json?
-  stripeAccountId         String?             @map("stripe_account_id") @db.VarChar(255)
-  paystackSubaccountId    String?             @map("paystack_subaccount_id") @db.VarChar(255)
-  flutterwaveSubaccountId String?             @map("flutterwave_subaccount_id") @db.VarChar(255)
-  pesapalAccountId        String?             @map("pesapal_account_id") @db.VarChar(255)
-  activePlanId            Int?                @map("active_plan_id")
-  subscriptionStatus      SubscriptionStatus? @map("subscription_status")
-  createdAt               DateTime?           @default(now()) @map("created_at")
-  updatedAt               DateTime?           @default(now()) @updatedAt @map("updated_at")
-
-  user  User?  @relation(fields: [userId], references: [id])
-  theme Theme? @relation(fields: [themeId], references: [id])
-
-  mixTapes     MixTape[]
-  events       Event[]
-  bookings     Booking[]
-  clients      Client[]
-  invoices     Invoice[]
-  transactions Transaction[]
+  createdAt               DateTime?              @default(now()) @map("created_at")
+  updatedAt               DateTime?              @default(now()) @updatedAt @map("updated_at")
+  activePlanId            Int?                   @map("active_plan_id")
+  subscriptionStatus      SubscriptionStatus?    @map("subscription_status")
+  flutterwaveSubaccountId String?                @map("flutterwave_subaccount_id") @db.VarChar(255)
+  paystackSubaccountId    String?                @map("paystack_subaccount_id") @db.VarChar(255)
+  pesapalAccountId        String?                @map("pesapal_account_id") @db.VarChar(255)
+  bookings                Booking[]
+  clients                 Client[]
+  events                  Event[]
+  invoices                Invoice[]
+  mixTapes                MixTape[]
+  payoutRequests          PayoutRequest[]
+  paymentAccounts         TenantPaymentAccount[]
+  theme                   Theme?                 @relation(fields: [themeId], references: [id])
+  user                    User?                  @relation(fields: [userId], references: [id])
+  transactions            Transaction[]
+  wallet                  Wallet?
 
   @@map("tenants")
 }
 
 model SubscriptionPlan {
-  id                   Int       @id @default(autoincrement())
-  name                 String?   @db.VarChar(255)
-  priceMonthly         Decimal?  @map("price_monthly") @db.Decimal(10, 2)
-  priceAnnually        Decimal?  @map("price_annually") @db.Decimal(10, 2)
-  stripeMonthlyPriceId String?   @map("stripe_monthly_price_id") @db.VarChar(255)
-  stripeAnnualPriceId  String?   @map("stripe_annual_price_id") @db.VarChar(255)
-  discountPercentage   Int?      @map("discount_percentage")
-  isActive             Boolean   @default(true) @map("is_active")
+  id                   Int            @id @default(autoincrement())
+  name                 String?        @db.VarChar(255)
+  priceMonthly         Decimal?       @map("price_monthly") @db.Decimal(10, 2)
+  priceAnnually        Decimal?       @map("price_annually") @db.Decimal(10, 2)
+  discountPercentage   Int?           @map("discount_percentage")
   features             Json?
-  createdAt            DateTime? @default(now()) @map("created_at")
-  updatedAt            DateTime? @default(now()) @updatedAt @map("updated_at")
-
-  subscriptions Subscription[]
-  invoices      Invoice[]
+  createdAt            DateTime?      @default(now()) @map("created_at")
+  updatedAt            DateTime?      @default(now()) @updatedAt @map("updated_at")
+  isActive             Boolean        @default(true) @map("is_active")
+  invoices             Invoice[]
+  subscriptions        Subscription[]
 
   @@map("subscription_plans")
 }
@@ -179,14 +101,12 @@ model Subscription {
   id          String              @id @default(uuid()) @db.Uuid
   userId      String?             @map("user_id") @db.Uuid
   planId      Int?                @map("plan_id")
-  stripeSubId String?             @map("stripe_sub_id") @db.VarChar(255)
   status      SubscriptionStatus?
   periodEnd   DateTime?           @map("period_end")
   createdAt   DateTime?           @default(now()) @map("created_at")
   updatedAt   DateTime?           @default(now()) @updatedAt @map("updated_at")
-
-  user User?             @relation(fields: [userId], references: [id])
-  plan SubscriptionPlan? @relation(fields: [planId], references: [id])
+  plan        SubscriptionPlan?   @relation(fields: [planId], references: [id])
+  user        User?               @relation(fields: [userId], references: [id])
 
   @@map("subscriptions")
 }
@@ -201,8 +121,7 @@ model MixTape {
   createdAt DateTime? @default(now()) @map("created_at")
   updatedAt DateTime? @default(now()) @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
-
-  tenant Tenant? @relation(fields: [tenantId], references: [id])
+  tenant    Tenant?   @relation(fields: [tenantId], references: [id])
 
   @@map("mix_tapes")
 }
@@ -211,9 +130,8 @@ model Event {
   id           String       @id @default(uuid()) @db.Uuid
   tenantId     String?      @map("tenant_id") @db.Uuid
   title        String?      @db.VarChar(255)
-  description  String?      @db.Text
+  description  String?
   eventDate    DateTime?    @map("event_date")
-  eventTime    String?      @map("event_time") @db.VarChar(50)
   venueName    String?      @map("venue_name") @db.VarChar(255)
   venueAddress String?      @map("venue_address") @db.VarChar(255)
   capacity     Int?
@@ -222,30 +140,44 @@ model Event {
   createdAt    DateTime?    @default(now()) @map("created_at")
   updatedAt    DateTime?    @default(now()) @updatedAt @map("updated_at")
   deletedAt    DateTime?    @map("deleted_at")
-
-  tenant Tenant? @relation(fields: [tenantId], references: [id])
+  eventTime    String?      @map("event_time") @db.VarChar(50)
+  tenant       Tenant?      @relation(fields: [tenantId], references: [id])
 
   @@map("events")
 }
 
 model Booking {
-  id           String         @id @default(uuid()) @db.Uuid
-  tenantId     String?        @map("tenant_id") @db.Uuid
-  clientId     String?        @map("client_id") @db.Uuid
-  eventType    String?        @map("event_type") @db.VarChar(255)
-  eventDetails String?        @map("event_details") @db.Text
-  eventDate    DateTime?      @map("event_date")
-  address      String?        @db.Text
-  status       BookingStatus?
-  totalAmount  Decimal?       @map("total_amount") @db.Decimal(10, 2)
-  createdAt    DateTime?      @default(now()) @map("created_at")
-  updatedAt    DateTime?      @default(now()) @updatedAt @map("updated_at")
-  deletedAt    DateTime?      @map("deleted_at")
+  id            String         @id @default(uuid()) @db.Uuid
+  tenantId      String?        @map("tenant_id") @db.Uuid
+  eventType     String?        @map("event_type") @db.VarChar(255)
+  eventDetails  Json?          @map("event_details")
+  status        BookingStatus  @default(PENDING)
+  totalAmount   Decimal        @default(0.00) @map("total_amount") @db.Decimal(18, 2)
+  createdAt     DateTime?      @default(now()) @map("created_at")
+  updatedAt     DateTime?      @default(now()) @updatedAt @map("updated_at")
+  address       String?
+  eventDate     DateTime?      @map("event_date")
+  clientId      String?        @map("client_id") @db.Uuid
+  deletedAt     DateTime?      @map("deleted_at")
+  currencyCode  String?        @default("KES") @map("currency_code") @db.Char(3)
+  eventTimezone String?        @map("event_timezone") @db.VarChar(100)
 
-  tenant  Tenant?  @relation(fields: [tenantId], references: [id])
-  client  Client?  @relation(fields: [clientId], references: [id])
-  invoice Invoice?
+  paymentStatus PaymentStatus  @default(PENDING) @map("payment_status")
+  payoutStatus  PayoutStatus   @default(NOT_ELIGIBLE) @map("payout_status")
+  paymentDueAt  DateTime?      @map("payment_due_at")
+  confirmedAt   DateTime?      @map("confirmed_at")
+  completedAt   DateTime?      @map("completed_at")
+  cancelledAt   DateTime?      @map("cancelled_at")
 
+  client        Client?        @relation(fields: [clientId], references: [id])
+  tenant        Tenant?        @relation(fields: [tenantId], references: [id])
+  invoice       Invoice?
+  walletLedgers WalletLedger[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, paymentStatus])
+  @@index([tenantId, payoutStatus])
+  @@index([eventDate])
   @@map("bookings")
 }
 
@@ -257,30 +189,29 @@ model Client {
   phone     String?   @db.VarChar(50)
   createdAt DateTime? @default(now()) @map("created_at")
   updatedAt DateTime? @default(now()) @updatedAt @map("updated_at")
-
-  tenant   Tenant?   @relation(fields: [tenantId], references: [id])
-  bookings Booking[]
+  bookings  Booking[]
+  tenant    Tenant?   @relation(fields: [tenantId], references: [id])
 
   @@map("clients")
 }
 
 model Invoice {
-  id        String        @id @default(uuid()) @db.Uuid
-  userId    String?       @map("user_id") @db.Uuid
-  tenantId  String?       @map("tenant_id") @db.Uuid
-  planId    Int?          @map("plan_id")
-  bookingId String?       @unique @map("booking_id") @db.Uuid
-  type      InvoiceType
-  amount    Decimal       @db.Decimal(10, 2)
-  status    InvoiceStatus @default(UNPAID)
-  dueDate   DateTime?     @map("due_date")
-  createdAt DateTime?     @default(now()) @map("created_at")
-  updatedAt DateTime?     @default(now()) @updatedAt @map("updated_at")
-
-  user         User?             @relation(fields: [userId], references: [id])
-  tenant       Tenant?           @relation(fields: [tenantId], references: [id])
-  plan         SubscriptionPlan? @relation(fields: [planId], references: [id])
+  id           String            @id @default(uuid()) @db.Uuid
+  userId       String?           @map("user_id") @db.Uuid
+  tenantId     String?           @map("tenant_id") @db.Uuid
+  planId       Int?              @map("plan_id")
+  bookingId    String?           @unique @map("booking_id") @db.Uuid
+  type         InvoiceType
+  amount       Decimal           @db.Decimal(18, 2)
+  status       InvoiceStatus     @default(UNPAID)
+  dueDate      DateTime?         @map("due_date")
+  createdAt    DateTime?         @default(now()) @map("created_at")
+  updatedAt    DateTime?         @default(now()) @updatedAt @map("updated_at")
+  currencyCode String?           @default("KES") @map("currency_code") @db.Char(3)
   booking      Booking?          @relation(fields: [bookingId], references: [id])
+  plan         SubscriptionPlan? @relation(fields: [planId], references: [id])
+  tenant       Tenant?           @relation(fields: [tenantId], references: [id])
+  user         User?             @relation(fields: [userId], references: [id])
   transactions Transaction[]
 
   @@map("invoices")
@@ -291,12 +222,13 @@ model Transaction {
   invoiceId        String?           @map("invoice_id") @db.Uuid
   userId           String?           @map("user_id") @db.Uuid
   tenantId         String?           @map("tenant_id") @db.Uuid
-  amount           Decimal           @db.Decimal(10, 2)
+  amount           Decimal           @db.Decimal(18, 2)
   currency         String            @default("KES") @db.VarChar(10)
   gateway          PaymentGateway
   channel          PaymentChannel    @default(UNKNOWN)
   status           TransactionStatus @default(PENDING)
   gatewayReference String?           @unique @map("gateway_reference") @db.VarChar(255)
+  idempotencyKey   String?           @unique @map("idempotency_key") @db.VarChar(255)
   cardBrand        String?           @map("card_brand") @db.VarChar(50)
   cardLast4        String?           @map("card_last4") @db.VarChar(10)
   bankName         String?           @map("bank_name") @db.VarChar(100)
@@ -304,22 +236,29 @@ model Transaction {
   metadata         Json?
   createdAt        DateTime?         @default(now()) @map("created_at")
   updatedAt        DateTime?         @default(now()) @updatedAt @map("updated_at")
+  djNetEarning     Decimal?          @default(0.00) @map("dj_net_earning") @db.Decimal(18, 2)
+  gatewayFee       Decimal?          @default(0.00) @map("gateway_fee") @db.Decimal(18, 2)
+  grossAmount      Decimal?          @default(0.00) @map("gross_amount") @db.Decimal(18, 2)
+  platformFee      Decimal?          @default(0.00) @map("platform_fee") @db.Decimal(18, 2)
+  refundedAmount   Decimal?          @default(0.00) @map("refunded_amount") @db.Decimal(18, 2)
+  remainingAmount  Decimal?          @default(0.00) @map("remaining_amount") @db.Decimal(18, 2)
+  invoice          Invoice?          @relation(fields: [invoiceId], references: [id])
+  tenant           Tenant?           @relation(fields: [tenantId], references: [id])
+  user             User?             @relation(fields: [userId], references: [id])
 
-  invoice Invoice? @relation(fields: [invoiceId], references: [id])
-  user    User?    @relation(fields: [userId], references: [id])
-  tenant  Tenant?  @relation(fields: [tenantId], references: [id])
-
+  @@index([invoiceId])
+  @@index([tenantId, status])
   @@map("transactions")
 }
 
 model WebhookEvent {
   id             String    @id @default(uuid()) @db.Uuid
-  gatewayEventId String    @unique @map("gateway_event_id") @db.VarChar(255)
-  gateway        String    @default("PAYSTACK") @db.VarChar(50)
   type           String?   @db.VarChar(255)
   status         String?   @db.VarChar(255)
-  payload        Json?
   createdAt      DateTime? @default(now()) @map("created_at")
+  gateway        String    @default("PAYSTACK") @db.VarChar(50)
+  gatewayEventId String    @unique @map("gateway_event_id") @db.VarChar(255)
+  payload        Json?
 
   @@map("webhook_events")
 }
@@ -331,8 +270,7 @@ model AuditLog {
   metadata  Json?
   ipAddress String?   @map("ip_address") @db.VarChar(255)
   createdAt DateTime? @default(now()) @map("created_at")
-
-  user User? @relation(fields: [userId], references: [id])
+  user      User?     @relation(fields: [userId], references: [id])
 
   @@map("audit_logs")
 }
@@ -343,11 +281,10 @@ model SupportTicket {
   fullName  String?       @map("full_name") @db.VarChar(255)
   email     String?       @db.VarChar(255)
   subject   String?       @db.VarChar(255)
-  issue     String?       @db.Text
+  issue     String?
   status    TicketStatus?
   createdAt DateTime?     @default(now()) @map("created_at")
-
-  user User? @relation(fields: [userId], references: [id])
+  user      User?         @relation(fields: [userId], references: [id])
 
   @@map("support_tickets")
 }
@@ -356,13 +293,12 @@ model Notification {
   id          String            @id @default(uuid()) @db.Uuid
   userId      String?           @map("user_id") @db.Uuid
   title       String?           @db.VarChar(255)
-  message     String?           @db.Text
+  message     String?
   type        NotificationType?
   isRead      Boolean?          @default(false) @map("is_read")
-  referenceId String?           @map("reference_id") @db.VarChar(255)
   createdAt   DateTime?         @default(now()) @map("created_at")
-
-  user User? @relation(fields: [userId], references: [id])
+  referenceId String?           @map("reference_id") @db.VarChar(255)
+  user        User?             @relation(fields: [userId], references: [id])
 
   @@map("notifications")
 }
@@ -370,11 +306,11 @@ model Notification {
 model LandingPageHero {
   id          Int      @id @default(autoincrement())
   title       String?  @db.VarChar(255)
-  description String?  @db.Text
+  description String?
+  isActive    Boolean? @default(false) @map("is_active")
   imageUrl1   String?  @map("image_url_1") @db.VarChar(255)
   imageUrl2   String?  @map("image_url_2") @db.VarChar(255)
   imageUrl3   String?  @map("image_url_3") @db.VarChar(255)
-  isActive    Boolean? @default(false) @map("is_active")
 
   @@map("landing_page_heroes")
 }
@@ -382,7 +318,7 @@ model LandingPageHero {
 model LandingPageStep {
   id          Int     @id @default(autoincrement())
   title       String? @db.VarChar(255)
-  description String? @db.Text
+  description String?
   imageUrl    String? @map("image_url") @db.VarChar(255)
   order       Int?
 
@@ -392,7 +328,7 @@ model LandingPageStep {
 model LandingPageService {
   id          Int     @id @default(autoincrement())
   title       String? @db.VarChar(255)
-  description String? @db.Text
+  description String?
   imageUrl    String? @map("image_url") @db.VarChar(255)
   order       Int?
 
@@ -402,7 +338,7 @@ model LandingPageService {
 model LandingPageFaq {
   id       Int     @id @default(autoincrement())
   question String? @db.VarChar(255)
-  answer   String? @db.Text
+  answer   String?
   order    Int?
 
   @@map("landing_page_faqs")
@@ -429,3 +365,241 @@ model LandingPageSetting {
   @@map("landing_page_settings")
 }
 
+model Currency {
+  id        Int       @id @default(autoincrement())
+  code      String    @unique @db.Char(3)
+  name      String    @db.VarChar(100)
+  symbol    String?   @db.VarChar(20)
+  decimals  Int       @default(2)
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  countries Country[]
+
+  @@map("currencies")
+}
+
+model Country {
+  id              Int                    @id @default(autoincrement())
+  code            String                 @unique @db.Char(2)
+  name            String                 @unique @db.VarChar(100)
+  currencyCode    String                 @map("currency_code") @db.Char(3)
+  timezone        String?                @db.VarChar(100)
+  isActive        Boolean                @default(true) @map("is_active")
+  createdAt       DateTime               @default(now()) @map("created_at")
+  updatedAt       DateTime               @updatedAt @map("updated_at")
+  currency        Currency               @relation(fields: [currencyCode], references: [code])
+  paymentAccounts TenantPaymentAccount[]
+
+  @@index([currencyCode])
+  @@map("countries")
+}
+
+model TenantPaymentAccount {
+  id           String         @id @default(uuid()) @db.Uuid
+  tenantId     String         @map("tenant_id") @db.Uuid
+  gateway      PaymentGateway
+  accountId    String?        @map("account_id") @db.VarChar(255)
+  subaccountId String?        @map("subaccount_id") @db.VarChar(255)
+  countryCode  String?        @map("country_code") @db.Char(2)
+  currencyCode String?        @map("currency_code") @db.Char(3)
+  isActive     Boolean        @default(true) @map("is_active")
+  metadata     Json?
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+  country      Country?       @relation(fields: [countryCode], references: [code])
+  tenant       Tenant         @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, gateway])
+  @@index([tenantId])
+  @@index([gateway])
+  @@map("tenant_payment_accounts")
+}
+
+model Wallet {
+  id               String          @id @default(uuid()) @db.Uuid
+  tenantId         String          @unique @map("tenant_id") @db.Uuid
+  pendingBalance   Decimal         @default(0.00) @map("pending_balance") @db.Decimal(18, 2)
+  availableBalance Decimal         @default(0.00) @map("available_balance") @db.Decimal(18, 2)
+  totalWithdrawn   Decimal         @default(0.00) @map("total_withdrawn") @db.Decimal(18, 2)
+  currency         String          @default("KES") @db.VarChar(10)
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @default(now()) @updatedAt @map("updated_at")
+  totalEarnings    Decimal         @default(0.00) @map("total_earnings") @db.Decimal(18, 2)
+  payoutRequests   PayoutRequest[]
+  walletLedgers    WalletLedger[]
+  tenant           Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("wallets")
+}
+
+model PayoutRequest {
+  id                String              @id @default(uuid()) @db.Uuid
+  walletId          String              @map("wallet_id") @db.Uuid
+  tenantId          String              @map("tenant_id") @db.Uuid
+  amount            Decimal             @db.Decimal(18, 2)
+  currency          String              @default("KES") @db.VarChar(10)
+  gateway           PaymentGateway      @default(PAYSTACK)
+  status            PayoutRequestStatus @default(PENDING)
+  accountDetails    Json
+  adminNote         String?             @map("admin_note")
+  failureReason     String?             @map("failure_reason")
+  processedAt       DateTime?           @map("processed_at")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @default(now()) @updatedAt @map("updated_at")
+  fee               Decimal             @default(0.00) @db.Decimal(18, 2)
+  recipientCode     String?             @map("recipient_code") @db.VarChar(255)
+  transferReference String?             @unique @map("transfer_reference") @db.VarChar(255)
+  tenant            Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  wallet            Wallet              @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([status])
+  @@map("payout_requests")
+}
+
+model WalletLedger {
+  id              String     @id @default(uuid()) @db.Uuid
+  walletId        String     @map("wallet_id") @db.Uuid
+  bookingId       String?    @map("booking_id") @db.Uuid
+  amount          Decimal    @db.Decimal(18, 2)
+  currency        String     @db.VarChar(10)
+  type            LedgerType
+  description     String     @db.VarChar(255)
+  createdAt       DateTime   @default(now()) @map("created_at")
+  newBalance      Decimal    @default(0.00) @map("new_balance") @db.Decimal(18, 2)
+  paymentId       String?    @map("payment_id") @db.Uuid
+  previousBalance Decimal    @default(0.00) @map("previous_balance") @db.Decimal(18, 2)
+  referenceId     String?    @unique @map("reference_id") @db.VarChar(255)
+  status          String?    @default("CONFIRMED") @db.VarChar(50)
+  transferId      String?    @map("transfer_id") @db.Uuid
+  wallet          Wallet     @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  booking         Booking?   @relation(fields: [bookingId], references: [id])
+
+  @@index([walletId])
+  @@index([bookingId])
+  @@index([referenceId])
+  @@map("wallet_ledgers")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  DJ
+  ADMIN
+}
+
+enum SubscriptionStatus {
+  active
+  past_due
+  canceled
+}
+
+enum EventStatus {
+  upcoming
+  completed
+  canceled
+}
+
+enum BookingStatus {
+  PENDING
+  AWAITING_PAYMENT
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  REJECTED
+  EXPIRED
+  NO_SHOW
+  DISPUTED
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+  EXPIRED
+  REFUND_PENDING
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum PayoutStatus {
+  NOT_ELIGIBLE
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+  CANCELLED
+}
+
+enum TicketStatus {
+  open
+  in_progress
+  resolved
+}
+
+enum NotificationType {
+  booking_request
+  payment
+  system
+}
+
+enum InvoiceType {
+  SUBSCRIPTION
+  BOOKING
+}
+
+enum InvoiceStatus {
+  PAID
+  UNPAID
+  OVERDUE
+}
+
+enum PaymentGateway {
+  PAYSTACK
+  FLUTTERWAVE
+  PESAPAL
+  DPO
+  CELLULANT
+  CASH
+  MANUAL
+}
+
+enum PaymentChannel {
+  CARD
+  BANK_TRANSFER
+  MOBILE_MONEY
+  USSD
+  CASH
+  UNKNOWN
+}
+
+enum TransactionStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+  CANCELLED
+}
+
+enum PayoutRequestStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  REJECTED
+  FAILED
+  CANCELLED
+}
+
+enum LedgerType {
+  BOOKING_CREDIT_PENDING
+  ESCROW_RELEASED
+  WITHDRAWAL_REQUESTED
+  WITHDRAWAL_COMPLETED
+  WITHDRAWAL_REJECTED
+  WITHDRAWAL_FAILED_REVERSAL
+  REFUND_ADJUSTMENT
+}

@@ -127,25 +127,151 @@ export class EmailTemplates {
   }
 
   // Case 7: Booking Request Accepted
-  static getBookingAcceptedTemplate(djName: string, eventType: string, paymentUrl: string, requestCashUrl: string): string {
+  static getBookingAcceptedTemplate(
+    options: {
+      clientName?: string;
+      djName: string;
+      eventType: string;
+      eventDate?: string;
+      eventTime?: string;
+      venue?: string;
+      currency?: string;
+      amount?: number;
+      paymentUrl: string;
+      requestCashUrl?: string;
+    } | string,
+    legacyEventType?: string,
+    legacyPaymentUrl?: string,
+    legacyRequestCashUrl?: string
+  ): string {
+    const data = typeof options === 'string'
+      ? {
+          clientName: 'there',
+          djName: options,
+          eventType: legacyEventType || 'Event',
+          eventDate: '',
+          eventTime: '',
+          venue: '',
+          currency: 'KES',
+          amount: 0,
+          paymentUrl: legacyPaymentUrl || '#',
+          requestCashUrl: legacyRequestCashUrl || '#',
+        }
+      : options;
+
+    const amountDisplay = data.amount && data.amount > 0
+      ? `${data.currency || 'KES'} ${Number(data.amount).toLocaleString()}`
+      : null;
+
     const content = `
-      <p>Great news! <strong>${djName}</strong> has accepted your booking request for a <strong>${eventType}</strong>.</p>
-      <p>To finalize the booking and secure your event date, please complete your payment using one of the following options:</p>
-      <div style="text-align: center; margin-top: 30px; margin-bottom: 20px;">
-        <a href="${paymentUrl}" style="display: inline-block; padding: 12px 24px; margin-right: 15px; background-color: #dc2626; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; margin-bottom: 10px;">Pay Now</a>
-        <a href="${requestCashUrl}" style="display: inline-block; padding: 12px 24px; background-color: #1f2937; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; margin-bottom: 10px;">Request Cash on Payment</a>
+      <p style="margin-top: 0; font-size: 16px;">Hi <strong>${data.clientName || 'there'}</strong>,</p>
+      <p style="font-size: 15px; line-height: 1.6;">
+        Great news! <strong>${data.djName}</strong> has accepted your booking request for <strong>${data.eventType}</strong>.
+      </p>
+      
+      <!-- Event & Quote Details Card -->
+      <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; margin: 24px 0; overflow: hidden;">
+        <tr>
+          <td style="padding: 14px 20px; border-bottom: 1px solid #e2e8f0; background-color: #f1f5f9;">
+            <strong style="color: #0f172a; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">Booking & Quotation Summary</strong>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 18px 20px;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="padding: 6px 0; color: #64748b; font-size: 14px; width: 38%;">Artist / DJ:</td>
+                <td style="padding: 6px 0; color: #0f172a; font-size: 14px; font-weight: 600;">${data.djName}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; color: #64748b; font-size: 14px;">Event Type:</td>
+                <td style="padding: 6px 0; color: #0f172a; font-size: 14px; font-weight: 500;">${data.eventType}</td>
+              </tr>
+              ${data.eventDate ? `
+              <tr>
+                <td style="padding: 6px 0; color: #64748b; font-size: 14px;">Event Date:</td>
+                <td style="padding: 6px 0; color: #0f172a; font-size: 14px; font-weight: 500;">${data.eventDate}</td>
+              </tr>
+              ` : ''}
+              ${data.eventTime ? `
+              <tr>
+                <td style="padding: 6px 0; color: #64748b; font-size: 14px;">Event Time:</td>
+                <td style="padding: 6px 0; color: #0f172a; font-size: 14px; font-weight: 500;">${data.eventTime}</td>
+              </tr>
+              ` : ''}
+              ${data.venue ? `
+              <tr>
+                <td style="padding: 6px 0; color: #64748b; font-size: 14px;">Location / Venue:</td>
+                <td style="padding: 6px 0; color: #0f172a; font-size: 14px; font-weight: 500;">${data.venue}</td>
+              </tr>
+              ` : ''}
+              ${amountDisplay ? `
+              <tr>
+                <td style="padding: 14px 0 4px 0; color: #0f172a; font-size: 15px; font-weight: 700; border-top: 1px dashed #cbd5e1;">Performance Fee:</td>
+                <td style="padding: 14px 0 4px 0; color: #dc2626; font-size: 20px; font-weight: 800; font-family: monospace; border-top: 1px dashed #cbd5e1;">${amountDisplay}</td>
+              </tr>
+              ` : ''}
+            </table>
+          </td>
+        </tr>
+      </table>
+
+      <!-- Payment & Escrow Guarantee Box -->
+      <div style="background-color: #fffbeb; border: 1px solid #fef3c7; border-radius: 8px; padding: 18px; margin-bottom: 24px;">
+        <h4 style="margin: 0 0 10px 0; color: #92400e; font-size: 14px; display: flex; align-items: center; gap: 6px;">
+          🛡️ Payment Options & Escrow Protection:
+        </h4>
+        <ul style="margin: 0; padding-left: 20px; color: #78350f; font-size: 13px; line-height: 1.65;">
+          <li style="margin-bottom: 6px;"><strong>Pay Online (Instant Lock):</strong> Choose M-Pesa, Mobile Money, Visa, or Mastercard. Your date is reserved immediately.</li>
+          <li style="margin-bottom: 6px;"><strong>100% Escrow Protection:</strong> Funds are locked securely in Escrow and are only released to the DJ after the performance is completed.</li>
+          <li><strong>Prefer Cash on Arrival?</strong> You can request to pay cash directly to the DJ on the event day before the set begins.</li>
+        </ul>
       </div>
+
+      <!-- Action Buttons -->
+      <div style="text-align: center; margin: 30px 0 16px 0;">
+        <a href="${data.paymentUrl}" style="display: inline-block; padding: 14px 28px; margin: 6px; background-color: #dc2626; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 15px; box-shadow: 0 4px 14px rgba(220, 38, 38, 0.3);">
+          Pay Online with Escrow &rarr;
+        </a>
+        <a href="${data.paymentUrl}?requestCash=true" style="display: inline-block; padding: 14px 24px; margin: 6px; background-color: #ffffff; color: #1e293b; border: 1.5px solid #cbd5e1; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 14px;">
+          Cash on Arrival
+        </a>
+      </div>
+
+      <p style="text-align: center; margin: 0; font-size: 12px; color: #94a3b8; line-height: 1.5;">
+        Having trouble with the buttons? Open your checkout page directly:<br/>
+        <a href="${data.paymentUrl}" style="color: #dc2626; word-break: break-all;">${data.paymentUrl}</a>
+      </p>
     `;
     return this.getHtmlShell("Booking Request Accepted", content);
   }
 
   // Case 8: Booking Canceled / Rejected
-  static getBookingRejectedTemplate(djName: string, eventType: string): string {
+  static getBookingRejectedTemplate(djName: string, eventType: string, reason?: string, siteUrl?: string): string {
+    const platformUrl = siteUrl || "https://upbeat.africa";
+    const reasonSection = reason && reason.trim().length > 0 ? `
+      <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-left: 4px solid #dc2626; border-radius: 8px; padding: 16px; margin: 20px 0;">
+        <p style="margin: 0 0 6px 0; font-size: 12px; font-weight: 700; color: #991b1b; text-transform: uppercase; letter-spacing: 0.5px;">Note from ${djName} (Reason for Decline):</p>
+        <p style="margin: 0; color: #374151; font-size: 14px; line-height: 1.6; font-style: italic; white-space: pre-wrap;">"${reason.trim()}"</p>
+      </div>
+    ` : '';
+
     const content = `
       <p>Unfortunately, <strong>${djName}</strong> is unable to accept your booking request for a <strong>${eventType}</strong> at this time.</p>
-      <p>We encourage you to explore other talented DJs on UpBeat Entertainment Africa for your event.</p>
+      ${reasonSection}
+      <p>Don't worry! There are many other talented, verified DJs available on UpBeat Entertainment Africa ready to perform at your event.</p>
+      
+      <!-- UpBeat Africa Link Button -->
+      <div style="text-align: center; margin: 28px 0 18px 0;">
+        <a href="${platformUrl}" style="display: inline-block; padding: 13px 28px; background-color: #dc2626; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; box-shadow: 0 4px 14px rgba(220, 38, 38, 0.25);">
+          Explore Other DJs on UpBeat Africa &rarr;
+        </a>
+      </div>
+      <p style="text-align: center; margin: 0; font-size: 12px; color: #94a3b8;">
+        Visit: <a href="${platformUrl}" style="color: #dc2626; word-break: break-all;">${platformUrl}</a>
+      </p>
     `;
-    return this.getHtmlShell("Booking Update", content);
+    return this.getHtmlShell("Booking Declined", content);
   }
 
   // Case 9: Booking Details Updated
@@ -164,20 +290,154 @@ export class EmailTemplates {
   static getCashPaymentRequestedTemplate(clientName: string, eventType: string): string {
     const content = `
       <p><strong>${clientName}</strong> has requested a cash payment for their <strong>${eventType}</strong> booking.</p>
-      <p>Once you receive the cash payment, you can mark the booking as paid from your UpBeat Entertainment Africa dashboard.</p>
+      <p>Please log in to your dashboard to either <strong>Approve</strong> or <strong>Decline</strong> this cash request.</p>
     `;
     return this.getHtmlShell("Cash Payment Requested", content);
   }
 
-  // Case 11: Payment Reminder for Booking
-  static getPaymentReminderTemplate(djName: string, eventType: string, paymentUrl: string): string {
+  // Case 10A: Cash Request Approved by DJ (Sent to Client)
+  static getCashRequestApprovedTemplate(
+    clientName: string,
+    djName: string,
+    eventType: string,
+    date: string,
+    currency: string,
+    amount: number,
+    djUrl: string
+  ): string {
     const content = `
-      <p>This is a friendly reminder from <strong>${djName}</strong> regarding your <strong>${eventType}</strong> booking.</p>
-      <p>Your payment is still pending. Please complete your payment to fully secure your event date.</p>
-      <div style="text-align: center; margin-top: 30px; margin-bottom: 20px;">
-        <a href="${paymentUrl}" style="display: inline-block; padding: 12px 24px; background-color: #dc2626; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">Complete Payment</a>
+      <p>Hi <strong>${clientName}</strong>,</p>
+      <p>Great news! <strong>${djName}</strong> has approved your request to pay in cash on the event day for your <strong>${eventType}</strong>.</p>
+      
+      <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin: 20px 0;">
+        <h3 style="margin-top: 0; color: #1e293b; font-size: 16px;">Booking Summary</h3>
+        <p style="margin: 4px 0; font-size: 14px;"><strong>Artist:</strong> ${djName}</p>
+        <p style="margin: 4px 0; font-size: 14px;"><strong>Event:</strong> ${eventType}</p>
+        <p style="margin: 4px 0; font-size: 14px;"><strong>Date:</strong> ${date}</p>
+        <p style="margin: 8px 0 0 0; font-size: 16px; color: #dc2626;"><strong>Cash to Prepare on Arrival:</strong> ${currency} ${amount.toLocaleString()}</p>
       </div>
-      <p>If you have any questions, please contact the DJ.</p>
+
+      <p style="color: #475569; font-size: 14px;">Your event date is officially confirmed. Please coordinate directly with the DJ and prepare exact cash on arrival.</p>
+
+      <div style="text-align: center; margin-top: 25px;">
+        <a href="${djUrl}" style="display: inline-block; padding: 12px 24px; background-color: #dc2626; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">View DJ Profile</a>
+      </div>
+    `;
+    return this.getHtmlShell("Cash Payment Approved - Booking Confirmed", content);
+  }
+
+  // Case 10B: Cash Request Declined by DJ (Sent to Client)
+  static getCashRequestDeclinedTemplate(
+    clientName: string,
+    djName: string,
+    eventType: string,
+    currency: string,
+    amount: number,
+    checkoutUrl: string
+  ): string {
+    const content = `
+      <p>Hi <strong>${clientName}</strong>,</p>
+      <p><strong>${djName}</strong> was unable to accept cash payment for your <strong>${eventType}</strong> booking.</p>
+      <p>To secure your event date, the DJ requires online payment via UpBeat Secure Escrow.</p>
+
+      <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 18px; margin: 20px 0;">
+        <p style="margin: 0; font-size: 14px; color: #991b1b;"><strong>Notice:</strong> Your date is currently on hold. Please complete payment online using Paystack, Pesapal, or Cards to lock in your reservation.</p>
+        <p style="margin: 8px 0 0 0; font-size: 16px; color: #1e293b;"><strong>Total Due:</strong> ${currency} ${amount.toLocaleString()}</p>
+      </div>
+
+      <div style="text-align: center; margin-top: 25px;">
+        <a href="${checkoutUrl}" style="display: inline-block; padding: 12px 28px; background-color: #dc2626; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">Pay Online to Secure Date</a>
+      </div>
+    `;
+    return this.getHtmlShell("Action Required: Cash Request Declined", content);
+  }
+
+  // Case 11: Payment Reminder for Booking
+  static getPaymentReminderTemplate(
+    options: {
+      clientName?: string;
+      djName: string;
+      eventType: string;
+      eventDate?: string;
+      eventTime?: string;
+      currency?: string;
+      amount?: number;
+      paymentUrl: string;
+    } | string,
+    legacyEventType?: string,
+    legacyPaymentUrl?: string
+  ): string {
+    const data = typeof options === 'string'
+      ? {
+          clientName: 'there',
+          djName: options,
+          eventType: legacyEventType || 'Event',
+          eventDate: '',
+          eventTime: '',
+          currency: 'KES',
+          amount: 0,
+          paymentUrl: legacyPaymentUrl || '#',
+        }
+      : options;
+
+    const amountDisplay = data.amount && data.amount > 0
+      ? `${data.currency || 'KES'} ${Number(data.amount).toLocaleString()}`
+      : null;
+
+    const content = `
+      <p style="margin-top: 0; font-size: 16px;">Hi <strong>${data.clientName || 'there'}</strong>,</p>
+      <p style="font-size: 15px; line-height: 1.6;">
+        This is a friendly reminder from <strong>${data.djName}</strong> regarding your pending booking for <strong>${data.eventType}</strong>.
+      </p>
+      
+      <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; margin: 20px 0; overflow: hidden;">
+        <tr>
+          <td style="padding: 16px 20px;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="padding: 5px 0; color: #64748b; font-size: 14px; width: 38%;">Artist:</td>
+                <td style="padding: 5px 0; color: #0f172a; font-size: 14px; font-weight: 600;">${data.djName}</td>
+              </tr>
+              <tr>
+                <td style="padding: 5px 0; color: #64748b; font-size: 14px;">Event:</td>
+                <td style="padding: 5px 0; color: #0f172a; font-size: 14px; font-weight: 500;">${data.eventType}</td>
+              </tr>
+              ${data.eventDate ? `
+              <tr>
+                <td style="padding: 5px 0; color: #64748b; font-size: 14px;">Event Date:</td>
+                <td style="padding: 5px 0; color: #0f172a; font-size: 14px; font-weight: 500;">${data.eventDate}</td>
+              </tr>
+              ` : ''}
+              ${data.eventTime ? `
+              <tr>
+                <td style="padding: 5px 0; color: #64748b; font-size: 14px;">Event Time:</td>
+                <td style="padding: 5px 0; color: #0f172a; font-size: 14px; font-weight: 500;">${data.eventTime}</td>
+              </tr>
+              ` : ''}
+              ${amountDisplay ? `
+              <tr>
+                <td style="padding: 12px 0 4px 0; color: #0f172a; font-size: 14px; font-weight: 700; border-top: 1px dashed #cbd5e1;">Amount Due:</td>
+                <td style="padding: 12px 0 4px 0; color: #dc2626; font-size: 18px; font-weight: 800; font-family: monospace; border-top: 1px dashed #cbd5e1;">${amountDisplay}</td>
+              </tr>
+              ` : ''}
+            </table>
+          </td>
+        </tr>
+      </table>
+
+      <p style="color: #475569; font-size: 14px; line-height: 1.6;">
+        Your date is currently on hold. Please finalize your payment through UpBeat Escrow to secure this date on ${data.djName}'s calendar. Your payment is held safely until the event is completed.
+      </p>
+
+      <div style="text-align: center; margin: 28px 0 16px 0;">
+        <a href="${data.paymentUrl}" style="display: inline-block; padding: 14px 34px; background-color: #dc2626; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 15px; box-shadow: 0 4px 14px rgba(220, 38, 38, 0.3);">
+          Complete Payment & Secure Date &rarr;
+        </a>
+      </div>
+
+      <p style="text-align: center; margin: 0; font-size: 12px; color: #94a3b8; line-height: 1.5;">
+        Direct checkout link: <a href="${data.paymentUrl}" style="color: #dc2626; word-break: break-all;">${data.paymentUrl}</a>
+      </p>
     `;
     return this.getHtmlShell("Payment Reminder", content);
   }

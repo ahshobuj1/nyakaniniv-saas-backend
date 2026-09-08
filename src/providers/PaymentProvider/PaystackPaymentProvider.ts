@@ -5,7 +5,10 @@ import { BadRequestError } from '@/core/errors/AppError';
 
 export class PaystackPaymentProvider implements IPaymentProvider {
   async getPaymentLink(booking: Booking & { tenant: Tenant | null, client?: Client | null }, paymentId: string): Promise<{ checkoutUrl: string }> {
-    if (!booking.tenant?.paystackSubaccountId) {
+    const hasPaystack = booking.tenant?.paystackSubaccountId || 
+      (booking.tenant as any)?.paymentAccounts?.some((acc: any) => acc.gateway === 'PAYSTACK' && acc.isActive);
+
+    if (!hasPaystack) {
       throw new BadRequestError('DJ has not configured Paystack payments yet');
     }
 
@@ -19,24 +22,41 @@ export class PaystackPaymentProvider implements IPaymentProvider {
     }
 
     const amountInKobo = Math.round(Number(booking.totalAmount) * 100);
-    const platformFeeInKobo = Math.round(amountInKobo * 0.05);
+    const currencyToUse = (booking as any).currencyCode || "KES";
+
+    const callbackBaseUrl = booking.tenant?.subdomain
+      ? (process.env.NODE_ENV === 'production'
+          ? `https://${booking.tenant.subdomain}.deejay.africa`
+          : `http://${booking.tenant.subdomain}.localhost:3000`)
+      : (process.env.CLIENT_URL || "http://localhost:3000");
+
+    const callbackUrl = `${callbackBaseUrl}/payment-success?provider=paystack`;
+
+    const subaccountCode = booking.tenant?.paystackSubaccountId || 
+      (booking.tenant as any)?.paymentAccounts?.find((acc: any) => acc.gateway === 'PAYSTACK' && acc.isActive)?.subaccountId;
+
+    const payload: any = {
+      email: booking.client.email,
+      amount: amountInKobo,
+      currency: currencyToUse,
+      callback_url: callbackUrl,
+      metadata: {
+        invoiceId: paymentId,
+        bookingId: booking.id,
+        tenantId: booking.tenantId,
+        subaccountCode: subaccountCode || null,
+      },
+    };
+
+    if (subaccountCode && !subaccountCode.startsWith('ACCT_test_')) {
+      payload.subaccount = subaccountCode;
+      payload.bearer = 'subaccount';
+    }
 
     try {
       const response = await axios.post(
         'https://api.paystack.co/transaction/initialize',
-        {
-          email: booking.client.email,
-          amount: amountInKobo,
-          currency: "KES", // Currently default to KES based on initial requirement
-          subaccount: booking.tenant.paystackSubaccountId,
-          transaction_charge: platformFeeInKobo,
-          bearer: "subaccount",
-          callback_url: `https://${booking.tenant.subdomain}.deejay.africa`,
-          metadata: {
-            invoiceId: paymentId,
-            bookingId: booking.id,
-          }
-        },
+        payload,
         {
           headers: {
             Authorization: `Bearer ${secretKey}`,

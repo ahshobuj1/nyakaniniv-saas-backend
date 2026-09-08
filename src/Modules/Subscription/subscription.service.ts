@@ -2,23 +2,17 @@ import { PrismaClient } from '@/prisma/generated/client';
 import { NotFoundError, BadRequestError, AuthorizationError } from '@/core/errors/AppError';
 import axios from 'axios';
 import { CreateSubscriptionPlanDTO, SubscribeDTO, UpdateSubscriptionPlanDTO } from './SubscriptionDTO';
-import { SubscriptionStatus, InvoiceStatus, InvoiceType } from '@/prisma/generated/client';
+import { SubscriptionStatus, InvoiceStatus, InvoiceType, PaymentChannel, TransactionStatus } from '@/prisma/generated/client';
 import { IEmailProvider } from '@/providers/EmailProvider';
 import { EmailTemplates } from '@/utils/EmailTemplates';
-import Stripe from 'stripe';
+import { PaymentProviderResolver } from '@/Modules/PaymentProvider/PaymentProviderResolver';
+import { config } from '@/core/config';
 
 export class SubscriptionServices {
-  private stripe: any = null;
   constructor(
     private prisma: PrismaClient,
     private emailProvider: IEmailProvider
-  ) {
-    if (process.env.STRIPE_SECRET_KEY) {
-      this.stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-        apiVersion: '2024-04-10' as any,
-      });
-    }
-  }
+  ) {}
 
   async createPlan(data: CreateSubscriptionPlanDTO) {
     const plan = await this.prisma.subscriptionPlan.create({
@@ -26,8 +20,6 @@ export class SubscriptionServices {
         name: data.name,
         priceMonthly: data.priceMonthly,
         priceAnnually: data.priceAnnually,
-        stripeMonthlyPriceId: data.stripeMonthlyPriceId,
-        stripeAnnualPriceId: data.stripeAnnualPriceId,
         discountPercentage: data.discountPercentage,
         features: data.features ? (data.features as any) : {},
       },
@@ -69,8 +61,6 @@ export class SubscriptionServices {
         name: data.name !== undefined ? data.name : existing.name,
         priceMonthly: data.priceMonthly !== undefined ? data.priceMonthly : existing.priceMonthly,
         priceAnnually: data.priceAnnually !== undefined ? data.priceAnnually : existing.priceAnnually,
-        stripeMonthlyPriceId: data.stripeMonthlyPriceId !== undefined ? data.stripeMonthlyPriceId : existing.stripeMonthlyPriceId,
-        stripeAnnualPriceId: data.stripeAnnualPriceId !== undefined ? data.stripeAnnualPriceId : existing.stripeAnnualPriceId,
         discountPercentage: data.discountPercentage !== undefined ? data.discountPercentage : existing.discountPercentage,
         isActive: data.isActive !== undefined ? data.isActive : existing.isActive,
         features: data.features !== undefined ? data.features : (existing.features as any),
@@ -90,7 +80,7 @@ export class SubscriptionServices {
     });
 
     if (activeSubs > 0) {
-      throw new BadRequestError();
+      throw new BadRequestError('Cannot delete plan with active subscriptions.');
     }
 
     await this.prisma.subscriptionPlan.delete({ where: { id } });
@@ -100,7 +90,7 @@ export class SubscriptionServices {
   async subscribe(userId: string, data: SubscribeDTO) {
     const plan = await this.prisma.subscriptionPlan.findUnique({ where: { id: data.planId } });
     if (!plan) {
-      throw new NotFoundError();
+      throw new NotFoundError('Subscription plan not found');
     }
 
     const amountStr = data.billingCycle === 'monthly' ? plan.priceMonthly : plan.priceAnnually;
@@ -118,75 +108,211 @@ export class SubscriptionServices {
       }
     }
 
-    const secretKey = process.env.PAYSTACK_SECRET_KEY;
-    if (!secretKey) {
-      // Mock logic if no Paystack keys are available yet
-      const subscription = await this.prisma.subscription.create({
-        data: {
-          userId,
-          planId: data.planId,
-          status: SubscriptionStatus.active,
-          stripeSubId: 'mock_sub_' + Date.now(), // Still using stripeSubId column as a generic reference
-          periodEnd: new Date(Date.now() + (data.billingCycle === 'monthly' ? 30 : 365) * 24 * 60 * 60 * 1000), // approx
-        }
-      });
-      
-      // Auto-generate invoice for mock payment
-      await this.prisma.invoice.create({
-        data: {
-          userId,
-          planId: data.planId,
-          amount,
-          type: InvoiceType.SUBSCRIPTION,
-          status: InvoiceStatus.PAID,
-        }
-      });
-
-      return { url: 'https://upbeat.africa/dashboard', subscription };
-    }
-
-    // Actual Paystack Logic
-    const amountInKobo = Math.round(amount * 100); 
-    const baseUrl = process.env.FRONTEND_URL || 'https://upbeat.africa';
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.user.findUnique({ 
+      where: { id: userId },
+      include: { tenant: true }
+    });
     
     if (!user || !user.email) {
-       throw new BadRequestError('User email is required for Paystack payments');
+       throw new BadRequestError('User email is required for subscription payments');
     }
 
-    try {
-      const response = await axios.post(
-        'https://api.paystack.co/transaction/initialize',
+    const country = user.tenant?.country || 'KE';
+    const provider = PaymentProviderResolver.resolve({
+      country,
+      operation: 'COLLECTION',
+      requestedGateway: data.gateway,
+    });
+
+    const currencyMap: Record<string, string> = {
+      NG: 'NGN',
+      GH: 'GHS',
+      ZA: 'ZAR',
+      UG: 'UGX',
+      RW: 'RWF',
+      TZ: 'TZS',
+      KE: 'KES',
+    };
+    const countryCode = PaymentProviderResolver.normalizeCountryCode(country);
+    const currency = currencyMap[countryCode] || 'KES';
+
+    // Create unpaid subscription invoice
+    const invoice = await this.prisma.invoice.create({
+      data: {
+        userId,
+        tenantId: user.tenant?.id,
+        planId: data.planId,
+        amount,
+        currencyCode: currency,
+        type: InvoiceType.SUBSCRIPTION,
+        status: InvoiceStatus.UNPAID,
+      }
+    });
+
+    const reference = `sub_${invoice.id.substring(0, 8)}_${Date.now()}`;
+    const callbackUrl = data.successUrl || `${config.clientUrl}/dashboard/billing?success=true&reference=${reference}`;
+    const cancelUrl = data.cancelUrl || `${config.clientUrl}/dashboard/billing?canceled=true&reference=${reference}`;
+
+    const paymentResult = await provider.initializePayment({
+      reference,
+      amount,
+      currency,
+      email: user.email,
+      name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'DJ',
+      description: `UpBeat Subscription: ${plan.name} (${data.billingCycle})`,
+      callbackUrl,
+      cancelUrl,
+      paymentType: 'SUBSCRIPTION',
+      country,
+      metadata: {
+        userId,
+        planId: String(plan.id),
+        billingCycle: data.billingCycle,
+        invoiceId: invoice.id,
+      },
+    });
+
+    // Create pending transaction record
+    await this.prisma.transaction.create({
+      data: {
+        invoiceId: invoice.id,
+        userId,
+        tenantId: user.tenant?.id,
+        amount,
+        currency,
+        gateway: provider.gateway,
+        channel: PaymentChannel.UNKNOWN,
+        status: TransactionStatus.PENDING,
+        gatewayReference: reference,
+        idempotencyKey: reference,
+        grossAmount: amount,
+        djNetEarning: 0,
+        metadata: {
+          planId: plan.id,
+          billingCycle: data.billingCycle,
+        },
+      },
+    });
+
+    return { url: paymentResult.checkoutUrl };
+  }
+
+  getAvailableGateways(country?: string) {
+    const c = (country || '').trim().toLowerCase();
+    const isEastAfrica = ['tanzania', 'tz', 'kenya', 'ke', 'uganda', 'ug', 'rwanda', 'rw'].includes(c);
+
+    if (isEastAfrica) {
+      return [
         {
-          email: user.email,
-          amount: amountInKobo,
-          currency: 'KES',
-          callback_url: data.successUrl || `${baseUrl}/dashboard/billing?success=true`,
-          metadata: {
-            userId,
-            planId: plan.id.toString(),
-            billingCycle: data.billingCycle,
-            type: 'subscription'
-          }
+          id: 'pesapal',
+          name: 'Pesapal',
+          title: 'Mobile Money & Cards (East Africa)',
+          description: 'M-Pesa, Tigo Pesa, Airtel Money, Visa & Mastercard',
+          currencies: ['TZS', 'KES', 'UGX', 'RWF', 'USD'],
+          isRecommended: true,
+          badge: 'Recommended for East Africa',
+          paymentMethods: ['M-Pesa', 'Tigo Pesa', 'Airtel Money', 'Cards']
         },
         {
-          headers: {
-            Authorization: `Bearer ${secretKey}`,
-            'Content-Type': 'application/json',
-          },
+          id: 'paystack',
+          name: 'Paystack',
+          title: 'Direct Card & Bank Checkout',
+          description: 'Visa, Mastercard, Verve and direct international checkout',
+          currencies: ['KES', 'NGN', 'GHS', 'ZAR', 'USD'],
+          isRecommended: false,
+          badge: 'Debit / Credit Cards',
+          paymentMethods: ['Cards', 'Bank Transfer', 'Apple Pay']
         }
-      );
-
-      const responseData = response.data;
-      if (responseData.status && responseData.data?.authorization_url) {
-        return { url: responseData.data.authorization_url };
-      } else {
-        throw new Error(responseData.message || "Failed to generate Paystack checkout URL");
-      }
-    } catch (error: any) {
-      console.error("Paystack Init Error:", error.response?.data || error.message);
-      throw new BadRequestError("An error occurred while initializing Paystack payment");
+      ];
     }
+
+    return [
+      {
+        id: 'paystack',
+        name: 'Paystack',
+        title: 'Paystack Payment Gateway',
+        description: 'Cards, Bank Transfer, USSD & Apple Pay',
+        currencies: ['NGN', 'GHS', 'ZAR', 'KES', 'USD'],
+        isRecommended: true,
+        badge: 'Recommended',
+        paymentMethods: ['Cards', 'Bank Transfer', 'USSD']
+      },
+      {
+        id: 'pesapal',
+        name: 'Pesapal',
+        title: 'Pesapal Gateway',
+        description: 'Mobile Money and Regional Cards',
+        currencies: ['TZS', 'KES', 'UGX', 'USD'],
+        isRecommended: false,
+        badge: 'East Africa / Mobile Money',
+        paymentMethods: ['M-Pesa', 'Airtel Money', 'Cards']
+      }
+    ];
+  }
+
+  async validatePayoutAccount(data: {
+    gateway: string;
+    bankCode?: string;
+    accountNumber: string;
+    country?: string;
+  }) {
+    const gateway = (data.gateway || '').toLowerCase();
+    const { bankCode, accountNumber, country } = data;
+
+    if (!accountNumber || !accountNumber.trim()) {
+      return { valid: false, message: 'Account or phone number is required.' };
+    }
+
+    if (gateway === 'paystack') {
+      if (!bankCode) {
+        return { valid: false, message: 'Bank selection is required for Paystack account verification.' };
+      }
+      const secretKey = process.env.PAYSTACK_SECRET_KEY;
+      if (!secretKey) {
+        return { valid: true, accountName: 'Test Verified Account (Dev Mode)' };
+      }
+
+      try {
+        const response = await axios.get(
+          `https://api.paystack.co/bank/resolve?account_number=${encodeURIComponent(accountNumber.trim())}&bank_code=${encodeURIComponent(bankCode.trim())}`,
+          {
+            headers: {
+              Authorization: `Bearer ${secretKey}`,
+            },
+          }
+        );
+        if (response.data?.status && response.data?.data?.account_name) {
+          return {
+            valid: true,
+            accountName: response.data.data.account_name,
+            accountNumber: response.data.data.account_number,
+          };
+        } else {
+          return {
+            valid: false,
+            message: response.data?.message || 'Could not verify account name with bank.',
+          };
+        }
+      } catch (err: any) {
+        const errMsg = err.response?.data?.message || 'Invalid account number or bank code.';
+        return { valid: false, message: errMsg };
+      }
+    }
+
+    // Pesapal / East Africa Mobile Money format validation
+    const cleaned = accountNumber.replace(/[\s-+]/g, '');
+    const isDigitsOnly = /^\d+$/.test(cleaned);
+    if (!isDigitsOnly || cleaned.length < 9 || cleaned.length > 13) {
+      return {
+        valid: false,
+        message: 'Invalid phone number. Mobile money numbers must be 9 to 12 digits (e.g. 0712345678).'
+      };
+    }
+
+    return {
+      valid: true,
+      accountName: 'Verified Mobile Money Account'
+    };
   }
 
   async cancelSubscription(userId: string) {
@@ -223,97 +349,5 @@ export class SubscriptionServices {
     }
 
     return { success: true, message: 'Subscription canceled' };
-  }
-
-  async handleStripeWebhook(signature: string, rawBody: string) {
-    if (!this.stripe || !process.env.STRIPE_WEBHOOK_SECRET) {
-      throw new BadRequestError();
-    }
-
-    let event: any;
-    try {
-      event = this.stripe.webhooks.constructEvent(rawBody, signature, process.env.STRIPE_WEBHOOK_SECRET);
-    } catch (err: any) {
-      throw new BadRequestError();
-    }
-
-    // Removed webhook event logic because we removed WebhookEvent model
-    // Just parse and continue
-
-
-    if (event.type === 'checkout.session.completed') {
-      const session = event.data.object as any;
-      const userId = session.metadata?.userId;
-      const planId = session.metadata?.planId;
-      const stripeSubId = session.subscription as string;
-      const amountPaid = (session.amount_total || 0) / 100;
-
-      if (userId && planId) {
-        await this.prisma.subscription.create({
-          data: {
-            userId,
-            planId: parseInt(planId, 10),
-            stripeSubId,
-            status: SubscriptionStatus.active,
-            periodEnd: new Date(Date.now() + (session.metadata?.billingCycle === 'monthly' ? 30 : 365) * 24 * 60 * 60 * 1000)
-          }
-        });
-
-        // Auto-generate invoice for actual Stripe payment
-        await this.prisma.invoice.create({
-          data: {
-            userId,
-            planId: parseInt(planId, 10),
-            amount: amountPaid,
-            type: InvoiceType.SUBSCRIPTION,
-            status: InvoiceStatus.PAID,
-          }
-        });
-      }
-    } else if (event.type === 'customer.subscription.deleted') {
-      const stripeSub = event.data.object as any;
-      await this.prisma.subscription.updateMany({
-        where: { stripeSubId: stripeSub.id },
-        data: { status: SubscriptionStatus.canceled }
-      });
-    }
-
-    // Process specific events
-    if (event.type === 'invoice.payment_succeeded') {
-      const invoiceData = event.data.object;
-      
-      const sub = await this.prisma.subscription.findFirst({ where: { stripeSubId: invoiceData.subscription } });
-      if (sub) {
-        await this.prisma.$transaction(async (tx) => {
-          await tx.subscription.update({
-            where: { id: sub.id },
-            data: { status: SubscriptionStatus.active }
-          });
-          
-          await tx.invoice.create({
-            data: {
-              userId: sub.userId,
-              planId: sub.planId,
-              amount: invoiceData.amount_paid / 100, // assuming cents
-              type: InvoiceType.SUBSCRIPTION,
-              status: InvoiceStatus.PAID,
-            }
-          });
-        });
-      }
-    } else if (event.type === 'invoice.payment_failed') {
-      const invoiceData = event.data.object;
-      const sub = await this.prisma.subscription.findFirst({ where: { stripeSubId: invoiceData.subscription } });
-      if (sub) {
-        await this.prisma.$transaction(async (tx) => {
-          await tx.subscription.update({
-            where: { id: sub.id },
-            data: { status: SubscriptionStatus.past_due }
-          });
-        });
-      }
-    }
-
-    return { received: true };
   }
 }

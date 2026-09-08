@@ -152,9 +152,9 @@ export class AnalyticsServices {
     ]);
 
     const bookings = {
-      pending: bookingStats.find((s: any) => s.status === BookingStatus.pending)?._count || 0,
-      accepted: bookingStats.find((s: any) => s.status === BookingStatus.accepted)?._count || 0,
-      completed: bookingStats.find((s: any) => s.status === BookingStatus.completed)?._count || 0,
+      pending: bookingStats.find((s: any) => s.status === BookingStatus.PENDING)?._count || 0,
+      accepted: bookingStats.find((s: any) => s.status === BookingStatus.CONFIRMED || s.status === BookingStatus.AWAITING_PAYMENT)?._count || 0,
+      completed: bookingStats.find((s: any) => s.status === BookingStatus.COMPLETED)?._count || 0,
     };
 
     return {

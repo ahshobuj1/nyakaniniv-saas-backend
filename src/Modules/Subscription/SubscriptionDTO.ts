@@ -16,8 +16,6 @@ export const createSubscriptionPlanSchema = {
     name: z.string().min(2, "Plan name must be at least 2 characters"),
     priceMonthly: z.number().min(0, "Price must be positive"),
     priceAnnually: z.number().min(0, "Price must be positive"),
-    stripeMonthlyPriceId: z.string().optional(),
-    stripeAnnualPriceId: z.string().optional(),
     discountPercentage: z.number().min(0).max(100).optional().default(0),
     isActive: z.boolean().optional().default(true),
     features: z.preprocess(parseJsonString, z.record(z.string(), z.any()).optional()),
@@ -29,8 +27,6 @@ export const updateSubscriptionPlanSchema = {
     name: z.string().min(2, "Plan name must be at least 2 characters").optional(),
     priceMonthly: z.number().min(0, "Price must be positive").optional(),
     priceAnnually: z.number().min(0, "Price must be positive").optional(),
-    stripeMonthlyPriceId: z.string().optional(),
-    stripeAnnualPriceId: z.string().optional(),
     discountPercentage: z.number().min(0).max(100).optional(),
     isActive: z.boolean().optional(),
     features: z.preprocess(parseJsonString, z.record(z.string(), z.any()).optional()),
@@ -46,6 +42,7 @@ export const subscribeSchema = {
     billingCycle: z.enum(['monthly', 'annually']),
     successUrl: z.string().url("Must be a valid URL").optional(),
     cancelUrl: z.string().url("Must be a valid URL").optional(),
+    gateway: z.enum(['paystack', 'pesapal', 'flutterwave', 'PAYSTACK', 'PESAPAL', 'FLUTTERWAVE']).optional(),
   }),
 };
 

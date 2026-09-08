@@ -7,4 +7,5 @@ export interface IPaymentProvider {
    * @param paymentId The ID of the BookingPayment record
    */
   getPaymentLink(booking: Booking & { tenant: Tenant | null }, paymentId: string): Promise<{ checkoutUrl: string }>;
+  verifyTransaction?(referenceOrTrackingId: string): Promise<unknown>;
 }
