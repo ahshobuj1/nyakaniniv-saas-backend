@@ -5,6 +5,7 @@ import {
   InvoiceStatus,
   InvoiceType,
   NotificationType,
+  TransactionStatus,
 } from '@/prisma/generated/client';
 import { BadRequestError, NotFoundError } from '@/core/errors/AppError';
 import { AppLogger } from '@/core/logging/logger';
@@ -34,6 +35,7 @@ export class BookingStatusService {
     ],
     [BookingStatus.AWAITING_PAYMENT]: [
       BookingStatus.CONFIRMED,
+      BookingStatus.REJECTED,
       BookingStatus.CANCELLED,
       BookingStatus.EXPIRED,
     ],
@@ -108,6 +110,16 @@ export class BookingStatusService {
 
       // 1. Moving to AWAITING_PAYMENT (DJ accepted request and set price)
       if (targetStatus === BookingStatus.AWAITING_PAYMENT) {
+        
+        // Payout Account Validation
+        const payoutAccount = await tx.tenantPaymentAccount.findFirst({
+          where: { tenantId: booking.tenantId!, isActive: true },
+        });
+        
+        if (!payoutAccount) {
+          throw new BadRequestError('You must connect a payout account in your wallet before accepting bookings.');
+        }
+
         if (!input.totalAmount && Number(booking.totalAmount) <= 0) {
           throw new BadRequestError('Total amount must be specified when accepting a booking.');
         }
@@ -174,6 +186,21 @@ export class BookingStatusService {
         }
         updatedDetails.declineReason = input.reason.trim();
         updateData.eventDetails = updatedDetails;
+        updateData.paymentStatus = PaymentStatus.FAILED;
+
+        // Invalidate unpaid invoice and cancel any pending transactions
+        await tx.invoice.updateMany({
+          where: { bookingId: booking.id, status: InvoiceStatus.UNPAID },
+          data: { status: InvoiceStatus.OVERDUE },
+        });
+
+        const invoiceId = booking.invoice?.id;
+        if (invoiceId) {
+          await tx.transaction.updateMany({
+            where: { invoiceId, status: TransactionStatus.PENDING },
+            data: { status: TransactionStatus.FAILED },
+          });
+        }
       }
 
       const res = await tx.booking.update({
