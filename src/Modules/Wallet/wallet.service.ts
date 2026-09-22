@@ -115,6 +115,42 @@ export class WalletService {
       };
     }
 
+    const balancesByCurrency: Record<string, { pendingBalance: number; availableBalance: number; totalEarnings: number; totalWithdrawn: number }> = {};
+    
+    wallet.walletLedgers.forEach(l => {
+      const cur = l.currency || wallet.currency;
+      if (!balancesByCurrency[cur]) {
+        balancesByCurrency[cur] = { pendingBalance: 0, availableBalance: 0, totalEarnings: 0, totalWithdrawn: 0 };
+      }
+      const bal = balancesByCurrency[cur];
+      const amt = Number(l.amount);
+
+      switch (l.type) {
+        case 'BOOKING_CREDIT_PENDING':
+          bal.pendingBalance += amt;
+          bal.totalEarnings += amt;
+          break;
+        case 'ESCROW_RELEASED':
+          bal.pendingBalance -= amt;
+          bal.availableBalance += amt;
+          break;
+        case 'WITHDRAWAL_REQUESTED':
+          bal.availableBalance -= amt;
+          break;
+        case 'WITHDRAWAL_COMPLETED':
+          bal.totalWithdrawn += amt;
+          break;
+        case 'WITHDRAWAL_REJECTED':
+        case 'WITHDRAWAL_FAILED_REVERSAL':
+          bal.availableBalance += amt;
+          break;
+        case 'REFUND_ADJUSTMENT':
+          bal.pendingBalance -= amt;
+          bal.totalEarnings -= amt;
+          break;
+      }
+    });
+
     return {
       wallet: {
         id: wallet.id,
@@ -127,6 +163,7 @@ export class WalletService {
         createdAt: wallet.createdAt,
         updatedAt: wallet.updatedAt,
       },
+      balancesByCurrency,
       payoutRequests: wallet.payoutRequests.map((p) => ({
         id: p.id,
         amount: Number(p.amount),
