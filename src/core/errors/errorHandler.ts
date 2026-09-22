@@ -9,19 +9,9 @@ import { AppLogger } from "../logging/logger";
 import { HTTPStatusCode } from "@/types/HTTPStatusCode";
 import { errorMapperRegistry } from "./ErrorMapperRegistry";
 import { MulterError } from "multer";
-
-interface ErrorResponse {
-  success: false;
-  error: {
-    message: string;
-    code: string;
-    statusCode: number;
-    timestamp: string;
-    requestId: string;
-    details?: unknown;
-    stack?: string;
-  };
-}
+import { z } from "zod";
+import { formatZodError } from "./validationErrorFormatter";
+import { ErrorResponse } from "@/types/error.types";
 
 export function errorHandler() {
   return (err: unknown, req: Request, res: Response, next: NextFunction) => {
@@ -65,6 +55,10 @@ function normalizeError(err: unknown): AppError {
   }
 
   // 3. Handle validation errors
+  if (err instanceof z.ZodError) {
+    return formatZodError(err);
+  }
+
   if (err instanceof Error && err.name === "ValidationError") {
     return new ValidationError(err.message, { originalError: err });
   }
