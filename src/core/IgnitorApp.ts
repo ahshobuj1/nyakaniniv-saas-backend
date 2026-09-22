@@ -19,7 +19,7 @@ import { Server } from "http";
 import swaggerUi from "swagger-ui-express";
 import { swaggerSpec } from "./config/swagger";
 import { EmailCronJobs } from "@/cron/emailJobs";
-
+import { BookingCronJobs } from "@/cron/bookingJobs";
 export class IgnitorApp {
   private app: Express;
   private context: Context;
@@ -73,6 +73,8 @@ export class IgnitorApp {
       const prisma = this.context.getService('prisma');
       const emailCronJobs = new EmailCronJobs(prisma, emailProvider);
       emailCronJobs.init();
+      const bookingCronJobs = new BookingCronJobs(prisma, emailProvider);
+      bookingCronJobs.init();
 
       // 2. Sort and Initialize Modules
       const sortedModules = sortModulesByDependencies(this.modules);

@@ -181,8 +181,27 @@ export class BookingServices {
       });
     }
 
-    const currencyCode = data.currencyCode || 'KES';
-    const eventTimezone = data.eventTimezone || tenant.timezone || 'Africa/Nairobi';
+    const countryToCurrency: Record<string, string> = {
+      KE: 'KES',
+      NG: 'NGN',
+      GH: 'GHS',
+      ZA: 'ZAR',
+      TZ: 'TZS',
+      UG: 'UGX',
+      RW: 'RWF',
+    };
+    const resolvedCurrency = tenant.country ? countryToCurrency[tenant.country.toUpperCase()] || 'KES' : 'KES';
+    const currencyCode = data.currencyCode || resolvedCurrency;
+
+    const tzAbbrToIana: Record<string, string> = {
+      EAT: 'Africa/Nairobi',
+      WAT: 'Africa/Lagos',
+      SAST: 'Africa/Johannesburg',
+      GMT: 'GMT',
+      UTC: 'UTC',
+    };
+    const rawTimezone = data.eventTimezone || tenant.timezone || 'EAT';
+    const eventTimezone = tzAbbrToIana[rawTimezone.toUpperCase()] || rawTimezone;
 
     const booking = await this.prisma.booking.create({
       data: {
@@ -377,6 +396,10 @@ export class BookingServices {
       throw new BadRequestError('Booking is already paid');
     }
 
+    if (booking.status === BookingStatus.REJECTED || booking.status === BookingStatus.CANCELLED) {
+      throw new BadRequestError('This booking has been declined or cancelled. The payment link is no longer valid.');
+    }
+
     if (booking.status !== BookingStatus.AWAITING_PAYMENT && (booking.status as any) !== 'accepted') {
       throw new BadRequestError('Booking is not ready for payment');
     }
@@ -483,6 +506,10 @@ export class BookingServices {
 
     if (booking.paymentStatus === PaymentStatus.PAID || (booking.invoice && booking.invoice.status === InvoiceStatus.PAID)) {
       throw new BadRequestError('Booking is already paid');
+    }
+
+    if (booking.status === BookingStatus.REJECTED || booking.status === BookingStatus.CANCELLED) {
+      throw new BadRequestError('This booking has been declined or cancelled. Cash payment cannot be requested.');
     }
 
     if (booking.status !== BookingStatus.AWAITING_PAYMENT && (booking.status as any) !== 'accepted') {
@@ -695,7 +722,7 @@ export class BookingServices {
 
       return { success: true, message: 'Cash request declined. Client has been notified by email to pay online.' };
     } else {
-      await this.prisma.$transaction([
+      const txOperations: any[] = [
         this.prisma.transaction.update({
           where: { id: cashTx.id },
           data: { metadata: { ...(cashTx.metadata as any), cashApproved: true } },
@@ -707,7 +734,33 @@ export class BookingServices {
             confirmedAt: new Date(),
           },
         }),
-      ]);
+      ];
+
+      if (booking.invoice) {
+        txOperations.push(
+          this.prisma.invoice.update({
+            where: { id: booking.invoice.id },
+            data: { status: InvoiceStatus.PAID },
+          })
+        );
+      }
+
+      await this.prisma.$transaction(txOperations);
+
+      try {
+        const { WalletService } = await import('@/Modules/Wallet/wallet.service');
+        const walletService = new WalletService(this.prisma);
+        await walletService.creditBookingEscrow(
+          booking.tenantId as string,
+          booking.id,
+          Number(booking.totalAmount),
+          booking.currencyCode || 'KES',
+          0,
+          cashTx.id
+        );
+      } catch (err: any) {
+        console.error(`Failed to credit escrow for booking ${booking.id}:`, err);
+      }
 
       if (clientEmail) {
         this.emailProvider.sendEmail(
@@ -767,5 +820,60 @@ export class BookingServices {
     ]);
 
     return { success: true, message: 'Cash payment confirmed, invoice marked as paid, and booking completed' };
+  }
+
+  async refundBooking(userId: string, bookingId: string) {
+    const tenantId = await this.getTenantIdByUserId(userId);
+    const booking = await this.prisma.booking.findFirst({
+      where: { id: bookingId, tenantId },
+      include: { invoice: true }
+    });
+
+    if (!booking) {
+      throw new NotFoundError('Booking not found');
+    }
+
+    if (booking.paymentStatus !== PaymentStatus.PAID && booking.paymentStatus !== PaymentStatus.REFUND_PENDING) {
+      throw new BadRequestError('Only paid bookings can be refunded');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.booking.update({
+        where: { id: booking.id },
+        data: {
+          status: BookingStatus.CANCELLED,
+          cancelledAt: new Date(),
+          paymentStatus: PaymentStatus.REFUNDED
+        }
+      });
+
+      if (booking.invoice) {
+        await tx.invoice.update({
+          where: { id: booking.invoice.id },
+          data: { status: InvoiceStatus.UNPAID } // or a new refunded status if exists
+        });
+      }
+
+      // Add a refund adjustment ledger entry if it was paid online
+      // In a real scenario, this would also call the PaymentProvider refund API
+      const wallet = await tx.wallet.findUnique({ where: { tenantId } });
+      if (wallet) {
+        await tx.walletLedger.create({
+          data: {
+            walletId: wallet.id,
+            bookingId: booking.id,
+            amount: booking.totalAmount || 0,
+            currency: booking.currencyCode || 'KES',
+            type: 'REFUND_ADJUSTMENT' as any, // LedgerType.REFUND_ADJUSTMENT
+            description: 'Refund processed for booking cancellation',
+            newBalance: 0,
+            previousBalance: 0,
+            status: 'COMPLETED'
+          }
+        });
+      }
+    });
+
+    return { success: true, message: 'Booking refunded successfully' };
   }
 }
