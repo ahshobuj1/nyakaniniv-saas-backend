@@ -1,5 +1,4 @@
-// src/middleware/validation.ts
-import { ValidationError } from "@/core/errors/AppError";
+import { formatZodError } from "@/core/errors/validationErrorFormatter";
 import { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 
@@ -41,18 +40,7 @@ export function validateRequest(schema: {
       next();
     } catch (error) {
       if (error instanceof z.ZodError) {
-        const issues = error.issues.map((issue) => ({
-          path: issue.path.join("."),
-          message: issue.message,
-          code: issue.code,
-        }));
-
-        next(
-          new ValidationError("Request validation failed", {
-            issues,
-            invalidFields: issues.length,
-          }),
-        );
+        next(formatZodError(error));
       } else {
         next(error);
       }

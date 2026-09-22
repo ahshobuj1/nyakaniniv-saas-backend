@@ -90,6 +90,13 @@ export class BookingModule extends BaseModule {
       controller.resendPaymentReminder.bind(controller),
     );
 
+    this.router.post(
+      "/:id/refund",
+      authenticateUser,
+      authorizeRole([UserRole.DJ]), // Only DJ can initiate refund for now
+      controller.refundBooking.bind(controller),
+    );
+
     // Client/Public route to generate fresh checkout session
     this.router.get(
       "/:id/payment-link",
