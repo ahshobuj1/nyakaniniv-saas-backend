@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { BaseController } from '@/core/BaseController';
 import { PaystackConnectService } from './payout-account.service';
+import config from '@/core/config';
 
 export class PaystackConnectController extends BaseController {
   constructor(private paystackConnectService: PaystackConnectService) {
@@ -76,7 +77,7 @@ export class PaystackConnectController extends BaseController {
   public async handleOAuthCallback(req: Request, res: Response): Promise<void> {
     const code = req.query.code as string;
     const state = req.query.state as string; // tenantId
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = process.env.FRONTEND_URL || config.clientUrl;
 
     if (!code || !state) {
       res.redirect(`${frontendUrl}/dashboard/billing?error=missing_oauth_params`);

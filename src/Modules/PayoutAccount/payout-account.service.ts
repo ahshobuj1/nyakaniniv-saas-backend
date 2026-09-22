@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { PrismaClient } from '@/prisma/generated/client';
+import config from '@/core/config';
 
 export class PaystackConnectService {
   constructor(private prisma: PrismaClient) { }
@@ -489,7 +490,7 @@ export class PaystackConnectService {
     if (!tenant) throw new Error("Tenant not found");
 
     const clientId = process.env.PAYSTACK_CLIENT_ID || process.env.PAYSTACK_PUBLIC_KEY || "pk_test_c244b02e1e567beaaf88b25f921cef6f3f7b7478";
-    const backendUrl = process.env.BACKEND_URL || "http://localhost:3030";
+    const backendUrl = process.env.BACKEND_URL || config.apiUrl;
     const redirectUri = `${backendUrl}/paystack-connect/v1/oauth/callback`;
 
     // Paystack official Connect OAuth Authorization URL
@@ -504,7 +505,7 @@ export class PaystackConnectService {
   public async handleOAuthCallback(code: string, tenantId: string) {
     const secretKey = process.env.PAYSTACK_SECRET_KEY;
     const clientId = process.env.PAYSTACK_CLIENT_ID || process.env.PAYSTACK_PUBLIC_KEY || "pk_test_c244b02e1e567beaaf88b25f921cef6f3f7b7478";
-    const backendUrl = process.env.BACKEND_URL || "http://localhost:3030";
+    const backendUrl = process.env.BACKEND_URL || config.apiUrl;
     const redirectUri = `${backendUrl}/paystack-connect/v1/oauth/callback`;
 
     let subaccountCode = '';

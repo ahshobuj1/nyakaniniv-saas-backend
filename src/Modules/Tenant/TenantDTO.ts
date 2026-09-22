@@ -5,7 +5,7 @@ export const createTenantSchema = {
   body: z.object({
     subdomain: z
       .string()
-      .min(3, "Subdomain must be at least 3 characters")
+      .min(2, "Subdomain must be at least 2 characters")
       .max(63, "Subdomain must be at most 63 characters")
       .regex(/^[a-z0-9-]+$/, "Subdomain can only contain lowercase letters, numbers, and hyphens")
       .refine(
