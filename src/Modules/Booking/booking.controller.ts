@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { BaseController } from '@/core/BaseController';
 import { BookingServices } from './booking.service';
 import { BadRequestError } from "@/core/errors/AppError";
+import config from '@/core/config';
 
 export class BookingController extends BaseController {
   constructor(private bookingService: BookingServices) {
@@ -133,7 +134,9 @@ export class BookingController extends BaseController {
     try {
       const id = String(req.params.id);
       const result = await this.bookingService.requestCashPayment(id);
-      const djUrl = `http://${result.subdomain}.localhost:3000`;
+      const baseDomain = config.clientUrl.includes('localhost') ? 'localhost:3000' : 'deejay.africa';
+      const protocol = config.clientUrl.startsWith('https') ? 'https' : 'http';
+      const djUrl = `${protocol}://${result.subdomain}.${baseDomain}`;
       
       res.status(200).send(`
         <!DOCTYPE html>
@@ -214,6 +217,12 @@ export class BookingController extends BaseController {
     const userId = req.user!.id;
     const id = String(req.params.id);
     const result = await this.bookingService.markCashAsPaid(userId, id);
+    this.sendResponse(req, res, result.message, undefined, result);
+  }
+  public async refundBooking(req: Request, res: Response): Promise<void> {
+    const userId = req.user!.id;
+    const id = String(req.params.id);
+    const result = await this.bookingService.refundBooking(userId, id);
     this.sendResponse(req, res, result.message, undefined, result);
   }
 }

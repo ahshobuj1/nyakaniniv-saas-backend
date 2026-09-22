@@ -119,14 +119,14 @@ async function main() {
       id: 1,
       name: 'Azura Theme',
       slug: 'azura',
-      previewImageUrl: 'https://additional-user.s3.eu-north-1.amazonaws.com/uploads/387c7d25-307e-47e1-aeca-0313af334094.png',
+      previewImageUrl: '/theme/Theme1.png',
       defaultConfig: {},
     },
     {
       id: 3,
       name: 'Kenzo Theme',
       slug: 'kenzo',
-      previewImageUrl: 'https://additional-user.s3.eu-north-1.amazonaws.com/uploads/08dcaa73-2f26-417d-894b-fbe3c9fbe26a.png',
+      previewImageUrl: '/theme/Theme2.png',
       defaultConfig: {},
     },
   ];

@@ -47,9 +47,28 @@ export class AppError extends Error {
 
 export class ValidationError extends AppError {
   constructor(message = "Validation failed", details?: unknown) {
+    let resolvedMessage = message;
+
+    if (
+      (resolvedMessage === "Validation failed" || resolvedMessage === "Request validation failed") &&
+      details &&
+      typeof details === "object" &&
+      "issues" in details &&
+      Array.isArray((details as any).issues)
+    ) {
+      const issues = (details as any).issues;
+      const msgs = issues
+        .map((i: any) => (typeof i?.message === "string" ? i.message.trim() : ""))
+        .filter(Boolean);
+
+      if (msgs.length > 0) {
+        resolvedMessage = Array.from(new Set(msgs)).join(", ");
+      }
+    }
+
     super({
       statusCode: HTTPStatusCode.BAD_REQUEST,
-      message,
+      message: resolvedMessage,
       code: "VALIDATION_ERROR",
       details,
     });
