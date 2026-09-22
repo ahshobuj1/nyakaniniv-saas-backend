@@ -96,7 +96,7 @@ export const config = {
       .map((country) => country.trim().toUpperCase())
       .filter(Boolean),
   },
-  clientUrl: process.env.CLIENT_URL || "http://localhost:3000",
+  clientUrl: process.env.CLIENT_URL || (process.env.NODE_ENV === "production" ? "https://upbeat.africa" : "http://localhost:3000"),
   apiUrl: process.env.API_URL || (process.env.NODE_ENV === "production" ? "https://api.upbeat.africa" : `http://localhost:${process.env.PORT || 3030}`),
   smtp: {
     host: process.env.SMTP_HOST || "sandbox.smtp.mailtrap.io",
@@ -108,3 +108,15 @@ export const config = {
 };
 
 export default config;
+
+// Production Key Validation
+if (config.server.isProduction) {
+  const missingKeys = [];
+  if (!config.paystack.secretKey) missingKeys.push('PAYSTACK_SECRET_KEY');
+  if (!config.flutterwave.secretKey) missingKeys.push('FLUTTERWAVE_SECRET_KEY');
+  if (!config.pesapal.consumerKey || !config.pesapal.consumerSecret) missingKeys.push('PESAPAL_CONSUMER_KEY/SECRET');
+
+  if (missingKeys.length > 0) {
+    console.error(`\x1b[31m[CRITICAL WARNING] Missing payment gateway keys in production: ${missingKeys.join(', ')}. Payments via these gateways will fail.\x1b[0m`);
+  }
+}
