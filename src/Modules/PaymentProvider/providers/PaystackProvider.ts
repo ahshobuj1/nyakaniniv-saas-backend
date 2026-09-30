@@ -166,10 +166,17 @@ export class PaystackProvider implements IPaymentProvider {
 
     try {
       let recipientType = 'nuban';
-      if (input.accountType === 'mobile_money') {
+      const isMobileMoney = input.accountType === 'mobile_money' || 
+                           ['MPESA', 'MPPAYBILL', 'MPTILL', 'ATL_KE', 'MTN', 'VOD', 'TIGO', 'AIRTEL'].includes((input.bankCode || '').toUpperCase());
+
+      if (isMobileMoney) {
         recipientType = 'mobile_money';
       } else if (input.country.toUpperCase() === 'ZA') {
         recipientType = 'basa';
+      } else if (input.country.toUpperCase() === 'KE') {
+        recipientType = 'kepss';
+      } else if (input.country.toUpperCase() === 'GH') {
+        recipientType = 'mobile_money'; // Ghana mostly uses mobile_money or ghipss
       }
 
       const payload = {
@@ -286,9 +293,10 @@ export class PaystackProvider implements IPaymentProvider {
     }
   }
 
-  public async handleWebhook(payload: any, signature: string): Promise<WebhookResult> {
+  public async handleWebhook(payload: any, signature: string, headers?: Record<string, any>, rawBody?: string | Buffer): Promise<WebhookResult> {
     if (this.secretKey && signature) {
-      const hash = crypto.createHmac('sha512', this.secretKey).update(JSON.stringify(payload)).digest('hex');
+      const dataToHash = rawBody ? (Buffer.isBuffer(rawBody) ? rawBody.toString('utf8') : rawBody) : JSON.stringify(payload);
+      const hash = crypto.createHmac('sha512', this.secretKey).update(dataToHash).digest('hex');
       if (hash !== signature) {
         return {
           isValid: false,
@@ -308,6 +316,13 @@ export class PaystackProvider implements IPaymentProvider {
 
     if (event === 'charge.success') {
       const currency = data.currency || 'KES';
+
+      let channel: PaymentChannel = PaymentChannel.UNKNOWN;
+      if (data.channel === 'card') channel = PaymentChannel.CARD;
+      else if (data.channel === 'bank' || data.channel === 'bank_transfer') channel = PaymentChannel.BANK_TRANSFER;
+      else if (data.channel === 'mobile_money') channel = PaymentChannel.MOBILE_MONEY;
+      else if (data.channel === 'ussd') channel = PaymentChannel.USSD;
+
       return {
         isValid: true,
         eventType: event,
@@ -317,6 +332,7 @@ export class PaystackProvider implements IPaymentProvider {
         amount: this.fromMinorUnit(data.amount, currency),
         currency,
         status: 'PAID',
+        channel,
         paidAt: data.paid_at ? new Date(data.paid_at) : new Date(),
         gatewayFee: data.fees ? this.fromMinorUnit(data.fees, currency) : 0,
         metadata: data.metadata,

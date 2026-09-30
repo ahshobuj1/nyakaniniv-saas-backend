@@ -76,6 +76,7 @@ export class WalletService {
       recipientCode?: string;
       countryCode?: string | null;
       currencyCode?: string | null;
+      metadata?: any;
     } | null = null;
 
     if (activePaymentAccount) {
@@ -88,6 +89,7 @@ export class WalletService {
         recipientCode: (activePaymentAccount.metadata as any)?.recipientCode,
         countryCode: activePaymentAccount.countryCode,
         currencyCode: activePaymentAccount.currencyCode,
+        metadata: activePaymentAccount.metadata,
       };
     } else if (tenantRecord?.paystackSubaccountId) {
       connectedAccount = {
@@ -448,23 +450,59 @@ export class WalletService {
 
     // 2. Dispatch to Payout Provider API via PaymentProviderResolver
     try {
-      const { PaymentProviderResolver } = await import('@/Modules/PaymentProvider/PaymentProviderResolver');
+      const { PaymentProviderResolver } = require('@/Modules/PaymentProvider/PaymentProviderResolver');
       const payoutProvider = PaymentProviderResolver.resolve({
         country: tenant?.country,
         operation: 'PAYOUT',
         requestedGateway: connectedAccount.gateway,
       });
 
+      let recipientCode = (connectedAccount as any).recipientCode || (connectedAccount.metadata as any)?.recipientCode;
+
+      if (!recipientCode && connectedAccount.gateway === PaymentGateway.PAYSTACK) {
+        // Need to generate RCP_ code for Paystack transfers
+        let bankCode = (connectedAccount.metadata as any)?.bankCode;
+        if (!bankCode) {
+          const bankName = (connectedAccount.metadata as any)?.bankName;
+          bankCode = bankName && bankName.toLowerCase().includes('test') ? '001' : (bankName || '001');
+        }
+
+        const recRes = await payoutProvider.createPayoutRecipient({
+          name: (connectedAccount.metadata as any)?.accountName || tenant?.stageName || 'UpBeat DJ',
+          accountNumber: connectedAccount.accountId!,
+          bankCode: bankCode,
+          currency: wallet.currency,
+          country: tenant?.country || 'ke',
+        });
+        recipientCode = recRes.recipientCode;
+        
+        // Cache it in DB metadata
+        await this.prisma.tenantPaymentAccount.update({
+          where: { id: connectedAccount.id },
+          data: {
+            metadata: {
+              ...(connectedAccount.metadata as any || {}),
+              recipientCode
+            }
+          }
+        });
+      }
+
+      // Fallback for non-Paystack
+      if (!recipientCode) {
+        recipientCode = connectedAccount.accountId;
+      }
+
       const transferResult = await payoutProvider.initiatePayout({
         amount,
         currency: wallet.currency,
-        recipientCode: connectedAccount.recipientCode || connectedAccount.accountId,
+        recipientCode,
         transferReference,
         reason: `DJ Withdrawal - ${tenant?.stageName || 'UpBeat DJ'}`,
         metadata: {
           tenantId,
-          bankName: connectedAccount.bankName,
-          accountName: connectedAccount.accountName,
+          bankName: (connectedAccount.metadata as any)?.bankName,
+          accountName: (connectedAccount.metadata as any)?.accountName,
         },
       });
 

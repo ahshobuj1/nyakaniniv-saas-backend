@@ -16,7 +16,7 @@ import { QueryBuilder } from '@/utils/QueryBuilder';
 import { IEmailProvider } from '@/providers/EmailProvider';
 import { EmailTemplates } from '@/utils/EmailTemplates';
 import { BookingStatusService } from './booking-status.service';
-import { PaymentProviderResolver } from '@/Modules/PaymentProvider/PaymentProviderResolver';
+import { PaymentProviderResolver, COUNTRY_ROUTING_MATRIX } from '@/Modules/PaymentProvider/PaymentProviderResolver';
 import { isValidUuid } from '@/utils/uuid';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
@@ -181,18 +181,15 @@ export class BookingServices {
       });
     }
 
-    const countryToCurrency: Record<string, string> = {
-      KE: 'KES',
-      NG: 'NGN',
-      GH: 'GHS',
-      ZA: 'ZAR',
-      TZ: 'TZS',
-      UG: 'UGX',
-      RW: 'RWF',
-    };
-    const resolvedCurrency = tenant.country ? countryToCurrency[tenant.country.toUpperCase()] || 'KES' : 'KES';
+    // Resolve currency from tenant country using the PaymentProviderResolver's normalizeCountryCode
+    // This correctly handles both ISO codes ("KE") and full names ("Kenya", "Nigeria", "South Africa")
+    const normalizedCountryCode = PaymentProviderResolver.normalizeCountryCode(tenant.country);
+    const countryConfig = COUNTRY_ROUTING_MATRIX[normalizedCountryCode];
+    const resolvedCurrency = countryConfig?.defaultCurrency || 'KES';
     const currencyCode = data.currencyCode || resolvedCurrency;
 
+    // Map abbreviated or full IANA timezone strings to proper IANA timezone names
+    // EAT, WAT, SAST abbreviations are NOT valid IANA strings for date libraries (luxon, date-fns-tz)
     const tzAbbrToIana: Record<string, string> = {
       EAT: 'Africa/Nairobi',
       WAT: 'Africa/Lagos',
@@ -200,7 +197,7 @@ export class BookingServices {
       GMT: 'GMT',
       UTC: 'UTC',
     };
-    const rawTimezone = data.eventTimezone || tenant.timezone || 'EAT';
+    const rawTimezone = data.eventTimezone || tenant.timezone || 'Africa/Nairobi';
     const eventTimezone = tzAbbrToIana[rawTimezone.toUpperCase()] || rawTimezone;
 
     const booking = await this.prisma.booking.create({
@@ -403,6 +400,24 @@ export class BookingServices {
     if (booking.status !== BookingStatus.AWAITING_PAYMENT && (booking.status as any) !== 'accepted') {
       throw new BadRequestError('Booking is not ready for payment');
     }
+
+    // Enforce 48-hour payment window — if paymentDueAt has passed, expire the booking
+    if (booking.paymentDueAt && new Date() > new Date(booking.paymentDueAt)) {
+      // Attempt to transition to EXPIRED (non-blocking — status may already be terminal)
+      try {
+        await this.bookingStatusService.transition({
+          bookingId: booking.id,
+          targetStatus: BookingStatus.EXPIRED,
+          reason: 'Payment window expired (48 hours)',
+        });
+      } catch {
+        // Already in a terminal state — still block the payment link
+      }
+      throw new BadRequestError(
+        'The payment window for this booking has expired. Please contact the DJ to request a new booking or a new payment link.'
+      );
+    }
+
 
     const amount = Number(booking.totalAmount);
     if (!amount || amount <= 0) {
@@ -747,20 +762,11 @@ export class BookingServices {
 
       await this.prisma.$transaction(txOperations);
 
-      try {
-        const { WalletService } = await import('@/Modules/Wallet/wallet.service');
-        const walletService = new WalletService(this.prisma);
-        await walletService.creditBookingEscrow(
-          booking.tenantId as string,
-          booking.id,
-          Number(booking.totalAmount),
-          booking.currencyCode || 'KES',
-          0,
-          cashTx.id
-        );
-      } catch (err: any) {
-        console.error(`Failed to credit escrow for booking ${booking.id}:`, err);
-      }
+      // NOTE: Cash payments are collected directly by the DJ — no platform funds are involved.
+      // Therefore we do NOT credit the DJ's platform escrow wallet here.
+      // Crediting escrow here would create a fraudulent liability where the DJ could withdraw
+      // platform funds despite having already received cash directly from the client.
+      // The DJ's actual cash earnings are tracked via the Invoice (PAID) + Transaction (CASH/PENDING) records only.
 
       if (clientEmail) {
         this.emailProvider.sendEmail(

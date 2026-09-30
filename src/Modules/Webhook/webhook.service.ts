@@ -52,14 +52,20 @@ export class WebhookServices {
       return { received: true, message: 'Already processed' };
     }
 
+    const isValidUuid = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+
+    const transactionOrConditions: any[] = [
+      { gatewayReference: params.reference },
+      { idempotencyKey: params.reference },
+    ];
+    if (isValidUuid(params.reference)) {
+      transactionOrConditions.push({ id: params.reference });
+    }
+
     // 2. Locate Transaction and Invoice
     let transaction = await this.prisma.transaction.findFirst({
       where: {
-        OR: [
-          { gatewayReference: params.reference },
-          { idempotencyKey: params.reference },
-          { id: params.reference },
-        ],
+        OR: transactionOrConditions,
       },
       include: { invoice: { include: { booking: { include: { client: true } } } } },
     });
@@ -67,17 +73,27 @@ export class WebhookServices {
     let invoice = transaction?.invoice;
 
     if (!invoice) {
-      // Try to find invoice by reference prefix
-      const cleanRef = params.reference.replace(/^bk_/, '').replace(/^sub_/, '').split('_')[0];
-      invoice = await this.prisma.invoice.findFirst({
-        where: {
-          OR: [
-            { id: cleanRef },
-            { bookingId: cleanRef },
-          ],
-        },
-        include: { booking: { include: { client: true } } },
-      });
+      // Try to find invoice by reference prefix if it's a full UUID
+      // Some gateways might drop the timestamp part, so we check if the cleanRef happens to be a valid UUID
+      let cleanRef = params.reference.replace(/^bk_/, '').replace(/^sub_/, '').split('_')[0];
+      
+      // If the original reference contained the full UUID (e.g. bk_uuid_timestamp), extract it:
+      const uuidMatch = params.reference.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+      if (uuidMatch) {
+        cleanRef = uuidMatch[0];
+      }
+
+      if (isValidUuid(cleanRef)) {
+        invoice = await this.prisma.invoice.findFirst({
+          where: {
+            OR: [
+              { id: cleanRef },
+              { bookingId: cleanRef },
+            ],
+          },
+          include: { booking: { include: { client: true } } },
+        });
+      }
     }
 
     // Record webhook event to guarantee idempotency
@@ -170,7 +186,7 @@ export class WebhookServices {
 
         // Credit Escrow in DJ Wallet
         if (invoice.tenantId) {
-          const { WalletService } = await import('@/Modules/Wallet/wallet.service');
+          const { WalletService } = require('@/Modules/Wallet/wallet.service');
           const walletService = new WalletService(this.prisma);
           await walletService.creditBookingEscrow(
             invoice.tenantId,
@@ -193,7 +209,7 @@ export class WebhookServices {
     const provider = PaymentProviderResolver.getGatewayProvider(PaymentGateway.PAYSTACK);
     const bodyObj = typeof rawBody === 'string' || Buffer.isBuffer(rawBody) ? JSON.parse(rawBody.toString()) : rawBody;
 
-    const webhookResult = await provider.handleWebhook(bodyObj, signature);
+    const webhookResult = await provider.handleWebhook(bodyObj, signature, undefined, rawBody);
 
     if (!webhookResult.isValid) {
       this.logger.error(`Invalid Paystack webhook signature: ${webhookResult.failureReason}`);
@@ -202,7 +218,7 @@ export class WebhookServices {
 
     // Handle Transfer / Payout events
     if (webhookResult.operation === 'PAYOUT' && webhookResult.reference) {
-      const { WalletService } = await import('@/Modules/Wallet/wallet.service');
+      const { WalletService } = require('@/Modules/Wallet/wallet.service');
       const walletService = new WalletService(this.prisma);
 
       const payout = await this.prisma.payoutRequest.findFirst({
@@ -227,6 +243,7 @@ export class WebhookServices {
         amountPaid: webhookResult.amount || 0,
         currency: webhookResult.currency || 'KES',
         paidAt: webhookResult.paidAt,
+        channel: webhookResult.channel,
         metadata: webhookResult.metadata,
         rawPayload: bodyObj,
       });

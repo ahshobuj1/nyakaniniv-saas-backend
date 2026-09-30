@@ -24,6 +24,7 @@
         "docker:up": "docker-compose up -d",
         "docker:down": "docker-compose down",
         "docker:logs": "docker-compose logs -f",
+        "docker:deploy": "docker build -t ahshobuj/upbeat-africa-backend:latest . && docker push ahshobuj/upbeat-africa-backend:latest",
         "add:module": "bun scripts/generate-module.ts"
     },
     "dependencies": {

@@ -185,6 +185,7 @@ export class PaystackConnectService {
         metadata: {
           accountName: valRes.accountName || businessName,
           bankName: finalBankName,
+          bankCode: bankCode,
         },
         isActive: true,
       },
@@ -196,6 +197,7 @@ export class PaystackConnectService {
         metadata: {
           accountName: valRes.accountName || businessName,
           bankName: finalBankName,
+          bankCode: bankCode,
         },
         isActive: true,
       },

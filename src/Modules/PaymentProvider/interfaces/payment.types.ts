@@ -97,6 +97,7 @@ export interface WebhookResult {
   status: 'PAID' | 'FAILED' | 'PROCESSING' | 'IGNORED';
   failureReason?: string;
   paidAt?: Date;
+  channel?: PaymentChannel;
   gatewayFee?: number;
   metadata?: any;
   rawPayload: any;

@@ -24,7 +24,7 @@ export interface IPaymentProvider {
 
   verifyPayout(transferReference: string): Promise<PayoutStatusResult>;
 
-  handleWebhook(payload: any, signature: string, headers?: Record<string, any>): Promise<WebhookResult>;
+  handleWebhook(payload: any, signature: string, headers?: Record<string, any>, rawBody?: string | Buffer): Promise<WebhookResult>;
 
   refundPayment?(reference: string, amount?: number): Promise<{ success: boolean; refundReference?: string; rawResponse?: any }>;
 }

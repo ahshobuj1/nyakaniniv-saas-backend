@@ -344,7 +344,7 @@ export class BookingStatusService {
     // COMPLETED: automatically release escrow funds from Pending -> Available
     if (targetStatus === BookingStatus.COMPLETED) {
       try {
-        const { WalletService } = await import('@/Modules/Wallet/wallet.service');
+        const { WalletService } = require('@/Modules/Wallet/wallet.service');
         const walletService = new WalletService(this.prisma);
         await walletService.releaseBookingEscrow(updated.id);
       } catch (err: any) {
