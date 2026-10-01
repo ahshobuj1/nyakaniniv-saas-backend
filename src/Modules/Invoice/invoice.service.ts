@@ -453,7 +453,8 @@ export class InvoiceServices {
         drawRow('Receipt No.', `INV-${invoice.id.split('-')[0].toUpperCase()}`, currentY); currentY += 20;
         drawRow('Transaction ID', invoice.id, currentY); currentY += 20;
         drawRow('Payment Date', mainTx?.createdAt?.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) || '', currentY); currentY += 20;
-        drawRow('Payment Method', `${mainTx?.channel?.replace('_', ' ') || mainTx?.gateway || 'CARD'} ${mainTx?.cardLast4 ? '•••• ' + mainTx.cardLast4 : ''}`.trim(), currentY); currentY += 20;
+        const methodString = `${mainTx?.channel?.replace('_', ' ') || 'UNKNOWN'} (${mainTx?.gateway || 'UNKNOWN'}) ${mainTx?.cardLast4 ? '•••• ' + mainTx.cardLast4 : ''}`.trim();
+        drawRow('Payment Method', methodString, currentY); currentY += 20;
         if (mainTx?.bankName) { drawRow('Bank Name', mainTx.bankName, currentY); currentY += 20; }
         
         // Divider

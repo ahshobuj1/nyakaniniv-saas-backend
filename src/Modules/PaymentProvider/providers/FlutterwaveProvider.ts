@@ -177,6 +177,16 @@ export class FlutterwaveProvider implements IPaymentProvider {
 
       if (accountType === 'mobile_money') {
         payload.beneficiary_name = input.metadata?.accountName || 'Beneficiary';
+        payload.meta = {
+          sender: 'UpBeat Africa',
+          sender_country: 'KE',
+          mobile_number: accountNumber || (input.metadata?.accountNumber ?? '')
+        };
+      }
+
+      // Automatically append _PMCK in Test mode so the webhook fires successfully!
+      if (this.secretKey.includes('_TEST')) {
+        payload.reference = `${payload.reference}_PMCK`;
       }
 
       const response = await axios.post(`${this.baseUrl}/transfers`, payload, {
@@ -264,24 +274,34 @@ export class FlutterwaveProvider implements IPaymentProvider {
       };
     }
 
-    const event = payload.event;
-    const data = payload.data;
-    const gatewayEventId = data?.id ? `flw_${data.id}` : `flw_evt_${data?.tx_ref || Date.now()}`;
+    const event = payload.event || payload['event.type'];
+    const data = payload.data || payload;
+    const gatewayEventId = data?.id ? `flw_${data.id}` : `flw_evt_${data?.tx_ref || data?.txRef || Date.now()}`;
 
-    if (event === 'charge.completed') {
+    // Collections (charge.completed or flat CARD_TRANSACTION)
+    if (event === 'charge.completed' || event === 'CARD_TRANSACTION' || data.txRef) {
       const isSuccessful = data.status === 'successful';
+      
+      let channel: PaymentChannel = PaymentChannel.UNKNOWN;
+      const rawType = (data.payment_type || event || '').toUpperCase();
+      if (rawType.includes('CARD')) channel = PaymentChannel.CARD;
+      else if (rawType.includes('MOBILE') || rawType.includes('MOM')) channel = PaymentChannel.MOBILE_MONEY;
+      else if (rawType.includes('BANK') || rawType.includes('ACCOUNT')) channel = PaymentChannel.BANK_TRANSFER;
+      else if (rawType.includes('USSD')) channel = PaymentChannel.USSD;
+
       return {
         isValid: true,
-        eventType: event,
+        eventType: event || 'charge.completed',
         gatewayEventId,
         operation: 'COLLECTION',
-        reference: data.tx_ref,
+        reference: data.tx_ref || data.txRef,
         amount: Number(data.amount || 0),
         currency: data.currency || 'KES',
         status: isSuccessful ? 'PAID' : 'FAILED',
-        paidAt: data.created_at ? new Date(data.created_at) : new Date(),
-        gatewayFee: Number(data.app_fee || 0),
-        metadata: data.meta,
+        paidAt: data.created_at || data.createdAt ? new Date(data.created_at || data.createdAt) : new Date(),
+        gatewayFee: Number(data.app_fee || data.appfee || 0),
+        metadata: data.meta || data.metadata,
+        channel,
         rawPayload: payload,
       };
     }

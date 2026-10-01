@@ -121,6 +121,53 @@ export class PaystackConnectService {
       };
     }
 
+    if (chosenGateway === 'FLUTTERWAVE') {
+      const countryCode = this.toCountryCode(country);
+      const currencyCode = this.toCurrencyCode(country);
+
+      await this.prisma.tenantPaymentAccount.upsert({
+        where: { tenantId_gateway: { tenantId, gateway: 'FLUTTERWAVE' } },
+        create: {
+          tenantId,
+          gateway: 'FLUTTERWAVE',
+          accountId: accountNumber,
+          countryCode,
+          currencyCode,
+          metadata: {
+            accountName: valRes.accountName || businessName,
+            network: bankCode,
+            bankName: bankCode,
+            country,
+          },
+          isActive: true,
+        },
+        update: {
+          accountId: accountNumber,
+          countryCode,
+          currencyCode,
+          metadata: {
+            accountName: valRes.accountName || businessName,
+            network: bankCode,
+            bankName: bankCode,
+            country,
+          },
+          isActive: true,
+        },
+      });
+
+      await this.prisma.tenant.update({
+        where: { id: tenantId },
+        data: { flutterwaveSubaccountId: accountNumber },
+      });
+
+      return {
+        success: true,
+        gateway: 'FLUTTERWAVE',
+        subaccountCode: accountNumber,
+        accountName: valRes.accountName || businessName,
+      };
+    }
+
     // Otherwise, Paystack flow for Nigeria, Ghana, South Africa, Kenya
     const secretKey = process.env.PAYSTACK_SECRET_KEY;
     if (!secretKey) throw new Error("Paystack secret key is not configured.");
@@ -448,6 +495,32 @@ export class PaystackConnectService {
         valid: true,
         accountName: `${bankCode || 'Mobile Money'} (${accountNumber.trim()})`
       };
+    }
+
+    if (chosenGateway === 'FLUTTERWAVE') {
+      const flwSecretKey = process.env.FLUTTERWAVE_SECRET_KEY;
+      if (!flwSecretKey) throw new Error("Flutterwave secret key is not configured.");
+      
+      try {
+        const res = await axios.post(
+          'https://api.flutterwave.com/v3/accounts/resolve',
+          {
+            account_number: accountNumber.trim(),
+            account_bank: bankCode.trim()
+          },
+          { headers: { Authorization: `Bearer ${flwSecretKey}` } }
+        );
+        if (res.data?.status === 'success' && res.data?.data?.account_name) {
+          return {
+            valid: true,
+            accountName: res.data.data.account_name,
+            accountNumber: res.data.data.account_number || accountNumber.trim(),
+          };
+        }
+        return { valid: false, message: res.data?.message || 'Could not verify account name with Flutterwave.' };
+      } catch (err: any) {
+        return { valid: false, message: err.response?.data?.message || 'Could not resolve bank account details on Flutterwave. Please check the account number and bank code.' };
+      }
     }
 
     const secretKey = process.env.PAYSTACK_SECRET_KEY;

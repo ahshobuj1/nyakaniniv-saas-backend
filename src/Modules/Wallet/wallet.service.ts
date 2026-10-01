@@ -119,15 +119,23 @@ export class WalletService {
 
     const balancesByCurrency: Record<string, { pendingBalance: number; availableBalance: number; totalEarnings: number; totalWithdrawn: number }> = {};
     
-    wallet.walletLedgers.forEach(l => {
-      const cur = l.currency || wallet.currency;
+    // Instead of iterating through the truncated walletLedgers array, query all ledgers properly
+    const groupedLedgers = await this.prisma.walletLedger.groupBy({
+      by: ['currency', 'type'],
+      where: { walletId: wallet.id },
+      _sum: { amount: true },
+    });
+
+    groupedLedgers.forEach(group => {
+      const cur = group.currency || wallet.currency;
       if (!balancesByCurrency[cur]) {
         balancesByCurrency[cur] = { pendingBalance: 0, availableBalance: 0, totalEarnings: 0, totalWithdrawn: 0 };
       }
+      
+      const amt = Number(group._sum.amount || 0);
       const bal = balancesByCurrency[cur];
-      const amt = Number(l.amount);
 
-      switch (l.type) {
+      switch (group.type) {
         case 'BOOKING_CREDIT_PENDING':
           bal.pendingBalance += amt;
           bal.totalEarnings += amt;
@@ -478,7 +486,7 @@ export class WalletService {
         
         // Cache it in DB metadata
         await this.prisma.tenantPaymentAccount.update({
-          where: { id: connectedAccount.id },
+          where: { id: (connectedAccount as any).id },
           data: {
             metadata: {
               ...(connectedAccount.metadata as any || {}),
@@ -597,11 +605,16 @@ export class WalletService {
       const prevAvailable = Number(currentWallet.availableBalance);
       const restoredAvailable = Math.round((prevAvailable + refundAmount) * 100) / 100;
 
+      const rawReason = failureReason || 'Transfer provider payout failed';
+      const safeReason = rawReason.length > 250 ? rawReason.substring(0, 247) + '...' : rawReason;
+      const rawDesc = `Transfer failed: ${refundAmount} ${payout.currency} restored (${safeReason})`;
+      const safeDesc = rawDesc.length > 250 ? rawDesc.substring(0, 247) + '...' : rawDesc;
+
       await tx.payoutRequest.update({
         where: { id: payoutRequestId },
         data: {
           status: PayoutRequestStatus.FAILED,
-          failureReason: failureReason || 'Transfer provider payout failed',
+          failureReason: safeReason,
           processedAt: new Date(),
         },
       });
@@ -617,14 +630,14 @@ export class WalletService {
         data: {
           walletId: currentWallet.id,
           transferId: payout.id,
-          referenceId: `REVERSAL_${payout.transferReference || payout.id}_${Date.now()}`,
+          referenceId: `REV_${payout.transferReference?.substring(0, 50) || payout.id.substring(0, 8)}_${Date.now()}`,
           amount: refundAmount,
           currency: payout.currency,
           type: LedgerType.WITHDRAWAL_FAILED_REVERSAL,
           previousBalance: prevAvailable,
           newBalance: restoredAvailable,
           status: 'RESTORED',
-          description: `Transfer failed: ${refundAmount} ${payout.currency} safely restored to Available Balance (${failureReason || 'Provider rejected'})`,
+          description: safeDesc,
         },
       });
     });

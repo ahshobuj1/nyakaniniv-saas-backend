@@ -289,6 +289,7 @@ export class WebhookServices {
         amountPaid: webhookResult.amount || 0,
         currency: webhookResult.currency || 'KES',
         paidAt: webhookResult.paidAt,
+        channel: webhookResult.channel,
         metadata: webhookResult.metadata,
         rawPayload: bodyObj,
       });
@@ -318,6 +319,7 @@ export class WebhookServices {
       amountPaid: verification.amount,
       currency: verification.currency,
       paidAt: verification.paidAt,
+      channel: verification.channel,
       metadata: verification.metadata,
       rawPayload: { orderTrackingId, orderMerchantReference, verification },
     });
