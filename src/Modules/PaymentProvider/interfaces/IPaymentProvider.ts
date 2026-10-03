@@ -8,6 +8,7 @@ import {
   PayoutResult,
   PayoutStatusResult,
   WebhookResult,
+  RefundResult,
 } from './payment.types';
 import { PaymentGateway } from '@/prisma/generated/client';
 
@@ -26,5 +27,5 @@ export interface IPaymentProvider {
 
   handleWebhook(payload: any, signature: string, headers?: Record<string, any>, rawBody?: string | Buffer): Promise<WebhookResult>;
 
-  refundPayment?(reference: string, amount?: number): Promise<{ success: boolean; refundReference?: string; rawResponse?: any }>;
+  refundPayment?(reference: string, amount?: number, currency?: string): Promise<RefundResult>;
 }

@@ -225,4 +225,17 @@ export class BookingController extends BaseController {
     const result = await this.bookingService.refundBooking(userId, id);
     this.sendResponse(req, res, result.message, undefined, result);
   }
+
+  public async getClientBooking(req: Request, res: Response): Promise<void> {
+    const id = String(req.params.id);
+    const result = await this.bookingService.getClientBooking(id);
+    this.sendResponse(req, res, 'Client booking fetched successfully', undefined, result);
+  }
+
+  public async clientCancelBooking(req: Request, res: Response): Promise<void> {
+    const id = String(req.params.id);
+    const { reason } = req.body;
+    const result = await this.bookingService.clientCancelBooking(id, reason);
+    this.sendResponse(req, res, result.message, undefined, result);
+  }
 }

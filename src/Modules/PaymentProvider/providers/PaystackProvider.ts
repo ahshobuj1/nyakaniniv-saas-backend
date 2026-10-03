@@ -11,6 +11,7 @@ import {
   PayoutResult,
   PayoutStatusResult,
   WebhookResult,
+  RefundResult,
 } from '../interfaces/payment.types';
 import { PaymentGateway, PaymentChannel } from '@/prisma/generated/client';
 import { config } from '@/core/config';
@@ -382,5 +383,51 @@ export class PaystackProvider implements IPaymentProvider {
       status: 'IGNORED',
       rawPayload: payload,
     };
+  }
+
+  public async refundPayment(reference: string, amount?: number, currency?: string): Promise<RefundResult> {
+    try {
+      const payload: any = { transaction: reference };
+      if (amount && currency) {
+        payload.amount = this.toMinorUnit(amount, currency);
+      } else if (amount) {
+        payload.amount = Math.round(amount * 100); // naive conversion if currency missing
+      }
+
+      const response = await axios.post(`${this.baseUrl}/refund`, payload, { headers: this.headers });
+      if (!response.data?.status) {
+        return {
+          success: false,
+          outcome: 'FAILED',
+          failureReason: response.data?.message || 'Paystack rejected the refund request',
+          rawResponse: response.data,
+        };
+      }
+
+      // Paystack refund states: pending | processing | processed | failed | needs-attention
+      const refundState = String(response.data?.data?.status || '').toLowerCase();
+      const outcome =
+        refundState === 'processed'
+          ? 'COMPLETED'
+          : refundState === 'failed'
+            ? 'FAILED'
+            : 'PENDING';
+
+      return {
+        success: outcome !== 'FAILED',
+        outcome,
+        refundReference: response.data?.data?.transaction?.reference || undefined,
+        failureReason: outcome === 'FAILED' ? 'Paystack reported the refund as failed' : undefined,
+        rawResponse: response.data,
+      };
+    } catch (error: any) {
+      this.logger.error('Paystack refund failed', error.response?.data || error.message);
+      return {
+        success: false,
+        outcome: 'FAILED',
+        failureReason: error.response?.data?.message || error.message,
+        rawResponse: error.response?.data,
+      };
+    }
   }
 }

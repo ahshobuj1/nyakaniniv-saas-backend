@@ -1,5 +1,26 @@
+import { config } from '@/core/config';
+
 export class EmailTemplates {
-  private static getHtmlShell(title: string, content: string): string {
+  /**
+   * Resolves a canonical client manage booking URL from either a direct URL,
+   * a checkout URL, or a booking ID.
+   */
+  public static resolveManageUrl(bookingIdOrUrl?: string): string {
+    if (!bookingIdOrUrl) return '';
+    const trimmed = bookingIdOrUrl.trim();
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      if (trimmed.includes('/booking/manage/')) {
+        return trimmed;
+      }
+      if (trimmed.includes('/checkout/')) {
+        return trimmed.replace('/checkout/', '/booking/manage/').split('?')[0];
+      }
+      return trimmed;
+    }
+    return `${config.clientUrl}/booking/manage/${trimmed}`;
+  }
+
+  public static getHtmlShell(title: string, content: string): string {
     return `
       <!DOCTYPE html>
       <html lang="en">
@@ -101,14 +122,14 @@ export class EmailTemplates {
   }
 
   // Case 5: New Booking Request Alert for DJ
-  static getNewBookingAlertTemplate(clientName: string, eventType: string, date: string): string {
+  static getNewBookingAlertTemplate(clientName: string, eventType: string, date: string, timezone?: string): string {
     const content = `
       <p>You have received a new booking request from <strong>${clientName}</strong>.</p>
       <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 20px; margin: 20px 0;">
         <h3 style="margin-top: 0; color: #334155; font-size: 18px;">Booking Details</h3>
         <ul style="list-style: none; padding: 0; margin: 0;">
           <li style="margin-bottom: 10px;"><strong>Event Type:</strong> ${eventType}</li>
-          <li><strong>Date:</strong> ${new Date(date).toLocaleString()}</li>
+          <li><strong>Date:</strong> ${new Date(date).toLocaleString()}${timezone ? ` (${timezone})` : ''}</li>
         </ul>
       </div>
       <p>Please log in to your dashboard to review and accept the booking.</p>
@@ -117,11 +138,39 @@ export class EmailTemplates {
   }
 
   // Case 6: Auto-reply to Client for New Booking Request
-  static getBookingAutoReplyTemplate(djName: string, eventType: string): string {
+  static getBookingAutoReplyTemplate(
+    optionsOrDjName: {
+      clientName?: string;
+      djName: string;
+      eventType: string;
+      eventDate?: string;
+      eventTime?: string;
+      manageUrl?: string;
+    } | string,
+    legacyEventType?: string
+  ): string {
+    if (typeof optionsOrDjName === 'string') {
+      const djName = optionsOrDjName;
+      const eventType = legacyEventType || 'Event';
+      const content = `
+        <p>Thank you for submitting your booking request for <strong>${djName}</strong> on UpBeat Entertainment Africa.</p>
+        <p>Your request for a <strong>${eventType}</strong> is currently pending review.</p>
+        <p>The DJ will review your request and get back to you shortly.</p>
+      `;
+      return this.getHtmlShell("Booking Request Received", content);
+    }
+
+    const { clientName, djName, eventType, eventDate, eventTime, manageUrl } = optionsOrDjName;
     const content = `
+      <p>Hi <strong>${clientName || 'there'}</strong>,</p>
       <p>Thank you for submitting your booking request for <strong>${djName}</strong> on UpBeat Entertainment Africa.</p>
       <p>Your request for a <strong>${eventType}</strong> is currently pending review.</p>
-      <p>The DJ will review your request and get back to you shortly.</p>
+      ${eventDate ? `<p><strong>Event Date:</strong> ${eventDate}${eventTime ? ` at ${eventTime}` : ''}</p>` : ''}
+      ${manageUrl ? `
+        <div style="text-align: center; margin: 25px 0;">
+          <a href="${manageUrl}" style="display: inline-block; padding: 12px 24px; background-color: #111827; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">Manage Your Booking</a>
+        </div>
+      ` : ''}
     `;
     return this.getHtmlShell("Booking Request Received", content);
   }
@@ -139,6 +188,7 @@ export class EmailTemplates {
       amount?: number;
       paymentUrl: string;
       requestCashUrl?: string;
+      manageUrl?: string;
     } | string,
     legacyEventType?: string,
     legacyPaymentUrl?: string,
@@ -162,6 +212,8 @@ export class EmailTemplates {
     const amountDisplay = data.amount && data.amount > 0
       ? `${data.currency || 'KES'} ${Number(data.amount).toLocaleString()}`
       : null;
+
+    const manageUrl = this.resolveManageUrl(data.manageUrl || data.paymentUrl);
 
     const content = `
       <p style="margin-top: 0; font-size: 16px;">Hi <strong>${data.clientName || 'there'}</strong>,</p>
@@ -229,7 +281,7 @@ export class EmailTemplates {
       </div>
 
       <!-- Action Buttons -->
-      <div style="text-align: center; margin: 30px 0 16px 0;">
+      <div style="text-align: center; margin: 30px 0 12px 0;">
         <a href="${data.paymentUrl}" style="display: inline-block; padding: 14px 28px; margin: 6px; background-color: #dc2626; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 15px; box-shadow: 0 4px 14px rgba(220, 38, 38, 0.3);">
           Pay Online with Escrow &rarr;
         </a>
@@ -237,6 +289,25 @@ export class EmailTemplates {
           Cash on Arrival
         </a>
       </div>
+
+      ${manageUrl ? `
+      <!-- View / Manage Booking Portal Button -->
+      <div style="text-align: center; margin: 6px 0 20px 0;">
+        <a href="${manageUrl}" style="display: inline-block; padding: 12px 28px; margin: 6px; background-color: #0f172a; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.15);">
+          📋 View & Manage Booking Portal &rarr;
+        </a>
+      </div>
+
+      <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; margin: 20px 0 14px 0; font-size: 13px; color: #475569; line-height: 1.6;">
+        <p style="margin: 0 0 6px 0; font-weight: 700; color: #0f172a;">
+          📌 Access Your Private Booking Portal:
+        </p>
+        <p style="margin: 0 0 8px 0; font-size: 13px;">
+          Need to review your event schedule, check DJ contact details, or view the cancellation policy? Access your booking dashboard at:
+        </p>
+        <a href="${manageUrl}" style="color: #dc2626; font-weight: 600; word-break: break-all;">${manageUrl}</a>
+      </div>
+      ` : ''}
 
       <p style="text-align: center; margin: 0; font-size: 12px; color: #94a3b8; line-height: 1.5;">
         Having trouble with the buttons? Open your checkout page directly:<br/>
@@ -247,8 +318,9 @@ export class EmailTemplates {
   }
 
   // Case 8: Booking Canceled / Rejected
-  static getBookingRejectedTemplate(djName: string, eventType: string, reason?: string, siteUrl?: string): string {
+  static getBookingRejectedTemplate(djName: string, eventType: string, reason?: string, siteUrl?: string, manageUrl?: string): string {
     const platformUrl = siteUrl || "https://upbeat.africa";
+    const portalUrl = this.resolveManageUrl(manageUrl);
     const reasonSection = reason && reason.trim().length > 0 ? `
       <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-left: 4px solid #dc2626; border-radius: 8px; padding: 16px; margin: 20px 0;">
         <p style="margin: 0 0 6px 0; font-size: 12px; font-weight: 700; color: #991b1b; text-transform: uppercase; letter-spacing: 0.5px;">Note from ${djName} (Reason for Decline):</p>
@@ -261,17 +333,49 @@ export class EmailTemplates {
       ${reasonSection}
       <p>Don't worry! There are many other talented, verified DJs available on UpBeat Entertainment Africa ready to perform at your event.</p>
       
-      <!-- UpBeat Africa Link Button -->
+      <!-- Action Buttons -->
       <div style="text-align: center; margin: 28px 0 18px 0;">
-        <a href="${platformUrl}" style="display: inline-block; padding: 13px 28px; background-color: #dc2626; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; box-shadow: 0 4px 14px rgba(220, 38, 38, 0.25);">
+        <a href="${platformUrl}" style="display: inline-block; padding: 13px 28px; margin: 6px; background-color: #dc2626; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; box-shadow: 0 4px 14px rgba(220, 38, 38, 0.25);">
           Explore Other DJs on UpBeat Africa &rarr;
         </a>
+        ${portalUrl ? `
+        <a href="${portalUrl}" style="display: inline-block; padding: 13px 24px; margin: 6px; background-color: #0f172a; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px;">
+          📋 View Booking Details
+        </a>
+        ` : ''}
       </div>
       <p style="text-align: center; margin: 0; font-size: 12px; color: #94a3b8;">
         Visit: <a href="${platformUrl}" style="color: #dc2626; word-break: break-all;">${platformUrl}</a>
       </p>
     `;
     return this.getHtmlShell("Booking Declined", content);
+  }
+
+  // Case 8B: Booking Cancelled
+  static getBookingCancelledTemplate(data: {
+    clientName?: string;
+    recipientName?: string;
+    djName?: string;
+    eventType?: string;
+    cancelledBy?: string;
+    reason?: string;
+    refundAmount?: number;
+    currency?: string;
+    manageUrl?: string;
+  }): string {
+    const name = data.recipientName || data.clientName || 'there';
+    const content = `
+      <p>Hi <strong>${name}</strong>,</p>
+      <p>Your booking for <strong>${data.eventType || 'Event'}</strong> with <strong>${data.djName || 'DJ'}</strong> has been cancelled${data.cancelledBy ? ` by ${data.cancelledBy.toLowerCase()}` : ''}.</p>
+      ${data.reason ? `<p><strong>Reason:</strong> ${data.reason}</p>` : ''}
+      ${data.refundAmount && data.refundAmount > 0 ? `<p><strong>Refund amount processed:</strong> ${data.currency || 'KES'} ${data.refundAmount.toLocaleString()}</p>` : ''}
+      ${data.manageUrl ? `
+        <div style="text-align: center; margin: 25px 0;">
+          <a href="${data.manageUrl}" style="display: inline-block; padding: 12px 24px; background-color: #111827; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">View Booking Details</a>
+        </div>
+      ` : ''}
+    `;
+    return this.getHtmlShell("Booking Cancelled", content);
   }
 
   // Case 9: Booking Details Updated
@@ -303,8 +407,10 @@ export class EmailTemplates {
     date: string,
     currency: string,
     amount: number,
-    djUrl: string
+    djUrl: string,
+    manageUrl?: string
   ): string {
+    const portalUrl = this.resolveManageUrl(manageUrl);
     const content = `
       <p>Hi <strong>${clientName}</strong>,</p>
       <p>Great news! <strong>${djName}</strong> has approved your request to pay in cash on the event day for your <strong>${eventType}</strong>.</p>
@@ -320,8 +426,20 @@ export class EmailTemplates {
       <p style="color: #475569; font-size: 14px;">Your event date is officially confirmed. Please coordinate directly with the DJ and prepare exact cash on arrival.</p>
 
       <div style="text-align: center; margin-top: 25px;">
-        <a href="${djUrl}" style="display: inline-block; padding: 12px 24px; background-color: #dc2626; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">View DJ Profile</a>
+        ${portalUrl ? `
+        <a href="${portalUrl}" style="display: inline-block; padding: 13px 26px; margin: 6px; background-color: #0f172a; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.15);">
+          📋 Manage Your Booking &rarr;
+        </a>
+        ` : ''}
+        <a href="${djUrl}" style="display: inline-block; padding: 13px 24px; margin: 6px; background-color: #ffffff; color: #1e293b; border: 1.5px solid #cbd5e1; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 14px;">
+          View DJ Profile
+        </a>
       </div>
+      ${portalUrl ? `
+      <p style="text-align: center; margin-top: 14px; font-size: 12px; color: #94a3b8;">
+        Portal: <a href="${portalUrl}" style="color: #dc2626; word-break: break-all;">${portalUrl}</a>
+      </p>
+      ` : ''}
     `;
     return this.getHtmlShell("Cash Payment Approved - Booking Confirmed", content);
   }
@@ -333,8 +451,10 @@ export class EmailTemplates {
     eventType: string,
     currency: string,
     amount: number,
-    checkoutUrl: string
+    checkoutUrl: string,
+    manageUrl?: string
   ): string {
+    const portalUrl = this.resolveManageUrl(manageUrl || checkoutUrl);
     const content = `
       <p>Hi <strong>${clientName}</strong>,</p>
       <p><strong>${djName}</strong> was unable to accept cash payment for your <strong>${eventType}</strong> booking.</p>
@@ -346,8 +466,20 @@ export class EmailTemplates {
       </div>
 
       <div style="text-align: center; margin-top: 25px;">
-        <a href="${checkoutUrl}" style="display: inline-block; padding: 12px 28px; background-color: #dc2626; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">Pay Online to Secure Date</a>
+        <a href="${checkoutUrl}" style="display: inline-block; padding: 13px 28px; margin: 6px; background-color: #dc2626; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; box-shadow: 0 4px 14px rgba(220, 38, 38, 0.25);">
+          Pay Online to Secure Date &rarr;
+        </a>
+        ${portalUrl ? `
+        <a href="${portalUrl}" style="display: inline-block; padding: 13px 24px; margin: 6px; background-color: #0f172a; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px;">
+          📋 Manage Booking
+        </a>
+        ` : ''}
       </div>
+      ${portalUrl ? `
+      <p style="text-align: center; margin-top: 14px; font-size: 12px; color: #94a3b8;">
+        Booking Portal: <a href="${portalUrl}" style="color: #dc2626; word-break: break-all;">${portalUrl}</a>
+      </p>
+      ` : ''}
     `;
     return this.getHtmlShell("Action Required: Cash Request Declined", content);
   }
@@ -363,6 +495,7 @@ export class EmailTemplates {
       currency?: string;
       amount?: number;
       paymentUrl: string;
+      manageUrl?: string;
     } | string,
     legacyEventType?: string,
     legacyPaymentUrl?: string
@@ -377,12 +510,15 @@ export class EmailTemplates {
           currency: 'KES',
           amount: 0,
           paymentUrl: legacyPaymentUrl || '#',
+          manageUrl: '',
         }
       : options;
 
     const amountDisplay = data.amount && data.amount > 0
       ? `${data.currency || 'KES'} ${Number(data.amount).toLocaleString()}`
       : null;
+
+    const manageUrl = this.resolveManageUrl(data.manageUrl || data.paymentUrl);
 
     const content = `
       <p style="margin-top: 0; font-size: 16px;">Hi <strong>${data.clientName || 'there'}</strong>,</p>
@@ -429,11 +565,22 @@ export class EmailTemplates {
         Your date is currently on hold. Please finalize your payment through UpBeat Escrow to secure this date on ${data.djName}'s calendar. Your payment is held safely until the event is completed.
       </p>
 
-      <div style="text-align: center; margin: 28px 0 16px 0;">
+      <div style="text-align: center; margin: 28px 0 12px 0;">
         <a href="${data.paymentUrl}" style="display: inline-block; padding: 14px 34px; background-color: #dc2626; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 15px; box-shadow: 0 4px 14px rgba(220, 38, 38, 0.3);">
           Complete Payment & Secure Date &rarr;
         </a>
       </div>
+
+      ${manageUrl ? `
+      <div style="text-align: center; margin: 6px 0 20px 0;">
+        <a href="${manageUrl}" style="display: inline-block; padding: 11px 24px; background-color: #0f172a; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 13px;">
+          📋 View & Manage Booking Details &rarr;
+        </a>
+      </div>
+      <p style="text-align: center; margin: 10px 0; font-size: 12px; color: #64748b;">
+        Booking Portal: <a href="${manageUrl}" style="color: #dc2626; word-break: break-all;">${manageUrl}</a>
+      </p>
+      ` : ''}
 
       <p style="text-align: center; margin: 0; font-size: 12px; color: #94a3b8; line-height: 1.5;">
         Direct checkout link: <a href="${data.paymentUrl}" style="color: #dc2626; word-break: break-all;">${data.paymentUrl}</a>
@@ -449,16 +596,19 @@ export class EmailTemplates {
     djName: string,
     date: string,
     paymentMethod: string,
-    bookingId: string
+    bookingId: string,
+    currency: string = 'KES',
+    manageUrl?: string
   ): string {
+    const portalUrl = this.resolveManageUrl(manageUrl || bookingId);
     const content = `
       <p>Thank you! Your payment for the booking has been successfully processed.</p>
-      <p>Your booking is now fully secured.</p>
+      <p>Your booking is now fully secured with 100% UpBeat Escrow Protection.</p>
       
       <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 20px; margin: 25px 0;">
         <h3 style="margin-top: 0; color: #334155; font-size: 18px; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px;">Payment Details</h3>
         <ul style="list-style: none; padding: 0; margin: 0;">
-          <li style="margin-bottom: 10px;"><strong>Amount Paid:</strong> $${amount.toFixed(2)}</li>
+          <li style="margin-bottom: 10px;"><strong>Amount Paid:</strong> ${currency} ${Number(amount).toLocaleString()}</li>
           <li style="margin-bottom: 10px;"><strong>Payment Method:</strong> ${paymentMethod}</li>
           <li style="margin-bottom: 10px;"><strong>DJ Name:</strong> ${djName}</li>
           <li style="margin-bottom: 10px;"><strong>Event Type:</strong> ${eventType}</li>
@@ -466,8 +616,18 @@ export class EmailTemplates {
           <li><strong>Booking ID:</strong> ${bookingId}</li>
         </ul>
       </div>
-      
-      `;
+
+      ${portalUrl ? `
+      <div style="text-align: center; margin: 25px 0 10px 0;">
+        <a href="${portalUrl}" style="display: inline-block; padding: 13px 28px; background-color: #0f172a; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.15);">
+          📋 View & Manage Booking Details &rarr;
+        </a>
+      </div>
+      <p style="text-align: center; font-size: 12px; color: #94a3b8;">
+        Portal Link: <a href="${portalUrl}" style="color: #dc2626; word-break: break-all;">${portalUrl}</a>
+      </p>
+      ` : ''}
+    `;
     return this.getHtmlShell("Payment Receipt", content);
   }
 
@@ -613,13 +773,30 @@ export class EmailTemplates {
   }
 
   // Case 26: Upcoming Event Reminder (Client or DJ)
-  static getUpcomingEventReminderTemplate(eventType: string, date: string, isDJ: boolean): string {
+  static getUpcomingEventReminderTemplate(
+    eventType: string,
+    date: string,
+    isDJ: boolean,
+    actionUrl?: string
+  ): string {
     const message = isDJ ? 'Good luck with the gig!' : 'We hope you enjoy the event!';
+    const portalUrl = this.resolveManageUrl(actionUrl);
+    const buttonText = isDJ ? 'View Booking in Dashboard &rarr;' : '📋 View Booking & Artist Contacts &rarr;';
     const content = `
       <p>This is a reminder that your <strong>${eventType}</strong> is scheduled for tomorrow.</p>
       <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 20px; margin: 20px 0;">
         <p style="margin: 0;"><strong>Date & Time:</strong><br/> ${new Date(date).toLocaleString()}</p>
       </div>
+      ${portalUrl ? `
+      <div style="text-align: center; margin: 25px 0 10px 0;">
+        <a href="${portalUrl}" style="display: inline-block; padding: 12px 26px; background-color: #0f172a; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.15);">
+          ${buttonText}
+        </a>
+      </div>
+      <p style="text-align: center; font-size: 12px; color: #94a3b8;">
+        Link: <a href="${portalUrl}" style="color: #dc2626; word-break: break-all;">${portalUrl}</a>
+      </p>
+      ` : ''}
       <p>${message}</p>
     `;
     return this.getHtmlShell("Upcoming Event Reminder", content);

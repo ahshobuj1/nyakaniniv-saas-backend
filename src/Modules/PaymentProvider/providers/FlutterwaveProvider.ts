@@ -10,6 +10,7 @@ import {
   PayoutResult,
   PayoutStatusResult,
   WebhookResult,
+  RefundResult,
 } from '../interfaces/payment.types';
 import { PaymentGateway, PaymentChannel } from '@/prisma/generated/client';
 import { config } from '@/core/config';
@@ -332,5 +333,68 @@ export class FlutterwaveProvider implements IPaymentProvider {
       status: 'IGNORED',
       rawPayload: payload,
     };
+  }
+
+  /**
+   * Flutterwave's refund endpoint needs the numeric transaction id, while we persist the
+   * merchant `tx_ref`. Resolve the id via verify_by_reference (numeric input is used as-is).
+   */
+  private async resolveTransactionId(reference: string): Promise<string | null> {
+    if (/^\d+$/.test(reference)) return reference;
+
+    const response = await axios.get(
+      `${this.baseUrl}/transactions/verify_by_reference?tx_ref=${encodeURIComponent(reference)}`,
+      { headers: this.headers }
+    );
+    const id = response.data?.data?.id;
+    return id ? String(id) : null;
+  }
+
+  public async refundPayment(reference: string, amount?: number, currency?: string): Promise<RefundResult> {
+    try {
+      const transactionId = await this.resolveTransactionId(reference);
+      if (!transactionId) {
+        return {
+          success: false,
+          outcome: 'FAILED',
+          failureReason: 'Could not resolve the Flutterwave transaction id for this reference',
+        };
+      }
+
+      const payload: any = {};
+      if (amount) {
+        payload.amount = amount;
+      }
+
+      const response = await axios.post(`${this.baseUrl}/transactions/${transactionId}/refund`, payload, { headers: this.headers });
+      if (response.data?.status !== 'success') {
+        return {
+          success: false,
+          outcome: 'FAILED',
+          failureReason: response.data?.message || 'Flutterwave rejected the refund request',
+          rawResponse: response.data,
+        };
+      }
+
+      // Flutterwave refund states: completed | pending | failed
+      const refundState = String(response.data?.data?.status || '').toLowerCase();
+      const outcome = refundState === 'completed' ? 'COMPLETED' : refundState === 'failed' ? 'FAILED' : 'PENDING';
+
+      return {
+        success: outcome !== 'FAILED',
+        outcome,
+        refundReference: response.data?.data?.id?.toString() || undefined,
+        failureReason: outcome === 'FAILED' ? 'Flutterwave reported the refund as failed' : undefined,
+        rawResponse: response.data,
+      };
+    } catch (error: any) {
+      this.logger.error('Flutterwave refund failed', error.response?.data || error.message);
+      return {
+        success: false,
+        outcome: 'FAILED',
+        failureReason: error.response?.data?.message || error.message,
+        rawResponse: error.response?.data,
+      };
+    }
   }
 }

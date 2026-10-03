@@ -384,6 +384,108 @@ export class WalletService {
   }
 
   /**
+   * Reverse Escrow funds when a booking is cancelled.
+   *
+   * @param retainedPercent Share (0-100) of the DJ's NET escrow credit that the DJ keeps as
+   *   cancellation compensation. The remainder is removed from the pending balance.
+   *   Idempotent: calling it twice for the same booking is a no-op.
+   */
+  public async reverseBookingEscrow(bookingId: string, retainedPercent: number = 0) {
+    const pendingLedger = await this.prisma.walletLedger.findFirst({
+      where: {
+        bookingId,
+        type: LedgerType.BOOKING_CREDIT_PENDING,
+      },
+    });
+
+    if (!pendingLedger) {
+      this.logger.warn(`No pending escrow found to reverse for booking #${bookingId}.`);
+      return { success: false, message: 'No pending escrow found' };
+    }
+
+    const alreadyHandled = await this.prisma.walletLedger.findFirst({
+      where: {
+        bookingId,
+        OR: [
+          { referenceId: { startsWith: 'ESCROW_REVERSAL_' } },
+          { referenceId: { startsWith: 'ESCROW_RELEASE_' } },
+        ],
+      },
+    });
+
+    if (alreadyHandled) {
+      this.logger.info(`Escrow for booking #${bookingId} already reversed or released. Skipping.`);
+      return { success: true, message: 'Already reversed or released' };
+    }
+
+    const boundedPercent = Math.min(100, Math.max(0, retainedPercent));
+    const netEscrow = Number(pendingLedger.amount);
+    const djCompensation = Math.round(netEscrow * boundedPercent) / 100;
+    const amountToReverse = Math.round((netEscrow - djCompensation) * 100) / 100;
+    const referenceId = `ESCROW_REVERSAL_${bookingId}`;
+
+    await this.prisma.$transaction(async (tx) => {
+      const currentWallet = await tx.wallet.findUnique({
+        where: { id: pendingLedger.walletId },
+      });
+      if (!currentWallet) throw new Error('Wallet not found');
+
+      const newPending = Math.max(0, Math.round((Number(currentWallet.pendingBalance) - Number(pendingLedger.amount)) * 100) / 100);
+      const prevAvailable = Number(currentWallet.availableBalance);
+      const newAvailable = Math.round((prevAvailable + djCompensation) * 100) / 100;
+      const newTotalEarnings = Math.round((Number(currentWallet.totalEarnings || 0) + djCompensation) * 100) / 100;
+
+      await tx.wallet.update({
+        where: { id: currentWallet.id },
+        data: {
+          pendingBalance: newPending,
+          availableBalance: newAvailable,
+          totalEarnings: newTotalEarnings,
+        },
+      });
+
+      // Record the reversal (refunded portion)
+      if (amountToReverse > 0) {
+        await tx.walletLedger.create({
+          data: {
+            walletId: currentWallet.id,
+            bookingId,
+            referenceId: referenceId + '_REV',
+            amount: -amountToReverse,
+            currency: pendingLedger.currency,
+            type: LedgerType.REFUND_ADJUSTMENT,
+            previousBalance: Number(currentWallet.pendingBalance),
+            newBalance: newPending,
+            status: 'CONFIRMED',
+            description: `Escrow reversed for cancelled booking #${bookingId.substring(0, 8)}`,
+          },
+        });
+      }
+
+      // Record the compensation (kept portion) if any
+      if (djCompensation > 0) {
+        await tx.walletLedger.create({
+          data: {
+            walletId: currentWallet.id,
+            bookingId,
+            referenceId: referenceId + '_COMP',
+            amount: djCompensation,
+            currency: pendingLedger.currency,
+            type: LedgerType.ESCROW_RELEASED,
+            previousBalance: prevAvailable,
+            newBalance: newAvailable,
+            status: 'CONFIRMED',
+            description: `Compensation released to Available Balance for cancelled booking #${bookingId.substring(0, 8)}`,
+          },
+        });
+      }
+    });
+
+    this.logger.info(`Reversed escrow for Booking #${bookingId}. Reversed: ${amountToReverse}, Kept: ${djCompensation}`);
+    return { success: true, reversedAmount: amountToReverse, compensationAmount: djCompensation };
+  }
+
+  /**
    * DJ requests a withdrawal from their available balance
    * Initiates payout via Transfer Provider
    */

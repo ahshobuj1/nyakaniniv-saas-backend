@@ -102,3 +102,14 @@ export interface WebhookResult {
   metadata?: any;
   rawPayload: any;
 }
+
+/** Normalised outcome of a gateway refund call. */
+export type RefundOutcome = 'COMPLETED' | 'PENDING' | 'FAILED';
+
+export interface RefundResult {
+  success: boolean;
+  outcome: RefundOutcome;
+  refundReference?: string;
+  failureReason?: string;
+  rawResponse?: any;
+}

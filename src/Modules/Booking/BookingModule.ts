@@ -136,5 +136,16 @@ export class BookingModule extends BaseModule {
       authorizeRole([UserRole.DJ]),
       controller.markCashAsPaid.bind(controller),
     );
+
+    // Client Portal Routes (Magic Link)
+    this.router.get(
+      "/client/:id",
+      controller.getClientBooking.bind(controller),
+    );
+
+    this.router.post(
+      "/client/:id/cancel",
+      controller.clientCancelBooking.bind(controller),
+    );
   }
 }

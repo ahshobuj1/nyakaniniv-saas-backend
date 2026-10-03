@@ -233,20 +233,54 @@ export class BookingServices {
           EmailTemplates.getNewBookingAlertTemplate(
             data.clientName,
             data.eventType || 'Event',
-            data.eventDate || new Date().toISOString()
+            data.eventDate || new Date().toISOString(),
+            tenant.timezone || 'Africa/Nairobi'
           )
         );
       }
     }
 
-    // Auto-reply to Client
+    // Auto-reply to Client with magic manage link & formatted date/time
+    const targetTz = booking.eventTimezone || tenant.timezone || 'Africa/Nairobi';
+    let clientEventDate = '';
+    let clientEventTime = '';
+    if (booking.eventDate) {
+      const d = new Date(booking.eventDate);
+      if (!isNaN(d.getTime())) {
+        try {
+          clientEventDate = d.toLocaleDateString('en-US', {
+            timeZone: targetTz,
+            weekday: 'short',
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+          });
+          const timeFormatted = d.toLocaleTimeString('en-US', {
+            timeZone: targetTz,
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true,
+          });
+          clientEventTime = timeFormatted;
+        } catch {
+          clientEventDate = d.toDateString();
+        }
+      }
+    }
+
+    const manageUrl = `${config.clientUrl}/booking/manage/${booking.id}`;
+
     this.emailProvider.sendEmail(
       data.clientEmail,
-      'Booking Request Received - UpBeat Entertainment Africa',
-      EmailTemplates.getBookingAutoReplyTemplate(
-        tenant.stageName || tenant.user?.firstName || 'DJ',
-        data.eventType || 'Event'
-      )
+      `Booking Request Received - ${tenant.stageName || tenant.user?.firstName || 'DJ'} - UpBeat Entertainment Africa`,
+      EmailTemplates.getBookingAutoReplyTemplate({
+        clientName: data.clientName,
+        djName: tenant.stageName || tenant.user?.firstName || 'DJ',
+        eventType: data.eventType || 'Event',
+        eventDate: clientEventDate,
+        eventTime: clientEventTime,
+        manageUrl,
+      })
     );
 
     return booking;
@@ -666,6 +700,8 @@ export class BookingServices {
       const amountFormatted = amount > 0 ? ` (${currency} ${amount.toLocaleString()})` : '';
       const reminderSubject = `Payment Reminder: Complete Payment${amountFormatted} to Secure Date with ${djName} - UpBeat Entertainment Africa`;
 
+      const manageUrl = `${config.clientUrl}/booking/manage/${id}`;
+
       this.emailProvider.sendEmail(
         booking.client.email,
         reminderSubject,
@@ -678,6 +714,7 @@ export class BookingServices {
           currency,
           amount,
           paymentUrl: checkoutUrl || checkoutRedirectUrl,
+          manageUrl,
         })
       );
     }
@@ -714,6 +751,8 @@ export class BookingServices {
       ? (config.clientUrl.includes('localhost') ? `http://${booking.tenant.subdomain}.localhost:3000` : `https://${booking.tenant.subdomain}.deejay.africa`)
       : config.clientUrl;
 
+    const manageUrl = `${config.clientUrl}/booking/manage/${booking.id}`;
+
     if (decision === 'reject') {
       await this.prisma.transaction.update({
         where: { id: cashTx.id },
@@ -730,37 +769,32 @@ export class BookingServices {
             booking.eventType || 'Event',
             booking.currencyCode || 'KES',
             Number(booking.totalAmount || 0),
-            checkoutUrl
+            checkoutUrl,
+            manageUrl
           )
         );
       }
 
       return { success: true, message: 'Cash request declined. Client has been notified by email to pay online.' };
     } else {
-      const txOperations: any[] = [
-        this.prisma.transaction.update({
-          where: { id: cashTx.id },
-          data: { metadata: { ...(cashTx.metadata as any), cashApproved: true } },
-        }),
-        this.prisma.booking.update({
-          where: { id: booking.id },
-          data: {
-            status: BookingStatus.CONFIRMED,
-            confirmedAt: new Date(),
-          },
-        }),
-      ];
+      await this.prisma.transaction.update({
+        where: { id: cashTx.id },
+        data: { metadata: { ...(cashTx.metadata as any), cashApproved: true } },
+      });
 
       if (booking.invoice) {
-        txOperations.push(
-          this.prisma.invoice.update({
-            where: { id: booking.invoice.id },
-            data: { status: InvoiceStatus.PAID },
-          })
-        );
+        await this.prisma.invoice.update({
+          where: { id: booking.invoice.id },
+          data: { status: InvoiceStatus.PAID },
+        });
       }
 
-      await this.prisma.$transaction(txOperations);
+      await this.bookingStatusService.transition({
+        bookingId: booking.id,
+        targetStatus: BookingStatus.CONFIRMED,
+        userId,
+        reason: 'DJ approved cash payment request',
+      });
 
       // NOTE: Cash payments are collected directly by the DJ — no platform funds are involved.
       // Therefore we do NOT credit the DJ's platform escrow wallet here.
@@ -779,7 +813,8 @@ export class BookingServices {
             booking.eventDate ? new Date(booking.eventDate).toLocaleDateString() : 'Event Day',
             booking.currencyCode || 'KES',
             Number(booking.totalAmount || 0),
-            djUrl
+            djUrl,
+            manageUrl
           )
         );
       }
@@ -815,15 +850,14 @@ export class BookingServices {
         where: { id: booking.invoice.id },
         data: { status: InvoiceStatus.PAID },
       }),
-      this.prisma.booking.update({
-        where: { id: booking.id },
-        data: {
-          paymentStatus: PaymentStatus.PAID,
-          status: BookingStatus.COMPLETED,
-          completedAt: new Date(),
-        },
-      }),
     ]);
+
+    await this.bookingStatusService.transition({
+      bookingId: booking.id,
+      targetStatus: BookingStatus.COMPLETED,
+      userId,
+      reason: 'Cash payment confirmed by DJ',
+    });
 
     return { success: true, message: 'Cash payment confirmed, invoice marked as paid, and booking completed' };
   }
@@ -843,43 +877,69 @@ export class BookingServices {
       throw new BadRequestError('Only paid bookings can be refunded');
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.booking.update({
-        where: { id: booking.id },
-        data: {
-          status: BookingStatus.CANCELLED,
-          cancelledAt: new Date(),
-          paymentStatus: PaymentStatus.REFUNDED
-        }
-      });
-
-      if (booking.invoice) {
-        await tx.invoice.update({
-          where: { id: booking.invoice.id },
-          data: { status: InvoiceStatus.UNPAID } // or a new refunded status if exists
-        });
-      }
-
-      // Add a refund adjustment ledger entry if it was paid online
-      // In a real scenario, this would also call the PaymentProvider refund API
-      const wallet = await tx.wallet.findUnique({ where: { tenantId } });
-      if (wallet) {
-        await tx.walletLedger.create({
-          data: {
-            walletId: wallet.id,
-            bookingId: booking.id,
-            amount: booking.totalAmount || 0,
-            currency: booking.currencyCode || 'KES',
-            type: 'REFUND_ADJUSTMENT' as any, // LedgerType.REFUND_ADJUSTMENT
-            description: 'Refund processed for booking cancellation',
-            newBalance: 0,
-            previousBalance: 0,
-            status: 'COMPLETED'
-          }
-        });
-      }
+    await this.bookingStatusService.transition({
+      bookingId: booking.id,
+      targetStatus: BookingStatus.CANCELLED,
+      userId,
+      reason: 'DJ initiated refund and cancellation',
     });
 
-    return { success: true, message: 'Booking refunded successfully' };
+    return { success: true, message: 'Booking refunded and cancelled successfully' };
+  }
+
+  public async getClientBooking(id: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id },
+      include: {
+        tenant: {
+          select: {
+            id: true,
+            stageName: true,
+            subdomain: true,
+            timezone: true,
+            logoUrl: true,
+            bio: true,
+            city: true,
+            country: true,
+            socialLinks: true,
+            config: true,
+            user: { select: { email: true, firstName: true, lastName: true, profileImg: true } }
+          }
+        },
+        client: {
+          select: { name: true, email: true, phone: true }
+        },
+        invoice: {
+          select: { id: true, status: true, amount: true, currencyCode: true }
+        }
+      }
+    });
+    if (!booking) throw new NotFoundError('Booking not found');
+    return booking;
+  }
+
+  public async clientCancelBooking(id: string, reason?: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id },
+    });
+    if (!booking) throw new NotFoundError('Booking not found');
+    
+    if (
+      booking.status === BookingStatus.COMPLETED ||
+      booking.status === BookingStatus.CANCELLED ||
+      booking.status === BookingStatus.EXPIRED ||
+      booking.status === BookingStatus.REJECTED
+    ) {
+      throw new BadRequestError('Booking cannot be cancelled at this stage.');
+    }
+
+    await this.bookingStatusService.transition({
+      bookingId: booking.id,
+      targetStatus: BookingStatus.CANCELLED,
+      cancelledBy: 'CLIENT',
+      reason: reason || 'Client requested cancellation',
+    });
+
+    return { success: true, message: 'Booking cancelled successfully' };
   }
 }

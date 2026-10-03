@@ -82,31 +82,31 @@ model Tenant {
 }
 
 model SubscriptionPlan {
-  id                   Int            @id @default(autoincrement())
-  name                 String?        @db.VarChar(255)
-  priceMonthly         Decimal?       @map("price_monthly") @db.Decimal(10, 2)
-  priceAnnually        Decimal?       @map("price_annually") @db.Decimal(10, 2)
-  discountPercentage   Int?           @map("discount_percentage")
-  features             Json?
-  createdAt            DateTime?      @default(now()) @map("created_at")
-  updatedAt            DateTime?      @default(now()) @updatedAt @map("updated_at")
-  isActive             Boolean        @default(true) @map("is_active")
-  invoices             Invoice[]
-  subscriptions        Subscription[]
+  id                 Int            @id @default(autoincrement())
+  name               String?        @db.VarChar(255)
+  priceMonthly       Decimal?       @map("price_monthly") @db.Decimal(10, 2)
+  priceAnnually      Decimal?       @map("price_annually") @db.Decimal(10, 2)
+  discountPercentage Int?           @map("discount_percentage")
+  features           Json?
+  createdAt          DateTime?      @default(now()) @map("created_at")
+  updatedAt          DateTime?      @default(now()) @updatedAt @map("updated_at")
+  isActive           Boolean        @default(true) @map("is_active")
+  invoices           Invoice[]
+  subscriptions      Subscription[]
 
   @@map("subscription_plans")
 }
 
 model Subscription {
-  id          String              @id @default(uuid()) @db.Uuid
-  userId      String?             @map("user_id") @db.Uuid
-  planId      Int?                @map("plan_id")
-  status      SubscriptionStatus?
-  periodEnd   DateTime?           @map("period_end")
-  createdAt   DateTime?           @default(now()) @map("created_at")
-  updatedAt   DateTime?           @default(now()) @updatedAt @map("updated_at")
-  plan        SubscriptionPlan?   @relation(fields: [planId], references: [id])
-  user        User?               @relation(fields: [userId], references: [id])
+  id        String              @id @default(uuid()) @db.Uuid
+  userId    String?             @map("user_id") @db.Uuid
+  planId    Int?                @map("plan_id")
+  status    SubscriptionStatus?
+  periodEnd DateTime?           @map("period_end")
+  createdAt DateTime?           @default(now()) @map("created_at")
+  updatedAt DateTime?           @default(now()) @updatedAt @map("updated_at")
+  plan      SubscriptionPlan?   @relation(fields: [planId], references: [id])
+  user      User?               @relation(fields: [userId], references: [id])
 
   @@map("subscriptions")
 }
@@ -147,27 +147,27 @@ model Event {
 }
 
 model Booking {
-  id            String         @id @default(uuid()) @db.Uuid
-  tenantId      String?        @map("tenant_id") @db.Uuid
-  eventType     String?        @map("event_type") @db.VarChar(255)
-  eventDetails  Json?          @map("event_details")
-  status        BookingStatus  @default(PENDING)
-  totalAmount   Decimal        @default(0.00) @map("total_amount") @db.Decimal(18, 2)
-  createdAt     DateTime?      @default(now()) @map("created_at")
-  updatedAt     DateTime?      @default(now()) @updatedAt @map("updated_at")
+  id            String        @id @default(uuid()) @db.Uuid
+  tenantId      String?       @map("tenant_id") @db.Uuid
+  eventType     String?       @map("event_type") @db.VarChar(255)
+  eventDetails  Json?         @map("event_details")
+  status        BookingStatus @default(PENDING)
+  totalAmount   Decimal       @default(0.00) @map("total_amount") @db.Decimal(18, 2)
+  createdAt     DateTime?     @default(now()) @map("created_at")
+  updatedAt     DateTime?     @default(now()) @updatedAt @map("updated_at")
   address       String?
-  eventDate     DateTime?      @map("event_date")
-  clientId      String?        @map("client_id") @db.Uuid
-  deletedAt     DateTime?      @map("deleted_at")
-  currencyCode  String?        @default("KES") @map("currency_code") @db.Char(3)
-  eventTimezone String?        @map("event_timezone") @db.VarChar(100)
+  eventDate     DateTime?     @map("event_date")
+  clientId      String?       @map("client_id") @db.Uuid
+  deletedAt     DateTime?     @map("deleted_at")
+  currencyCode  String?       @default("KES") @map("currency_code") @db.Char(3)
+  eventTimezone String?       @map("event_timezone") @db.VarChar(100)
 
-  paymentStatus PaymentStatus  @default(PENDING) @map("payment_status")
-  payoutStatus  PayoutStatus   @default(NOT_ELIGIBLE) @map("payout_status")
-  paymentDueAt  DateTime?      @map("payment_due_at")
-  confirmedAt   DateTime?      @map("confirmed_at")
-  completedAt   DateTime?      @map("completed_at")
-  cancelledAt   DateTime?      @map("cancelled_at")
+  paymentStatus PaymentStatus @default(PENDING) @map("payment_status")
+  payoutStatus  PayoutStatus  @default(NOT_ELIGIBLE) @map("payout_status")
+  paymentDueAt  DateTime?     @map("payment_due_at")
+  confirmedAt   DateTime?     @map("confirmed_at")
+  completedAt   DateTime?     @map("completed_at")
+  cancelledAt   DateTime?     @map("cancelled_at")
 
   client        Client?        @relation(fields: [clientId], references: [id])
   tenant        Tenant?        @relation(fields: [tenantId], references: [id])

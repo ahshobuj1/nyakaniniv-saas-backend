@@ -3,6 +3,7 @@ import { PrismaClient, BookingStatus, SubscriptionStatus } from '@/prisma/genera
 import { IEmailProvider } from '@/providers/EmailProvider';
 import { EmailTemplates } from '@/utils/EmailTemplates';
 import { AppLogger } from '@/core/logging/logger';
+import { config } from '@/core/config';
 
 export class EmailCronJobs {
   private logger = new AppLogger('EmailCronJobs');
@@ -60,25 +61,29 @@ export class EmailCronJobs {
 
     for (const booking of upcomingBookings) {
       if (booking.client?.email) {
+        const clientManageUrl = `${config.clientUrl}/booking/manage/${booking.id}`;
         this.emailProvider.sendEmail(
           booking.client.email,
           "Upcoming Event Reminder 📅 - UpBeat Entertainment Africa",
           EmailTemplates.getUpcomingEventReminderTemplate(
             booking.eventType || "Event",
             booking.eventDate?.toISOString() || new Date().toISOString(),
-            false
+            false,
+            clientManageUrl
           )
         );
       }
 
       if (booking.tenant?.user?.email) {
+        const djDashboardUrl = `${config.clientUrl}/dashboard/bookings/${booking.id}`;
         this.emailProvider.sendEmail(
           booking.tenant.user.email,
           "Upcoming Event Reminder 📅 - UpBeat Entertainment Africa",
           EmailTemplates.getUpcomingEventReminderTemplate(
             booking.eventType || "Event",
             booking.eventDate?.toISOString() || new Date().toISOString(),
-            true
+            true,
+            djDashboardUrl
           )
         );
       }

@@ -68,21 +68,43 @@ export class InvoiceServices {
 
     const invoices = invoiceRecords.map(inv => {
       const latestTx = inv.transactions[0];
-      return {
+      const isBooking = inv.type === 'BOOKING';
+      const item: any = {
         id: inv.id,
-        transactionId: latestTx?.id || inv.id,
         amount: Number(inv.amount),
+        currencyCode: inv.currencyCode || 'KES',
         status: inv.status,
-        method: latestTx?.channel || 'UNKNOWN',
-        gateway: latestTx?.gateway || null,
-        type: inv.type || 'UNKNOWN',
+        type: inv.type,
         createdAt: inv.createdAt,
-        user: inv.user ? { email: inv.user.email, firstName: inv.user.firstName, lastName: inv.user.lastName } : 
-              inv.booking?.client ? { email: inv.booking.client.email, firstName: inv.booking.client.name, lastName: '' } : null,
-        plan: inv.plan ? { name: inv.plan.name } : null,
-        tenant: inv.tenant ? { subdomain: inv.tenant.subdomain, stageName: inv.tenant.stageName } : null,
-        booking: inv.booking || null
+        gateway: latestTx?.gateway || null,
+        method: latestTx?.channel || (inv.status === 'PAID' ? 'ONLINE' : null),
       };
+
+      if (isBooking && inv.booking) {
+        item.booking = {
+          id: inv.booking.id,
+          eventType: inv.booking.eventType,
+          client: inv.booking.client ? {
+            name: inv.booking.client.name,
+            email: inv.booking.client.email,
+          } : null,
+        };
+      } else if (!isBooking) {
+        if (inv.user) {
+          item.user = {
+            firstName: inv.user.firstName,
+            lastName: inv.user.lastName,
+            email: inv.user.email,
+          };
+        }
+        if (inv.plan) {
+          item.plan = {
+            name: inv.plan.name,
+          };
+        }
+      }
+
+      return item;
     });
 
     const totalPages = Math.ceil(total / limit);
@@ -147,21 +169,43 @@ export class InvoiceServices {
 
     const invoices = invoicesData.map((inv: any) => {
       const latestTx = inv.transactions?.[0];
-      return {
+      const isBooking = inv.type === 'BOOKING';
+      const item: any = {
         id: inv.id,
-        transactionId: latestTx?.id || inv.id,
         amount: Number(inv.amount),
+        currencyCode: inv.currencyCode || 'KES',
         status: inv.status,
-        method: latestTx?.channel || (inv.status === 'PAID' ? 'ONLINE' : 'PENDING'),
-        gateway: latestTx?.gateway || null,
-        type: inv.type || 'UNKNOWN',
+        type: inv.type,
         createdAt: inv.createdAt,
-        user: inv.user ? { email: inv.user.email, firstName: inv.user.firstName, lastName: inv.user.lastName } : 
-              inv.booking?.client ? { email: inv.booking.client.email, firstName: inv.booking.client.name, lastName: '' } : null,
-        plan: inv.plan ? { name: inv.plan.name } : null,
-        tenant: inv.tenant ? { subdomain: inv.tenant.subdomain, stageName: inv.tenant.stageName } : null,
-        booking: inv.booking || null
+        gateway: latestTx?.gateway || null,
+        method: latestTx?.channel || (inv.status === 'PAID' ? 'ONLINE' : null),
       };
+
+      if (isBooking && inv.booking) {
+        item.booking = {
+          id: inv.booking.id,
+          eventType: inv.booking.eventType,
+          client: inv.booking.client ? {
+            name: inv.booking.client.name,
+            email: inv.booking.client.email,
+          } : null,
+        };
+      } else if (!isBooking) {
+        if (inv.user) {
+          item.user = {
+            firstName: inv.user.firstName,
+            lastName: inv.user.lastName,
+            email: inv.user.email,
+          };
+        }
+        if (inv.plan) {
+          item.plan = {
+            name: inv.plan.name,
+          };
+        }
+      }
+
+      return item;
     });
 
     return { invoices, meta };
@@ -187,11 +231,10 @@ export class InvoiceServices {
       },
       include: {
         user: { select: { firstName: true, lastName: true, email: true } },
-        plan: { select: { name: true, priceMonthly: true, priceAnnually: true } },
+        plan: { select: { name: true } },
         tenant: {
           select: {
             stageName: true,
-            logoUrl: true,
             country: true,
             city: true,
             user: { select: { firstName: true, lastName: true, email: true } }
@@ -202,14 +245,21 @@ export class InvoiceServices {
             id: true,
             eventDate: true,
             eventType: true,
-            eventDetails: true,
             address: true,
-            status: true,
-            totalAmount: true,
             client: { select: { name: true, email: true, phone: true } }
           }
         },
-        transactions: true
+        transactions: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: {
+            gateway: true,
+            channel: true,
+            cardBrand: true,
+            cardLast4: true,
+            createdAt: true,
+          }
+        }
       }
     });
 
@@ -217,18 +267,68 @@ export class InvoiceServices {
       throw new NotFoundError('Invoice not found');
     }
 
-    // Attach transaction details to root for backward compatibility with frontend
     const mainTx = invoice.transactions[0];
-    return {
-      ...invoice,
-      method: mainTx?.channel || 'UNKNOWN',
+    const isBooking = invoice.type === 'BOOKING';
+
+    const result: any = {
+      id: invoice.id,
+      type: invoice.type,
+      status: invoice.status,
+      amount: Number(invoice.amount),
+      currencyCode: invoice.currencyCode || 'KES',
+      createdAt: invoice.createdAt,
       gateway: mainTx?.gateway || null,
-      cardBrand: mainTx?.cardBrand || null,
-      cardLast4: mainTx?.cardLast4 || null,
-      bankName: mainTx?.bankName || null,
-      accountName: mainTx?.accountName || null,
-      paidAt: mainTx?.createdAt || null
+      method: mainTx?.channel || (invoice.status === 'PAID' ? 'ONLINE' : null),
     };
+
+    if (mainTx?.cardBrand) result.cardBrand = mainTx.cardBrand;
+    if (mainTx?.cardLast4) result.cardLast4 = mainTx.cardLast4;
+    if (invoice.status === 'PAID') {
+      result.paidAt = mainTx?.createdAt || invoice.updatedAt || invoice.createdAt;
+    }
+
+    if (isBooking) {
+      if (invoice.booking) {
+        result.booking = {
+          id: invoice.booking.id,
+          eventType: invoice.booking.eventType,
+          eventDate: invoice.booking.eventDate,
+          address: invoice.booking.address,
+          client: invoice.booking.client ? {
+            name: invoice.booking.client.name,
+            email: invoice.booking.client.email,
+            phone: invoice.booking.client.phone,
+          } : null,
+        };
+      }
+      if (invoice.tenant) {
+        result.tenant = {
+          stageName: invoice.tenant.stageName,
+          country: invoice.tenant.country,
+          city: invoice.tenant.city,
+          user: invoice.tenant.user ? {
+            firstName: invoice.tenant.user.firstName,
+            lastName: invoice.tenant.user.lastName,
+            email: invoice.tenant.user.email,
+          } : null,
+        };
+      }
+    } else {
+      if (invoice.plan) {
+        result.plan = {
+          name: invoice.plan.name,
+        };
+      }
+      if (invoice.user) {
+        result.user = {
+          firstName: invoice.user.firstName,
+          lastName: invoice.user.lastName,
+          email: invoice.user.email,
+        };
+      }
+    }
+
+    return result;
   }
 
   async markAsPaid(userId: string, id: string) {
