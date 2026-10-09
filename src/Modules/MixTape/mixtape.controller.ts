@@ -26,8 +26,8 @@ export class MixTapeController extends BaseController {
 
   public async getTenantMixTapes(req: Request, res: Response): Promise<void> {
     const tenantId = String(req.params.tenantId);
-    const mixTapes = await this.mixTapeService.getTenantMixTapes(tenantId);
-    this.sendResponse(req, res, 'MixTapes retrieved successfully', undefined, mixTapes);
+    const { mixTapes, meta } = await this.mixTapeService.getTenantMixTapes(tenantId, req.query as Record<string, unknown>);
+    this.sendPaginatedResponse(req, res, meta, 'MixTapes retrieved successfully', mixTapes);
   }
 
   public async updateMixTape(req: Request, res: Response): Promise<void> {

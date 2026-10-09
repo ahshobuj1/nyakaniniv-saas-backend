@@ -1,20 +1,29 @@
-import { PrismaClient } from '@/prisma/generated/client';
-import { NotFoundError, BadRequestError, AuthorizationError } from '@/core/errors/AppError';
-import { IFileUploader } from '@/utils/IFileUploader';
-import { CreateMixTapeDTO, UpdateMixTapeDTO, ReorderMixTapesDTO } from './MixTapeDTO';
-import { isValidUuid } from '@/utils/uuid';
+import {PrismaClient} from '@/prisma/generated/client';
+import {
+  NotFoundError,
+  BadRequestError,
+  AuthorizationError,
+} from '@/core/errors/AppError';
+import {IFileUploader} from '@/utils/IFileUploader';
+import {
+  CreateMixTapeDTO,
+  UpdateMixTapeDTO,
+  ReorderMixTapesDTO,
+} from './MixTapeDTO';
+import {isValidUuid} from '@/utils/uuid';
+import {QueryBuilder} from '@/utils/QueryBuilder';
 
 export class MixTapeServices {
   constructor(
     private prisma: PrismaClient,
-    private fileUploader: IFileUploader
-  ) { }
+    private fileUploader: IFileUploader,
+  ) {}
 
   private async getTenantIdByUserId(userId: string): Promise<string> {
     if (!isValidUuid(userId)) {
       throw new AuthorizationError();
     }
-    const tenant = await this.prisma.tenant.findUnique({ where: { userId } });
+    const tenant = await this.prisma.tenant.findUnique({where: {userId}});
     if (!tenant) {
       throw new AuthorizationError();
     }
@@ -31,10 +40,11 @@ export class MixTapeServices {
     let order = data.order;
     if (order === undefined) {
       const lastMixTape = await this.prisma.mixTape.findFirst({
-        where: { tenantId },
-        orderBy: { order: 'desc' },
+        where: {tenantId},
+        orderBy: {order: 'desc'},
       });
-      order = lastMixTape && lastMixTape.order !== null ? lastMixTape.order + 1 : 0;
+      order =
+        lastMixTape && lastMixTape.order !== null ? lastMixTape.order + 1 : 0;
     }
 
     return this.prisma.mixTape.create({
@@ -48,44 +58,75 @@ export class MixTapeServices {
     });
   }
 
-  async getTenantMixTapes(tenantId: string) {
+  async getTenantMixTapes(
+    tenantId: string,
+    query: Record<string, unknown> = {},
+  ) {
     if (!isValidUuid(tenantId)) {
-      return [];
+      return {
+        mixTapes: [],
+        meta: {
+          total: 0,
+          page: 1,
+          limit: 10,
+          totalPages: 0,
+          hasNext: false,
+          hasPrevious: false,
+        },
+      };
     }
-    return this.prisma.mixTape.findMany({
-      where: { tenantId },
-      orderBy: { order: 'asc' },
-      include: {
-        tenant: {
-          select: {
-            id: true,
-            userId: true,
-            subdomain: true,
-            stageName: true,
-            city: true,
-            country: true,
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-                profileImg: true,
-              }
-            }
-          }
-        }
-      }
-    });
+
+    const safeQuery: any = {...query, tenantId};
+    const mixTapeQuery = new QueryBuilder(this.prisma.mixTape, safeQuery)
+      .search(['title'])
+      .filter()
+      .sort()
+      .pagination();
+
+    if (!safeQuery.sortBy) {
+      mixTapeQuery.prismaArgs.orderBy = {order: 'asc'};
+    }
+
+    mixTapeQuery.prismaArgs.include = {
+      tenant: {
+        select: {
+          id: true,
+          userId: true,
+          subdomain: true,
+          stageName: true,
+          city: true,
+          country: true,
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              profileImg: true,
+            },
+          },
+        },
+      },
+    };
+
+    const mixTapes = await mixTapeQuery.model.findMany(mixTapeQuery.prismaArgs);
+    const meta = await mixTapeQuery.countTotal();
+
+    return {mixTapes, meta};
   }
 
-  async updateMixTape(userId: string, id: string, data: UpdateMixTapeDTO, coverFile?: Express.Multer.File) {
+  async updateMixTape(
+    userId: string,
+    id: string,
+    data: UpdateMixTapeDTO,
+    coverFile?: Express.Multer.File,
+  ) {
     if (!isValidUuid(id)) {
       throw new NotFoundError('MixTape not found');
     }
     const tenantId = await this.getTenantIdByUserId(userId);
     const existing = await this.prisma.mixTape.findFirst({
-      where: { id, tenantId },
+      where: {id, tenantId},
     });
 
     if (!existing) {
@@ -98,10 +139,11 @@ export class MixTapeServices {
     }
 
     return this.prisma.mixTape.update({
-      where: { id },
+      where: {id},
       data: {
         title: data.title !== undefined ? data.title : existing.title,
-        audioUrl: data.audioUrl !== undefined ? data.audioUrl : existing.audioUrl,
+        audioUrl:
+          data.audioUrl !== undefined ? data.audioUrl : existing.audioUrl,
         order: data.order !== undefined ? data.order : existing.order,
         coverUrl,
       },
@@ -114,23 +156,23 @@ export class MixTapeServices {
     }
     const tenantId = await this.getTenantIdByUserId(userId);
     const existing = await this.prisma.mixTape.findFirst({
-      where: { id, tenantId },
+      where: {id, tenantId},
     });
 
     if (!existing) {
       throw new NotFoundError();
     }
 
-    await this.prisma.mixTape.delete({ where: { id } });
-    return { success: true };
+    await this.prisma.mixTape.delete({where: {id}});
+    return {success: true};
   }
 
   async reorderMixTapes(userId: string, data: ReorderMixTapesDTO) {
     const tenantId = await this.getTenantIdByUserId(userId);
     // Validate all mixtapes belong to tenant
-    const ids = data.orders.map(o => o.id);
+    const ids = data.orders.map((o) => o.id);
     const existing = await this.prisma.mixTape.findMany({
-      where: { id: { in: ids }, tenantId },
+      where: {id: {in: ids}, tenantId},
     });
 
     if (existing.length !== ids.length) {
@@ -141,12 +183,12 @@ export class MixTapeServices {
     await this.prisma.$transaction(
       data.orders.map((item) =>
         this.prisma.mixTape.update({
-          where: { id: item.id },
-          data: { order: item.order },
-        })
-      )
+          where: {id: item.id},
+          data: {order: item.order},
+        }),
+      ),
     );
 
-    return { success: true };
+    return {success: true};
   }
 }

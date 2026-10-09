@@ -17,11 +17,11 @@ export class WalletService {
       include: {
         payoutRequests: {
           orderBy: { createdAt: 'desc' },
-          take: 20,
+          take: 200,
         },
         walletLedgers: {
           orderBy: { createdAt: 'desc' },
-          take: 30,
+          take: 200,
         },
       },
     });

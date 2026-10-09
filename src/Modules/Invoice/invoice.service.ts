@@ -1,9 +1,18 @@
-import { PrismaClient, BookingStatus, TransactionStatus, PaymentStatus } from '@/prisma/generated/client';
-import { config } from '@/core/config';
-import { NotFoundError, BadRequestError, AuthorizationError } from '@/core/errors/AppError';
-import { PayInvoiceDTO } from './InvoiceDTO';
-import { QueryBuilder } from '@/utils/QueryBuilder';
-import { isValidUuid } from '@/utils/uuid';
+import {
+  PrismaClient,
+  BookingStatus,
+  TransactionStatus,
+  PaymentStatus,
+} from '@/prisma/generated/client';
+import {config} from '@/core/config';
+import {
+  NotFoundError,
+  BadRequestError,
+  AuthorizationError,
+} from '@/core/errors/AppError';
+import {PayInvoiceDTO} from './InvoiceDTO';
+import {QueryBuilder} from '@/utils/QueryBuilder';
+import {isValidUuid} from '@/utils/uuid';
 import PDFDocument from 'pdfkit';
 import path from 'path';
 import fs from 'fs';
@@ -15,7 +24,7 @@ export class InvoiceServices {
     if (!isValidUuid(userId)) {
       throw new AuthorizationError();
     }
-    const tenant = await this.prisma.tenant.findUnique({ where: { userId } });
+    const tenant = await this.prisma.tenant.findUnique({where: {userId}});
     if (!tenant) {
       throw new AuthorizationError();
     }
@@ -30,43 +39,79 @@ export class InvoiceServices {
     const skip = (page - 1) * limit;
 
     const whereClause: any = {
-      OR: [
-        { userId },
-        ...(tenantId ? [{ tenantId }] : [])
-      ]
+      OR: [{userId}, ...(tenantId ? [{tenantId}] : [])],
     };
 
     const status = query?.status as string;
-    if (status && status !== 'all') {
+    if (status && status.toLowerCase() !== 'all') {
       whereClause.status = status.toUpperCase();
     }
 
     const type = query?.type as string;
-    if (type && type !== 'all') {
+    if (type && type.toLowerCase() !== 'all') {
       whereClause.type = type.toUpperCase();
     }
 
+    const searchTerm = (
+      (query?.searchTerm as string) || (query?.search as string)
+    )?.trim();
+    if (searchTerm) {
+      whereClause.AND = [
+        ...(whereClause.AND || []),
+        {
+          OR: [
+            {id: {contains: searchTerm, mode: 'insensitive'}},
+            {user: {email: {contains: searchTerm, mode: 'insensitive'}}},
+            {
+              booking: {
+                client: {email: {contains: searchTerm, mode: 'insensitive'}},
+              },
+            },
+            {
+              booking: {
+                client: {name: {contains: searchTerm, mode: 'insensitive'}},
+              },
+            },
+            {booking: {eventType: {contains: searchTerm, mode: 'insensitive'}}},
+          ],
+        },
+      ];
+    }
+
+    const sortBy = (query?.sortBy as string) || 'createdAt';
+    const sortOrder =
+      (query?.sortOrder as string)?.toLowerCase() === 'asc' ? 'asc' : 'desc';
+
+    let orderBy: any = {createdAt: sortOrder};
+    if (sortBy === 'amount') {
+      orderBy = {amount: sortOrder};
+    } else if (sortBy === 'status') {
+      orderBy = {status: sortOrder};
+    } else if (sortBy === 'createdAt') {
+      orderBy = {createdAt: sortOrder};
+    }
+
     const [total, invoiceRecords] = await Promise.all([
-      this.prisma.invoice.count({ where: whereClause }),
+      this.prisma.invoice.count({where: whereClause}),
       this.prisma.invoice.findMany({
         where: whereClause,
         skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         include: {
-          user: { select: { email: true, firstName: true, lastName: true } },
-          tenant: { select: { subdomain: true, stageName: true } },
-          plan: { select: { name: true } },
-          booking: { include: { client: { select: { name: true, email: true } } } },
+          user: {select: {email: true, firstName: true, lastName: true}},
+          tenant: {select: {subdomain: true, stageName: true}},
+          plan: {select: {name: true}},
+          booking: {include: {client: {select: {name: true, email: true}}}},
           transactions: {
-            orderBy: { createdAt: 'desc' },
-            take: 1
-          }
-        }
-      })
+            orderBy: {createdAt: 'desc'},
+            take: 1,
+          },
+        },
+      }),
     ]);
 
-    const invoices = invoiceRecords.map(inv => {
+    const invoices = invoiceRecords.map((inv) => {
       const latestTx = inv.transactions[0];
       const isBooking = inv.type === 'BOOKING';
       const item: any = {
@@ -84,10 +129,12 @@ export class InvoiceServices {
         item.booking = {
           id: inv.booking.id,
           eventType: inv.booking.eventType,
-          client: inv.booking.client ? {
-            name: inv.booking.client.name,
-            email: inv.booking.client.email,
-          } : null,
+          client: inv.booking.client
+            ? {
+                name: inv.booking.client.name,
+                email: inv.booking.client.email,
+              }
+            : null,
         };
       } else if (!isBooking) {
         if (inv.user) {
@@ -109,9 +156,16 @@ export class InvoiceServices {
 
     const totalPages = Math.ceil(total / limit);
 
-    return { 
-      invoices, 
-      meta: { total, page, limit, totalPages, hasNext: page < totalPages, hasPrevious: page > 1 } 
+    return {
+      invoices,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrevious: page > 1,
+      },
     };
   }
 
@@ -121,20 +175,31 @@ export class InvoiceServices {
       .filter()
       .sort()
       .pagination();
-    
+
     // 1. Complex Search
-    const searchTerm = (query?.searchTerm as string || query?.search as string)?.toLowerCase();
+    const searchTerm = (
+      (query?.searchTerm as string) || (query?.search as string)
+    )?.toLowerCase();
     if (searchTerm) {
       invQuery.prismaArgs.where.OR = [
-        { id: { contains: searchTerm, mode: 'insensitive' } },
-        { user: { email: { contains: searchTerm, mode: 'insensitive' } } },
-        { booking: { client: { email: { contains: searchTerm, mode: 'insensitive' } } } },
-        { booking: { client: { name: { contains: searchTerm, mode: 'insensitive' } } } },
+        {id: {contains: searchTerm, mode: 'insensitive'}},
+        {user: {email: {contains: searchTerm, mode: 'insensitive'}}},
+        {
+          booking: {
+            client: {email: {contains: searchTerm, mode: 'insensitive'}},
+          },
+        },
+        {
+          booking: {
+            client: {name: {contains: searchTerm, mode: 'insensitive'}},
+          },
+        },
       ];
     }
 
     // 2. Filter by status
-    const status = query?.status as string || query?.paymentStatus as string;
+    const status =
+      (query?.status as string) || (query?.paymentStatus as string);
     if (status && status !== 'all') {
       invQuery.prismaArgs.where.status = status.toUpperCase();
     }
@@ -147,14 +212,14 @@ export class InvoiceServices {
 
     // 4. Includes
     invQuery.prismaArgs.include = {
-      user: { select: { email: true, firstName: true, lastName: true } },
-      tenant: { select: { subdomain: true, stageName: true } },
-      plan: { select: { name: true } },
-      booking: { include: { client: { select: { name: true, email: true } } } },
+      user: {select: {email: true, firstName: true, lastName: true}},
+      tenant: {select: {subdomain: true, stageName: true}},
+      plan: {select: {name: true}},
+      booking: {include: {client: {select: {name: true, email: true}}}},
       transactions: {
-        orderBy: { createdAt: 'desc' },
-        take: 1
-      }
+        orderBy: {createdAt: 'desc'},
+        take: 1,
+      },
     };
 
     // 5. Cleanup query builder filter artifacts
@@ -185,10 +250,12 @@ export class InvoiceServices {
         item.booking = {
           id: inv.booking.id,
           eventType: inv.booking.eventType,
-          client: inv.booking.client ? {
-            name: inv.booking.client.name,
-            email: inv.booking.client.email,
-          } : null,
+          client: inv.booking.client
+            ? {
+                name: inv.booking.client.name,
+                email: inv.booking.client.email,
+              }
+            : null,
         };
       } else if (!isBooking) {
         if (inv.user) {
@@ -208,7 +275,7 @@ export class InvoiceServices {
       return item;
     });
 
-    return { invoices, meta };
+    return {invoices, meta};
   }
 
   async getInvoiceById(userId: string, id: string) {
@@ -216,29 +283,31 @@ export class InvoiceServices {
       throw new NotFoundError('Invoice not found');
     }
 
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.user.findUnique({where: {id: userId}});
     const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
     const tenantId = await this.getTenantIdByUserId(userId).catch(() => null);
 
     const invoice = await this.prisma.invoice.findFirst({
-      where: isAdmin ? { id } : {
-        id,
-        OR: [
-          { userId },
-          ...(tenantId ? [{ tenantId }] : []),
-          { booking: { clientId: userId } }
-        ]
-      },
+      where: isAdmin
+        ? {id}
+        : {
+            id,
+            OR: [
+              {userId},
+              ...(tenantId ? [{tenantId}] : []),
+              {booking: {clientId: userId}},
+            ],
+          },
       include: {
-        user: { select: { firstName: true, lastName: true, email: true } },
-        plan: { select: { name: true } },
+        user: {select: {firstName: true, lastName: true, email: true}},
+        plan: {select: {name: true}},
         tenant: {
           select: {
             stageName: true,
             country: true,
             city: true,
-            user: { select: { firstName: true, lastName: true, email: true } }
-          }
+            user: {select: {firstName: true, lastName: true, email: true}},
+          },
         },
         booking: {
           select: {
@@ -246,11 +315,11 @@ export class InvoiceServices {
             eventDate: true,
             eventType: true,
             address: true,
-            client: { select: { name: true, email: true, phone: true } }
-          }
+            client: {select: {name: true, email: true, phone: true}},
+          },
         },
         transactions: {
-          orderBy: { createdAt: 'desc' },
+          orderBy: {createdAt: 'desc'},
           take: 1,
           select: {
             gateway: true,
@@ -258,9 +327,9 @@ export class InvoiceServices {
             cardBrand: true,
             cardLast4: true,
             createdAt: true,
-          }
-        }
-      }
+          },
+        },
+      },
     });
 
     if (!invoice) {
@@ -284,7 +353,8 @@ export class InvoiceServices {
     if (mainTx?.cardBrand) result.cardBrand = mainTx.cardBrand;
     if (mainTx?.cardLast4) result.cardLast4 = mainTx.cardLast4;
     if (invoice.status === 'PAID') {
-      result.paidAt = mainTx?.createdAt || invoice.updatedAt || invoice.createdAt;
+      result.paidAt =
+        mainTx?.createdAt || invoice.updatedAt || invoice.createdAt;
     }
 
     if (isBooking) {
@@ -294,11 +364,13 @@ export class InvoiceServices {
           eventType: invoice.booking.eventType,
           eventDate: invoice.booking.eventDate,
           address: invoice.booking.address,
-          client: invoice.booking.client ? {
-            name: invoice.booking.client.name,
-            email: invoice.booking.client.email,
-            phone: invoice.booking.client.phone,
-          } : null,
+          client: invoice.booking.client
+            ? {
+                name: invoice.booking.client.name,
+                email: invoice.booking.client.email,
+                phone: invoice.booking.client.phone,
+              }
+            : null,
         };
       }
       if (invoice.tenant) {
@@ -306,11 +378,13 @@ export class InvoiceServices {
           stageName: invoice.tenant.stageName,
           country: invoice.tenant.country,
           city: invoice.tenant.city,
-          user: invoice.tenant.user ? {
-            firstName: invoice.tenant.user.firstName,
-            lastName: invoice.tenant.user.lastName,
-            email: invoice.tenant.user.email,
-          } : null,
+          user: invoice.tenant.user
+            ? {
+                firstName: invoice.tenant.user.firstName,
+                lastName: invoice.tenant.user.lastName,
+                email: invoice.tenant.user.email,
+              }
+            : null,
         };
       }
     } else {
@@ -338,8 +412,11 @@ export class InvoiceServices {
 
     const tenantId = await this.getTenantIdByUserId(userId);
     const invoice = await this.prisma.invoice.findFirst({
-      where: { id, tenantId },
-      include: { booking: { include: { client: true } }, tenant: { include: { user: true } } }
+      where: {id, tenantId},
+      include: {
+        booking: {include: {client: true}},
+        tenant: {include: {user: true}},
+      },
     });
 
     if (!invoice) {
@@ -352,8 +429,8 @@ export class InvoiceServices {
 
     const txResult = await this.prisma.$transaction(async (tx) => {
       const updatedInvoice = await tx.invoice.update({
-        where: { id },
-        data: { status: 'PAID' }
+        where: {id},
+        data: {status: 'PAID'},
       });
 
       await tx.transaction.create({
@@ -363,14 +440,17 @@ export class InvoiceServices {
           amount: invoice.amount,
           gateway: 'MANUAL',
           channel: 'CASH',
-          status: TransactionStatus.SUCCEEDED
-        }
+          status: TransactionStatus.SUCCEEDED,
+        },
       });
 
       if (invoice.bookingId) {
         await tx.booking.update({
-          where: { id: invoice.bookingId },
-          data: { status: BookingStatus.COMPLETED, paymentStatus: PaymentStatus.PAID }
+          where: {id: invoice.bookingId},
+          data: {
+            status: BookingStatus.COMPLETED,
+            paymentStatus: PaymentStatus.PAID,
+          },
         });
       }
 
@@ -386,7 +466,7 @@ export class InvoiceServices {
     }
 
     const invoice = await this.prisma.invoice.findUnique({
-      where: { id },
+      where: {id},
       include: {
         booking: {
           include: {
@@ -394,22 +474,22 @@ export class InvoiceServices {
             tenant: {
               include: {
                 paymentAccounts: {
-                  where: { isActive: true },
-                  orderBy: { updatedAt: 'desc' }
-                }
-              }
-            }
-          }
+                  where: {isActive: true},
+                  orderBy: {updatedAt: 'desc'},
+                },
+              },
+            },
+          },
         },
         tenant: {
           include: {
             paymentAccounts: {
-              where: { isActive: true },
-              orderBy: { updatedAt: 'desc' }
-            }
-          }
-        }
-      }
+              where: {isActive: true},
+              orderBy: {updatedAt: 'desc'},
+            },
+          },
+        },
+      },
     });
 
     if (!invoice) {
@@ -421,20 +501,27 @@ export class InvoiceServices {
     }
 
     if (!invoice.amount) {
-      return { url: 'http://localhost:3000/payment-mock' };
+      return {url: 'http://localhost:3000/payment-mock'};
     }
 
-    const { PaymentProviderFactory } = await import('@/providers/PaymentProvider/PaymentProviderFactory');
-    const paymentProvider = PaymentProviderFactory.getProvider((invoice.booking || invoice.tenant) as any);
-    
+    const {PaymentProviderFactory} =
+      await import('@/providers/PaymentProvider/PaymentProviderFactory');
+    const paymentProvider = PaymentProviderFactory.getProvider(
+      (invoice.booking || invoice.tenant) as any,
+    );
+
     try {
       // Mocking payment link generation if booking doesn't exist (e.g. for subscription)
       if (invoice.type === 'SUBSCRIPTION') {
-        return { url: `https://paystack.com/pay/subscription_${invoice.id}` };
+        return {url: `https://paystack.com/pay/subscription_${invoice.id}`};
       }
 
       if (invoice.booking) {
-        const clientEmail = (invoice.booking as any).client?.email || (invoice.booking as any).customerEmail || (invoice.tenant as any)?.user?.email || 'customer@example.com';
+        const clientEmail =
+          (invoice.booking as any).client?.email ||
+          (invoice.booking as any).customerEmail ||
+          (invoice.tenant as any)?.user?.email ||
+          'customer@example.com';
         const reference = `inv_${invoice.id}_${Date.now()}`;
         const paymentResult = await paymentProvider.initializePayment({
           amount: Number(invoice.amount),
@@ -450,13 +537,15 @@ export class InvoiceServices {
             tenantId: invoice.tenantId,
           },
         });
-        return { url: paymentResult.checkoutUrl };
+        return {url: paymentResult.checkoutUrl};
       }
-      
-      throw new BadRequestError("Cannot generate link for this invoice type");
+
+      throw new BadRequestError('Cannot generate link for this invoice type');
     } catch (error: any) {
-      console.error("Payment Link Generation Error:", error.message);
-      throw new BadRequestError(error.message || "Failed to generate payment link");
+      console.error('Payment Link Generation Error:', error.message);
+      throw new BadRequestError(
+        error.message || 'Failed to generate payment link',
+      );
     }
   }
 
@@ -466,17 +555,17 @@ export class InvoiceServices {
     }
 
     const invoice = await this.prisma.invoice.findUnique({
-      where: { id },
+      where: {id},
       include: {
-        booking: { include: { client: true } },
-        tenant: { include: { user: true } },
+        booking: {include: {client: true}},
+        tenant: {include: {user: true}},
         user: true,
         plan: true,
         transactions: {
-          orderBy: { createdAt: 'desc' },
-          take: 1
-        }
-      }
+          orderBy: {createdAt: 'desc'},
+          take: 1,
+        },
+      },
     });
 
     if (!invoice) {
@@ -487,7 +576,7 @@ export class InvoiceServices {
 
     return new Promise<Buffer>((resolve, reject) => {
       try {
-        const doc = new PDFDocument({ margin: 0, size: 'A4' });
+        const doc = new PDFDocument({margin: 0, size: 'A4'});
         const buffers: Buffer[] = [];
         doc.on('data', buffers.push.bind(buffers));
         doc.on('end', () => resolve(Buffer.concat(buffers)));
@@ -503,7 +592,7 @@ export class InvoiceServices {
         const boxW = 500;
         const boxX = (pageWidth - boxW) / 2; // ~47.64
         const boxY = 60;
-        
+
         // Colors
         const primary = '#F63131';
         const textMain = '#111827';
@@ -515,7 +604,7 @@ export class InvoiceServices {
         const logoPath = path.resolve(process.cwd(), 'public/logo.png');
         if (fs.existsSync(logoPath)) {
           try {
-            doc.image(logoPath, boxX, currentY, { height: 32 });
+            doc.image(logoPath, boxX, currentY, {height: 32});
             currentY += 40;
           } catch (err) {
             // fallback
@@ -523,46 +612,126 @@ export class InvoiceServices {
         }
 
         // Header (UpBeat Entertainment Africa & PAID/UNPAID Badge)
-        doc.font('Helvetica-Bold').fontSize(18).fillColor(primary).text('UpBeat Entertainment Africa', boxX, currentY);
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(18)
+          .fillColor(primary)
+          .text('UpBeat Entertainment Africa', boxX, currentY);
         if (invoice.status === 'PAID') {
           doc.rect(boxX + boxW - 70, currentY, 70, 24).fill('#DEF7EC');
-          doc.font('Helvetica-Bold').fontSize(11).fillColor('#03543F').text('PAID', boxX + boxW - 70, currentY + 6, { width: 70, align: 'center' });
+          doc
+            .font('Helvetica-Bold')
+            .fontSize(11)
+            .fillColor('#03543F')
+            .text('PAID', boxX + boxW - 70, currentY + 6, {
+              width: 70,
+              align: 'center',
+            });
         } else {
           doc.rect(boxX + boxW - 70, currentY, 70, 24).fill('#FEE2E2');
-          doc.font('Helvetica-Bold').fontSize(11).fillColor('#991B1B').text('UNPAID', boxX + boxW - 70, currentY + 6, { width: 70, align: 'center' });
+          doc
+            .font('Helvetica-Bold')
+            .fontSize(11)
+            .fillColor('#991B1B')
+            .text('UNPAID', boxX + boxW - 70, currentY + 6, {
+              width: 70,
+              align: 'center',
+            });
         }
-        
+
         currentY += 30;
-        doc.font('Helvetica-Bold').fontSize(14).fillColor(textMain).text('Payment Receipt', boxX, currentY);
-        doc.font('Helvetica').fontSize(12).fillColor(textMuted).text(invoice.createdAt?.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) || '', boxX + boxW - 140, currentY, { width: 140, align: 'right' });
-        
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(14)
+          .fillColor(textMain)
+          .text('Payment Receipt', boxX, currentY);
+        doc
+          .font('Helvetica')
+          .fontSize(12)
+          .fillColor(textMuted)
+          .text(
+            invoice.createdAt?.toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric',
+            }) || '',
+            boxX + boxW - 140,
+            currentY,
+            {width: 140, align: 'right'},
+          );
+
         currentY += 30;
         // Divider
-        doc.moveTo(boxX, currentY).lineTo(boxX + boxW, currentY).strokeColor(border).lineWidth(1).stroke();
+        doc
+          .moveTo(boxX, currentY)
+          .lineTo(boxX + boxW, currentY)
+          .strokeColor(border)
+          .lineWidth(1)
+          .stroke();
         currentY += 20;
 
         // RECEIPT INFORMATION
-        doc.font('Helvetica-Bold').fontSize(11).fillColor(textMuted).text('RECEIPT INFORMATION', boxX, currentY);
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(11)
+          .fillColor(textMuted)
+          .text('RECEIPT INFORMATION', boxX, currentY);
         currentY += 20;
-        
+
         const drawRow = (label: string, value: string, y: number) => {
-          doc.font('Helvetica').fontSize(12).fillColor(textMuted).text(label, boxX, y);
-          doc.font('Helvetica-Bold').fontSize(12).fillColor(textMain).text(value, boxX + 160, y);
+          doc
+            .font('Helvetica')
+            .fontSize(12)
+            .fillColor(textMuted)
+            .text(label, boxX, y);
+          doc
+            .font('Helvetica-Bold')
+            .fontSize(12)
+            .fillColor(textMain)
+            .text(value, boxX + 160, y);
         };
-        
-        drawRow('Receipt No.', `INV-${invoice.id.split('-')[0].toUpperCase()}`, currentY); currentY += 20;
-        drawRow('Transaction ID', invoice.id, currentY); currentY += 20;
-        drawRow('Payment Date', mainTx?.createdAt?.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) || '', currentY); currentY += 20;
-        const methodString = `${mainTx?.channel?.replace('_', ' ') || 'UNKNOWN'} (${mainTx?.gateway || 'UNKNOWN'}) ${mainTx?.cardLast4 ? '•••• ' + mainTx.cardLast4 : ''}`.trim();
-        drawRow('Payment Method', methodString, currentY); currentY += 20;
-        if (mainTx?.bankName) { drawRow('Bank Name', mainTx.bankName, currentY); currentY += 20; }
-        
+
+        drawRow(
+          'Receipt No.',
+          `INV-${invoice.id.split('-')[0].toUpperCase()}`,
+          currentY,
+        );
+        currentY += 20;
+        drawRow('Transaction ID', invoice.id, currentY);
+        currentY += 20;
+        drawRow(
+          'Payment Date',
+          mainTx?.createdAt?.toLocaleString('en-US', {
+            dateStyle: 'medium',
+            timeStyle: 'short',
+          }) || '',
+          currentY,
+        );
+        currentY += 20;
+        const methodString =
+          `${mainTx?.channel?.replace('_', ' ') || 'UNKNOWN'} (${mainTx?.gateway || 'UNKNOWN'}) ${mainTx?.cardLast4 ? '•••• ' + mainTx.cardLast4 : ''}`.trim();
+        drawRow('Payment Method', methodString, currentY);
+        currentY += 20;
+        if (mainTx?.bankName) {
+          drawRow('Bank Name', mainTx.bankName, currentY);
+          currentY += 20;
+        }
+
         // Divider
-        doc.moveTo(boxX, currentY).lineTo(boxX + boxW, currentY).strokeColor(border).lineWidth(1).stroke();
+        doc
+          .moveTo(boxX, currentY)
+          .lineTo(boxX + boxW, currentY)
+          .strokeColor(border)
+          .lineWidth(1)
+          .stroke();
         currentY += 20;
 
         // BILLED FROM / TO
-        doc.font('Helvetica-Bold').fontSize(11).fillColor(textMuted).text('BILLED FROM', boxX, currentY);
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(11)
+          .fillColor(textMuted)
+          .text('BILLED FROM', boxX, currentY);
         doc.text('BILLED TO', boxX + boxW / 2, currentY);
         currentY += 20;
 
@@ -570,28 +739,43 @@ export class InvoiceServices {
         let billedFromName = 'UpBeat Entertainment Africa';
         let billedFromDesc = 'UpBeat Entertainment Africa';
         let billedFromEmail = 'hello@upbeatafrica.com';
-        
+
         let clientName = 'Valued Client';
         let clientEmail = 'N/A';
         let clientPhone = '';
 
         if (invoice.type === 'BOOKING' && invoice.booking) {
-          billedFromName = invoice.tenant?.stageName || invoice.tenant?.user?.firstName || billedFromName;
+          billedFromName =
+            invoice.tenant?.stageName ||
+            invoice.tenant?.user?.firstName ||
+            billedFromName;
           billedFromDesc = invoice.tenant?.user?.email || billedFromDesc;
-          billedFromEmail = invoice.tenant?.subdomain ? `https://${invoice.tenant.subdomain}.deejay.africa` : '';
+          billedFromEmail = invoice.tenant?.subdomain
+            ? `https://${invoice.tenant.subdomain}.deejay.africa`
+            : '';
           clientName = invoice.booking.client?.name || clientName;
           clientEmail = invoice.booking.client?.email || clientEmail;
           clientPhone = invoice.booking.client?.phone || '';
         } else if (invoice.type === 'SUBSCRIPTION') {
-          clientName = `${invoice.user?.firstName || ''} ${invoice.user?.lastName || ''}`.trim() || clientName;
+          clientName =
+            `${invoice.user?.firstName || ''} ${invoice.user?.lastName || ''}`.trim() ||
+            clientName;
           clientEmail = invoice.user?.email || clientEmail;
         }
 
-        doc.font('Helvetica-Bold').fontSize(13).fillColor(textMain).text(billedFromName, boxX, currentY);
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(13)
+          .fillColor(textMain)
+          .text(billedFromName, boxX, currentY);
         doc.text(clientName, boxX + boxW / 2, currentY);
         currentY += 16;
-        
-        doc.font('Helvetica').fontSize(12).fillColor(textMuted).text(billedFromDesc, boxX, currentY);
+
+        doc
+          .font('Helvetica')
+          .fontSize(12)
+          .fillColor(textMuted)
+          .text(billedFromDesc, boxX, currentY);
         doc.text(clientEmail, boxX + boxW / 2, currentY);
         currentY += 16;
 
@@ -603,61 +787,168 @@ export class InvoiceServices {
 
         currentY += 10;
         // Divider
-        doc.moveTo(boxX, currentY).lineTo(boxX + boxW, currentY).strokeColor(border).lineWidth(1).stroke();
+        doc
+          .moveTo(boxX, currentY)
+          .lineTo(boxX + boxW, currentY)
+          .strokeColor(border)
+          .lineWidth(1)
+          .stroke();
         currentY += 20;
 
         // EVENT DETAILS (If Booking)
         if (invoice.type === 'BOOKING' && invoice.booking) {
-          doc.font('Helvetica-Bold').fontSize(11).fillColor(textMuted).text('EVENT DETAILS', boxX, currentY);
+          doc
+            .font('Helvetica-Bold')
+            .fontSize(11)
+            .fillColor(textMuted)
+            .text('EVENT DETAILS', boxX, currentY);
           currentY += 20;
-          
-          drawRow('Event Type', (invoice.booking.eventType || 'Event').toUpperCase(), currentY); currentY += 20;
-          drawRow('Event Date', invoice.booking.eventDate?.toLocaleDateString('en-US', { dateStyle: 'medium' }) || 'N/A', currentY); currentY += 20;
-          drawRow('Location', invoice.booking.address || 'N/A', currentY); currentY += 20;
+
+          drawRow(
+            'Event Type',
+            (invoice.booking.eventType || 'Event').toUpperCase(),
+            currentY,
+          );
+          currentY += 20;
+          drawRow(
+            'Event Date',
+            invoice.booking.eventDate?.toLocaleDateString('en-US', {
+              dateStyle: 'medium',
+            }) || 'N/A',
+            currentY,
+          );
+          currentY += 20;
+          drawRow('Location', invoice.booking.address || 'N/A', currentY);
+          currentY += 20;
 
           // Divider
-          doc.moveTo(boxX, currentY).lineTo(boxX + boxW, currentY).strokeColor(border).lineWidth(1).stroke();
+          doc
+            .moveTo(boxX, currentY)
+            .lineTo(boxX + boxW, currentY)
+            .strokeColor(border)
+            .lineWidth(1)
+            .stroke();
           currentY += 20;
         }
 
         // PAYMENT SUMMARY
-        doc.font('Helvetica-Bold').fontSize(11).fillColor(textMuted).text('PAYMENT SUMMARY', boxX, currentY);
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(11)
+          .fillColor(textMuted)
+          .text('PAYMENT SUMMARY', boxX, currentY);
         currentY += 20;
-        
-        const description = invoice.type === 'SUBSCRIPTION' ? 'Platform Subscription' : 'DJ Booking Payment';
-        doc.font('Helvetica').fontSize(14).fillColor(textMain).text(description, boxX, currentY);
-        
+
+        const description =
+          invoice.type === 'SUBSCRIPTION'
+            ? 'Platform Subscription'
+            : 'DJ Booking Payment';
+        doc
+          .font('Helvetica')
+          .fontSize(14)
+          .fillColor(textMain)
+          .text(description, boxX, currentY);
+
         const displayCurrency = mainTx?.currency || 'KES';
-        const displayAmount = Number(mainTx?.amount || invoice.amount).toFixed(2);
-        
-        doc.font('Helvetica-Bold').fontSize(14).fillColor(textMain).text(`${displayCurrency} ${displayAmount}`, boxX + boxW - 140, currentY, { width: 140, align: 'right' });
+        const displayAmount = Number(mainTx?.amount || invoice.amount).toFixed(
+          2,
+        );
+
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(14)
+          .fillColor(textMain)
+          .text(
+            `${displayCurrency} ${displayAmount}`,
+            boxX + boxW - 140,
+            currentY,
+            {width: 140, align: 'right'},
+          );
         currentY += 30;
-        
+
         // Divider
-        doc.moveTo(boxX, currentY).lineTo(boxX + boxW, currentY).strokeColor(border).lineWidth(1).stroke();
+        doc
+          .moveTo(boxX, currentY)
+          .lineTo(boxX + boxW, currentY)
+          .strokeColor(border)
+          .lineWidth(1)
+          .stroke();
         currentY += 20;
 
         // TOTAL DUE / PAID
-        const totalText = invoice.status === 'PAID' ? 'TOTAL PAID' : 'TOTAL DUE';
-        doc.font('Helvetica-Bold').fontSize(14).fillColor(textMain).text(totalText, boxX, currentY + 6);
-        doc.font('Helvetica-Bold').fontSize(24).fillColor(primary).text(`${displayCurrency} ${displayAmount}`, boxX + boxW - 200, currentY, { width: 200, align: 'right' });
-        
+        const totalText =
+          invoice.status === 'PAID' ? 'TOTAL PAID' : 'TOTAL DUE';
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(14)
+          .fillColor(textMain)
+          .text(totalText, boxX, currentY + 6);
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(24)
+          .fillColor(primary)
+          .text(
+            `${displayCurrency} ${displayAmount}`,
+            boxX + boxW - 200,
+            currentY,
+            {width: 200, align: 'right'},
+          );
+
         currentY += 60;
-        
+
         // Footer Message inside the layout
         if (invoice.status === 'PAID') {
-          doc.font('Helvetica').fontSize(12).fillColor('#03543F').text('Payment Successful', boxX, currentY, { align: 'center', width: boxW });
+          doc
+            .font('Helvetica')
+            .fontSize(12)
+            .fillColor('#03543F')
+            .text('Payment Successful', boxX, currentY, {
+              align: 'center',
+              width: boxW,
+            });
         } else {
-          doc.font('Helvetica').fontSize(12).fillColor('#991B1B').text('Payment Pending', boxX, currentY, { align: 'center', width: boxW });
+          doc
+            .font('Helvetica')
+            .fontSize(12)
+            .fillColor('#991B1B')
+            .text('Payment Pending', boxX, currentY, {
+              align: 'center',
+              width: boxW,
+            });
         }
         currentY += 30;
-        doc.font('Helvetica').fontSize(11).fillColor(textMuted).text('Thank you for choosing UpBeat Entertainment Africa.', boxX, currentY, { align: 'center', width: boxW });
+        doc
+          .font('Helvetica')
+          .fontSize(11)
+          .fillColor(textMuted)
+          .text(
+            'Thank you for choosing UpBeat Entertainment Africa.',
+            boxX,
+            currentY,
+            {align: 'center', width: boxW},
+          );
         currentY += 16;
-        doc.font('Helvetica-Bold').fontSize(11).fillColor(textMuted).text('upbeat.africa', boxX, currentY, { align: 'center', width: boxW });
-        
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(11)
+          .fillColor(textMuted)
+          .text('upbeat.africa', boxX, currentY, {
+            align: 'center',
+            width: boxW,
+          });
+
         // Final bottom message
         currentY += 40;
-        doc.font('Helvetica').fontSize(10).fillColor('#9CA3AF').text('This is an electronically generated payment receipt.', 0, currentY, { align: 'center', width: pageWidth });
+        doc
+          .font('Helvetica')
+          .fontSize(10)
+          .fillColor('#9CA3AF')
+          .text(
+            'This is an electronically generated payment receipt.',
+            0,
+            currentY,
+            {align: 'center', width: pageWidth},
+          );
 
         doc.end();
       } catch (err) {

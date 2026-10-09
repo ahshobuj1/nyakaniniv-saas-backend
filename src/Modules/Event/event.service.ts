@@ -68,7 +68,16 @@ export class EventServices {
     }
 
     // Ensure we only fetch events for this tenant
-    const safeQuery = { ...query, tenantId };
+    const safeQuery: any = { ...query, tenantId };
+
+    let statusFilterValue: any = undefined;
+    if (safeQuery.status && typeof safeQuery.status === 'string') {
+      const s = safeQuery.status.trim().toLowerCase();
+      delete safeQuery.status;
+      if (s !== 'all' && ['upcoming', 'completed', 'canceled'].includes(s)) {
+        statusFilterValue = s as EventStatus;
+      }
+    }
 
     const eventQuery = new QueryBuilder(this.prisma.event, safeQuery)
       .search(['title', 'venueName'])
@@ -76,6 +85,17 @@ export class EventServices {
       .sort()
       .pagination()
       .fields();
+
+    if (statusFilterValue) {
+      eventQuery.prismaArgs.where = {
+        ...eventQuery.prismaArgs.where,
+        status: statusFilterValue,
+      };
+    }
+
+    if (!safeQuery.sortBy) {
+      eventQuery.prismaArgs.orderBy = { eventDate: 'desc' };
+    }
 
     const events = await eventQuery.model.findMany(eventQuery.prismaArgs);
     const meta = await eventQuery.countTotal();

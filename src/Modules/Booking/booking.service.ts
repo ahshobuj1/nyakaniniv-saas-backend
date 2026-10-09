@@ -289,7 +289,22 @@ export class BookingServices {
   async getMyBookings(userId: string, query: Record<string, unknown> = {}) {
     const tenantId = await this.getTenantIdByUserId(userId);
 
-    const bookingQuery = new QueryBuilder(this.prisma.booking, query)
+    const cleanQuery = { ...query };
+    let statusFilterValue: any = undefined;
+
+    if (cleanQuery.status && typeof cleanQuery.status === 'string') {
+      const s = cleanQuery.status.trim().toUpperCase();
+      delete cleanQuery.status; // Handle explicitly to avoid Prisma enum case mismatch
+      if (s !== 'ALL') {
+        if (s === 'CANCELED' || s === 'CANCELLED') {
+          statusFilterValue = { in: [BookingStatus.CANCELLED, BookingStatus.REJECTED] };
+        } else if (Object.values(BookingStatus).includes(s as BookingStatus)) {
+          statusFilterValue = s as BookingStatus;
+        }
+      }
+    }
+
+    const bookingQuery = new QueryBuilder(this.prisma.booking, cleanQuery)
       .search(['eventType', 'address'])
       .filter()
       .sort()
@@ -298,6 +313,7 @@ export class BookingServices {
     bookingQuery.prismaArgs.where = {
       ...bookingQuery.prismaArgs.where,
       tenantId,
+      ...(statusFilterValue ? { status: statusFilterValue } : {}),
     };
 
     bookingQuery.prismaArgs.include = {
