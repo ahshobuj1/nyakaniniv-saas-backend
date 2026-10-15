@@ -1,6 +1,5 @@
 # dependencies (bun install)
 node_modules
-.vscode
 .idea
 
 
@@ -19,13 +18,10 @@ _.log
 report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # dotenv environment variable files
-.env
 .env.development.local
 .env.test.local
+temp_auto_push.bat
 .env.production.local
-.env.local
-.env.production
-.env.development
 
 # caches
 .eslintcache
@@ -46,3 +42,6 @@ generated
 
 generated/
 generated/**
+.gitignore
+branch_structure.json
+config.bat
