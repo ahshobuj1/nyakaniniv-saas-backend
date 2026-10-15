@@ -1,6 +1,5 @@
 # dependencies (bun install)
 node_modules
-.vscode
 .idea
 
 
@@ -22,6 +21,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .env
 .env.development.local
 .env.test.local
+temp_auto_push.bat
 .env.production.local
 .env.local
 .env.production
@@ -46,3 +46,5 @@ generated
 
 generated/
 generated/**
+.gitignore
+branch_structure.json
