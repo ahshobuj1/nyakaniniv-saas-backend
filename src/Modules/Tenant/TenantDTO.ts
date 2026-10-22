@@ -28,6 +28,7 @@ export const updateTenantSchema = {
     bio: z.string().optional(),
     logoUrl: z.string().url("Invalid URL format").optional(),
     timezone: z.string().optional(),
+    currencyCode: z.string().length(3).optional(),
     socialLinks: z
       .object({
         facebook: z.string().optional().or(z.literal("")),
@@ -54,7 +55,19 @@ export const updateTenantStatusSchema = {
   }),
 };
 
+export const updatePaymentInstructionsSchema = {
+  body: z.object({
+    method: z.enum(['CASH', 'BANK_TRANSFER', 'MOBILE_MONEY', 'CUSTOM']),
+    displayName: z.string().max(100).optional(),
+    accountNumber: z.string().max(100).optional(),
+    bankName: z.string().max(100).optional(),
+    notes: z.string().max(500).optional(),
+    isEnabled: z.boolean().default(true),
+  }),
+};
+
 export type CreateTenantDTO = z.infer<typeof createTenantSchema.body>;
 export type UpdateTenantDTO = z.infer<typeof updateTenantSchema.body>;
 export type AssignThemeDTO = z.infer<typeof assignThemeSchema.body>;
 export type UpdateTenantStatusDTO = z.infer<typeof updateTenantStatusSchema.body>;
+export type UpdatePaymentInstructionsDTO = z.infer<typeof updatePaymentInstructionsSchema.body>;

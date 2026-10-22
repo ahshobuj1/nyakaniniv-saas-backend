@@ -124,6 +124,107 @@ export class PaymentProviderResolver {
     return nameMap[normalized] || 'KE';
   }
 
+  public static resolveCurrencyFromCountry(country?: string | null): string {
+    if (!country) return 'KES';
+    const normalized = country.trim().toUpperCase();
+    if (COUNTRY_ROUTING_MATRIX[normalized]?.defaultCurrency) {
+      return COUNTRY_ROUTING_MATRIX[normalized].defaultCurrency;
+    }
+
+    const map: Record<string, string> = {
+      // East Africa
+      KE: 'KES', KENYA: 'KES',
+      UG: 'UGX', UGANDA: 'UGX',
+      TZ: 'TZS', TANZANIA: 'TZS',
+      RW: 'RWF', RWANDA: 'RWF',
+      BI: 'BIF', BURUNDI: 'BIF',
+      ET: 'ETB', ETHIOPIA: 'ETB',
+      SS: 'SSP', 'SOUTH SUDAN': 'SSP',
+      SO: 'SOS', SOMALIA: 'SOS',
+      DJ: 'DJF', DJIBOUTI: 'DJF',
+      ER: 'ERN', ERITREA: 'ERN',
+
+      // West Africa
+      NG: 'NGN', NIGERIA: 'NGN',
+      GH: 'GHS', GHANA: 'GHS',
+      SN: 'XOF', SENEGAL: 'XOF',
+      CI: 'XOF', "COTE D'IVOIRE": 'XOF', 'IVORY COAST': 'XOF',
+      BF: 'XOF', 'BURKINA FASO': 'XOF',
+      ML: 'XOF', MALI: 'XOF',
+      BJ: 'XOF', BENIN: 'XOF',
+      TG: 'XOF', TOGO: 'XOF',
+      NE: 'XOF', NIGER: 'XOF',
+      GW: 'XOF', 'GUINEA-BISSAU': 'XOF',
+      GN: 'GNF', GUINEA: 'GNF',
+      SL: 'SLE', 'SIERRA LEONE': 'SLE',
+      LR: 'LRD', LIBERIA: 'LRD',
+      GM: 'GMD', GAMBIA: 'GMD', 'THE GAMBIA': 'GMD',
+      CV: 'CVE', 'CAPE VERDE': 'CVE', 'CABO VERDE': 'CVE',
+      MR: 'MRU', MAURITANIA: 'MRU',
+
+      // Southern Africa
+      ZA: 'ZAR', 'SOUTH AFRICA': 'ZAR',
+      BW: 'BWP', BOTSWANA: 'BWP',
+      NA: 'NAD', NAMIBIA: 'NAD',
+      ZM: 'ZMW', ZAMBIA: 'ZMW',
+      ZW: 'ZWL', ZIMBABWE: 'ZWL',
+      MW: 'MWK', MALAWI: 'MWK',
+      MZ: 'MZN', MOZAMBIQUE: 'MZN',
+      AO: 'AOA', ANGOLA: 'AOA',
+      LS: 'LSL', LESOTHO: 'LSL',
+      SZ: 'SZL', ESWATINI: 'SZL', SWAZILAND: 'SZL',
+      MG: 'MGA', MADAGASCAR: 'MGA',
+      MU: 'MUR', MAURITIUS: 'MUR',
+      SC: 'SCR', SEYCHELLES: 'SCR',
+      KM: 'KMF', COMOROS: 'KMF',
+
+      // Central Africa
+      CM: 'XAF', CAMEROON: 'XAF',
+      GA: 'XAF', GABON: 'XAF',
+      CG: 'XAF', CONGO: 'XAF', 'REPUBLIC OF THE CONGO': 'XAF',
+      CD: 'CDF', 'DEMOCRATIC REPUBLIC OF THE CONGO': 'CDF', 'DR CONGO': 'CDF',
+      TD: 'XAF', CHAD: 'XAF',
+      CF: 'XAF', 'CENTRAL AFRICAN REPUBLIC': 'XAF',
+      GQ: 'XAF', 'EQUATORIAL GUINEA': 'XAF',
+      ST: 'STN', 'SAO TOME AND PRINCIPE': 'STN',
+
+      // North Africa
+      EG: 'EGP', EGYPT: 'EGP',
+      MA: 'MAD', MOROCCO: 'MAD',
+      DZ: 'DZD', ALGERIA: 'DZD',
+      TN: 'TND', TUNISIA: 'TND',
+      LY: 'LYD', LIBYA: 'LYD',
+      SD: 'SDG', SUDAN: 'SDG',
+
+      // Global
+      US: 'USD', USA: 'USD', 'UNITED STATES': 'USD',
+      GB: 'GBP', UK: 'GBP', 'UNITED KINGDOM': 'GBP',
+      CA: 'CAD', CANADA: 'CAD',
+      AU: 'AUD', AUSTRALIA: 'AUD',
+      AE: 'AED', UAE: 'AED', 'UNITED ARAB EMIRATES': 'AED',
+      SA: 'SAR', 'SAUDI ARABIA': 'SAR',
+      QA: 'QAR', QATAR: 'QAR',
+      CH: 'CHF', SWITZERLAND: 'CHF',
+      JP: 'JPY', JAPAN: 'JPY',
+      IN: 'INR', INDIA: 'INR',
+      BD: 'BDT', BANGLADESH: 'BDT',
+      PK: 'PKR', PAKISTAN: 'PKR',
+      SG: 'SGD', SINGAPORE: 'SGD',
+      BR: 'BRL', BRAZIL: 'BRL',
+      CN: 'CNY', CHINA: 'CNY',
+
+      // Europe
+      FR: 'EUR', FRANCE: 'EUR',
+      DE: 'EUR', GERMANY: 'EUR',
+      ES: 'EUR', SPAIN: 'EUR',
+      IT: 'EUR', ITALY: 'EUR',
+      NL: 'EUR', NETHERLANDS: 'EUR',
+      EU: 'EUR', EUROPE: 'EUR',
+    };
+
+    return map[normalized] || 'KES';
+  }
+
   public static resolve(params: {
     country?: string | null;
     operation: PaymentOperation;

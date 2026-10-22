@@ -161,27 +161,45 @@ export class FlutterwaveProvider implements IPaymentProvider {
     }
 
     try {
-      const parts = input.recipientCode.split('_');
-      const accountType = parts[2] || 'bank';
-      const bankCode = parts[3] || '';
-      const accountNumber = parts.slice(4).join('_');
+      let accountType = input.metadata?.accountType || 'bank';
+      let bankCode = input.metadata?.bankCode || input.metadata?.network || '';
+      let accountNumber = input.metadata?.accountNumber || '';
+
+      if (input.recipientCode && input.recipientCode.startsWith('flw_rcp_')) {
+        const parts = input.recipientCode.split('_');
+        accountType = parts[2] || accountType;
+        bankCode = parts[3] || bankCode;
+        accountNumber = parts.slice(4).join('_') || accountNumber;
+      } else if (!accountNumber && input.recipientCode) {
+        accountNumber = input.recipientCode;
+      }
+
+      if (!bankCode && input.metadata?.bankName) {
+        bankCode = input.metadata.bankName;
+      }
+
+      if (!accountNumber) {
+        throw new Error('No account number or recipient identifier passed to Flutterwave transfer');
+      }
+
+      const beneficiaryName = input.metadata?.accountName || input.metadata?.beneficiary_name || 'UpBeat DJ';
 
       const payload: Record<string, any> = {
-        account_bank: bankCode || (input.metadata?.bankCode ?? ''),
-        account_number: accountNumber || (input.metadata?.accountNumber ?? ''),
+        account_bank: bankCode,
+        account_number: accountNumber,
         amount: input.amount,
         currency: input.currency.toUpperCase(),
+        beneficiary_name: beneficiaryName,
         narration: input.reason || 'UpBeat Africa DJ Withdrawal',
         reference: input.transferReference,
         callback_url: `${config.apiUrl}/webhooks/v1/flutterwave`,
       };
 
-      if (accountType === 'mobile_money') {
-        payload.beneficiary_name = input.metadata?.accountName || 'Beneficiary';
+      if (accountType === 'mobile_money' || bankCode === 'MPS' || bankCode.toLowerCase().includes('mpesa') || bankCode.toLowerCase().includes('momo')) {
         payload.meta = {
           sender: 'UpBeat Africa',
-          sender_country: 'KE',
-          mobile_number: accountNumber || (input.metadata?.accountNumber ?? '')
+          sender_country: input.metadata?.country || 'KE',
+          mobile_number: accountNumber,
         };
       }
 
@@ -213,7 +231,8 @@ export class FlutterwaveProvider implements IPaymentProvider {
       };
     } catch (error: any) {
       this.logger.error('Error initiating Flutterwave payout:', error?.response?.data || error.message);
-      throw new Error(`Flutterwave Payout Error: ${error?.response?.data?.message || error.message}`);
+      const specificError = error?.response?.data?.data?.complete_message || error?.response?.data?.message || error.message;
+      throw new Error(`Flutterwave Payout Error: ${specificError}`);
     }
   }
 
@@ -228,13 +247,26 @@ export class FlutterwaveProvider implements IPaymentProvider {
     }
 
     try {
-      const response = await axios.get(
-        `${this.baseUrl}/transfers?reference=${encodeURIComponent(transferReference)}`,
-        { headers: this.headers }
-      );
+      let data: any = null;
+      try {
+        const response = await axios.get(
+          `${this.baseUrl}/transfers?reference=${encodeURIComponent(transferReference)}`,
+          { headers: this.headers }
+        );
+        const items = response.data?.data;
+        data = Array.isArray(items) && items.length > 0 ? items[0] : null;
+      } catch {}
 
-      const items = response.data?.data;
-      const data = Array.isArray(items) && items.length > 0 ? items[0] : null;
+      if (!data && !transferReference.endsWith('_PMCK')) {
+        try {
+          const response = await axios.get(
+            `${this.baseUrl}/transfers?reference=${encodeURIComponent(`${transferReference}_PMCK`)}`,
+            { headers: this.headers }
+          );
+          const items = response.data?.data;
+          data = Array.isArray(items) && items.length > 0 ? items[0] : null;
+        } catch {}
+      }
 
       if (!data) {
         throw new Error('Transfer record not found on Flutterwave');

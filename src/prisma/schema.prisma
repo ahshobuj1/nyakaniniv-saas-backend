@@ -45,38 +45,41 @@ model Theme {
 }
 
 model Tenant {
-  id                      String                 @id @default(uuid()) @db.Uuid
-  userId                  String?                @unique @map("user_id") @db.Uuid
-  subdomain               String?                @unique @db.VarChar(255)
-  stageName               String?                @map("stage_name") @db.VarChar(255)
-  country                 String?                @db.VarChar(255)
-  city                    String?                @db.VarChar(255)
-  genres                  Json?
-  themeId                 Int?                   @map("theme_id")
-  logoUrl                 String?                @map("logo_url") @db.VarChar(255)
-  bio                     String?
-  timezone                String?                @db.VarChar(255)
-  isActive                Boolean?               @map("is_active")
-  socialLinks             Json?                  @map("social_links")
-  config                  Json?
-  createdAt               DateTime?              @default(now()) @map("created_at")
-  updatedAt               DateTime?              @default(now()) @updatedAt @map("updated_at")
-  activePlanId            Int?                   @map("active_plan_id")
-  subscriptionStatus      SubscriptionStatus?    @map("subscription_status")
-  flutterwaveSubaccountId String?                @map("flutterwave_subaccount_id") @db.VarChar(255)
-  paystackSubaccountId    String?                @map("paystack_subaccount_id") @db.VarChar(255)
-  pesapalAccountId        String?                @map("pesapal_account_id") @db.VarChar(255)
-  bookings                Booking[]
-  clients                 Client[]
-  events                  Event[]
-  invoices                Invoice[]
-  mixTapes                MixTape[]
-  payoutRequests          PayoutRequest[]
-  paymentAccounts         TenantPaymentAccount[]
-  theme                   Theme?                 @relation(fields: [themeId], references: [id])
-  user                    User?                  @relation(fields: [userId], references: [id])
-  transactions            Transaction[]
-  wallet                  Wallet?
+  id                        String                 @id @default(uuid()) @db.Uuid
+  userId                    String?                @unique @map("user_id") @db.Uuid
+  subdomain                 String?                @unique @db.VarChar(255)
+  stageName                 String?                @map("stage_name") @db.VarChar(255)
+  country                   String?                @db.VarChar(255)
+  city                      String?                @db.VarChar(255)
+  genres                    Json?
+  themeId                   Int?                   @map("theme_id")
+  logoUrl                   String?                @map("logo_url") @db.VarChar(255)
+  bio                       String?
+  timezone                  String?                @db.VarChar(255)
+  currencyCode              String?                @default("KES") @map("currency_code") @db.VarChar(10)
+  isActive                  Boolean?               @map("is_active")
+  socialLinks               Json?                  @map("social_links")
+  config                    Json?
+  directPaymentInstructions Json?                  @map("direct_payment_instructions")
+  createdAt                 DateTime?              @default(now()) @map("created_at")
+  updatedAt                 DateTime?              @default(now()) @updatedAt @map("updated_at")
+  activePlanId              Int?                   @map("active_plan_id")
+  subscriptionStatus        SubscriptionStatus?    @map("subscription_status")
+  flutterwaveSubaccountId   String?                @map("flutterwave_subaccount_id") @db.VarChar(255)
+  paystackSubaccountId      String?                @map("paystack_subaccount_id") @db.VarChar(255)
+  pesapalAccountId          String?                @map("pesapal_account_id") @db.VarChar(255)
+  bookings                  Booking[]
+  clients                   Client[]
+  events                    Event[]
+  invoices                  Invoice[]
+  mixTapes                  MixTape[]
+  payoutRequests            PayoutRequest[]
+  paymentAccounts           TenantPaymentAccount[]
+  bookingReviews            BookingReview[]
+  theme                     Theme?                 @relation(fields: [themeId], references: [id])
+  user                      User?                  @relation(fields: [userId], references: [id])
+  transactions              Transaction[]
+  wallet                    Wallet?
 
   @@map("tenants")
 }
@@ -169,15 +172,28 @@ model Booking {
   completedAt   DateTime?     @map("completed_at")
   cancelledAt   DateTime?     @map("cancelled_at")
 
-  client        Client?        @relation(fields: [clientId], references: [id])
-  tenant        Tenant?        @relation(fields: [tenantId], references: [id])
+  orderReference        String?             @unique @map("order_reference") @db.VarChar(50)
+  directPaymentStatus   DirectPaymentStatus @default(UNREPORTED) @map("direct_payment_status")
+  completionRequestedAt DateTime?           @map("completion_requested_at")
+  completionConfirmedAt DateTime?           @map("completion_confirmed_at")
+  issueReportedAt       DateTime?           @map("issue_reported_at")
+  issueDescription      String?             @map("issue_description")
+
+  client        Client?             @relation(fields: [clientId], references: [id])
+  tenant        Tenant?             @relation(fields: [tenantId], references: [id])
   invoice       Invoice?
   walletLedgers WalletLedger[]
+  quotes        BookingQuote[]
+  messages      BookingMessage[]
+  auditEvents   BookingAuditEvent[]
+  agreement     BookingAgreement?
+  review        BookingReview?
 
   @@index([tenantId, status])
   @@index([tenantId, paymentStatus])
   @@index([tenantId, payoutStatus])
   @@index([eventDate])
+  @@index([orderReference])
   @@map("bookings")
 }
 
@@ -502,6 +518,7 @@ enum EventStatus {
 
 enum BookingStatus {
   PENDING
+  ACCEPTED
   AWAITING_PAYMENT
   CONFIRMED
   IN_PROGRESS
@@ -511,6 +528,12 @@ enum BookingStatus {
   EXPIRED
   NO_SHOW
   DISPUTED
+}
+
+enum DirectPaymentStatus {
+  UNREPORTED
+  CLIENT_REPORTED
+  DJ_CONFIRMED
 }
 
 enum PaymentStatus {
@@ -602,4 +625,82 @@ enum LedgerType {
   WITHDRAWAL_REJECTED
   WITHDRAWAL_FAILED_REVERSAL
   REFUND_ADJUSTMENT
+}
+
+model BookingQuote {
+  id         String             @id @default(uuid()) @db.Uuid
+  bookingId  String             @map("booking_id") @db.Uuid
+  version    Int                @default(1)
+  amount     Decimal            @db.Decimal(18, 2)
+  currency   String             @default("KES") @db.Char(3)
+  proposedBy String             @map("proposed_by") @db.VarChar(20) // "DJ" or "CLIENT"
+  status     String             @default("PROPOSED") @db.VarChar(50) // "PROPOSED", "ACCEPTED", "REJECTED", "SUPERSEDED"
+  notes      String?
+  createdAt  DateTime           @default(now()) @map("created_at")
+  acceptedAt DateTime?          @map("accepted_at")
+  booking    Booking            @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  agreements BookingAgreement[]
+
+  @@index([bookingId])
+  @@map("booking_quotes")
+}
+
+model BookingMessage {
+  id         String   @id @default(uuid()) @db.Uuid
+  bookingId  String   @map("booking_id") @db.Uuid
+  senderType String   @map("sender_type") @db.VarChar(20) // "DJ" or "CLIENT"
+  senderId   String?  @map("sender_id") @db.Uuid
+  content    String
+  createdAt  DateTime @default(now()) @map("created_at")
+  booking    Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+  @@map("booking_messages")
+}
+
+model BookingAgreement {
+  id               String        @id @default(uuid()) @db.Uuid
+  bookingId        String        @unique @map("booking_id") @db.Uuid
+  quoteId          String?       @map("quote_id") @db.Uuid
+  agreedAmount     Decimal       @map("agreed_amount") @db.Decimal(18, 2)
+  currency         String        @default("KES") @db.Char(3)
+  termsSnapshot    Json?         @map("terms_snapshot")
+  acceptedByParty  String?       @map("accepted_by_party") @db.VarChar(20)
+  clientAcceptedAt DateTime?     @map("client_accepted_at")
+  djAcceptedAt     DateTime?     @map("dj_accepted_at")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  booking          Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  quote            BookingQuote? @relation(fields: [quoteId], references: [id])
+
+  @@map("booking_agreements")
+}
+
+model BookingAuditEvent {
+  id        String   @id @default(uuid()) @db.Uuid
+  bookingId String   @map("booking_id") @db.Uuid
+  actorType String   @map("actor_type") @db.VarChar(20) // "DJ", "CLIENT", "SYSTEM", "ADMIN"
+  actorId   String?  @map("actor_id") @db.Uuid
+  eventType String   @map("event_type") @db.VarChar(100)
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+  @@map("booking_audit_events")
+}
+
+model BookingReview {
+  id         String   @id @default(uuid()) @db.Uuid
+  bookingId  String   @unique @map("booking_id") @db.Uuid
+  tenantId   String?  @map("tenant_id") @db.Uuid
+  rating     Int
+  reviewText String?  @map("review_text")
+  clientName String?  @map("client_name") @db.VarChar(255)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")
+  booking    Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  tenant     Tenant?  @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@map("booking_reviews")
 }

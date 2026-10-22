@@ -1,7 +1,16 @@
-import { PrismaClient, PaymentGateway, PayoutRequestStatus, LedgerType, TransactionStatus } from '@/prisma/generated/client';
-import { AppLogger } from '@/core/logging/logger';
-import { calculateFinancialBreakdown, getCountryFinancialConfig } from '@/core/config/financial-matrix.config';
-import { TransferProviderFactory } from '@/providers/TransferProvider/TransferProviderFactory';
+import {
+  PrismaClient,
+  PaymentGateway,
+  PayoutRequestStatus,
+  LedgerType,
+  TransactionStatus,
+} from '@/prisma/generated/client';
+import {AppLogger} from '@/core/logging/logger';
+import {
+  calculateFinancialBreakdown,
+  getCountryFinancialConfig,
+} from '@/core/config/financial-matrix.config';
+import {TransferProviderFactory} from '@/providers/TransferProvider/TransferProviderFactory';
 
 export class WalletService {
   private logger = new AppLogger('WalletService');
@@ -13,14 +22,14 @@ export class WalletService {
    */
   public async getWallet(tenantId: string) {
     let wallet = await this.prisma.wallet.findUnique({
-      where: { tenantId },
+      where: {tenantId},
       include: {
         payoutRequests: {
-          orderBy: { createdAt: 'desc' },
+          orderBy: {createdAt: 'desc'},
           take: 200,
         },
         walletLedgers: {
-          orderBy: { createdAt: 'desc' },
+          orderBy: {createdAt: 'desc'},
           take: 200,
         },
       },
@@ -28,7 +37,7 @@ export class WalletService {
 
     if (!wallet) {
       const tenant = await this.prisma.tenant.findUnique({
-        where: { id: tenantId },
+        where: {id: tenantId},
       });
       if (!tenant) throw new Error('Tenant not found');
 
@@ -50,14 +59,67 @@ export class WalletService {
       });
     }
 
+    // Reconcile any processing payout requests with the gateway
+    const processingPayouts = wallet.payoutRequests.filter(
+      (p) => p.status === PayoutRequestStatus.PROCESSING,
+    );
+
+    if (processingPayouts.length > 0) {
+      try {
+        const {
+          PaymentProviderResolver,
+        } = require('@/Modules/PaymentProvider/PaymentProviderResolver');
+        for (const p of processingPayouts) {
+          try {
+            const provider = PaymentProviderResolver.getGatewayProvider(p.gateway);
+            const verification = await provider.verifyPayout(p.transferReference);
+            if (verification.status === 'COMPLETED') {
+              await this.handleTransferSuccess(p.id);
+              p.status = PayoutRequestStatus.COMPLETED;
+              p.processedAt = new Date();
+            } else if (verification.status === 'FAILED') {
+              await this.handleTransferFailure(
+                p.id,
+                verification.failureReason || 'Transfer failed',
+              );
+              p.status = PayoutRequestStatus.FAILED;
+            }
+          } catch (verErr: any) {
+            this.logger.warn(
+              `Could not auto-verify processing payout #${p.id}: ${verErr.message}`,
+            );
+          }
+        }
+        // Reload wallet if any were updated
+        const refreshedWallet = await this.prisma.wallet.findUnique({
+          where: { tenantId },
+          include: {
+            payoutRequests: {
+              orderBy: { createdAt: 'desc' },
+              take: 200,
+            },
+            walletLedgers: {
+              orderBy: { createdAt: 'desc' },
+              take: 200,
+            },
+          },
+        });
+        if (refreshedWallet) {
+          wallet = refreshedWallet;
+        }
+      } catch (err: any) {
+        this.logger.warn(`Error reconciling payouts in getWallet: ${err.message}`);
+      }
+    }
+
     // Also get active payout account details
     const [activePaymentAccount, tenantRecord] = await Promise.all([
       this.prisma.tenantPaymentAccount.findFirst({
-        where: { tenantId, isActive: true },
-        orderBy: { updatedAt: 'desc' },
+        where: {tenantId, isActive: true},
+        orderBy: {updatedAt: 'desc'},
       }),
       this.prisma.tenant.findUnique({
-        where: { id: tenantId },
+        where: {id: tenantId},
         select: {
           country: true,
           paystackSubaccountId: true,
@@ -68,6 +130,7 @@ export class WalletService {
     ]);
 
     let connectedAccount: {
+      id?: string;
       gateway: string;
       accountId: string;
       subaccountId?: string | null;
@@ -81,10 +144,17 @@ export class WalletService {
 
     if (activePaymentAccount) {
       connectedAccount = {
+        id: activePaymentAccount.id,
         gateway: activePaymentAccount.gateway,
-        accountId: activePaymentAccount.accountId || activePaymentAccount.subaccountId || '',
+        accountId:
+          activePaymentAccount.accountId ||
+          activePaymentAccount.subaccountId ||
+          '',
         subaccountId: activePaymentAccount.subaccountId,
-        bankName: (activePaymentAccount.metadata as any)?.bankName || (activePaymentAccount.metadata as any)?.network || 'Connected Payout Account',
+        bankName:
+          (activePaymentAccount.metadata as any)?.bankName ||
+          (activePaymentAccount.metadata as any)?.network ||
+          'Connected Payout Account',
         accountName: (activePaymentAccount.metadata as any)?.accountName,
         recipientCode: (activePaymentAccount.metadata as any)?.recipientCode,
         countryCode: activePaymentAccount.countryCode,
@@ -117,21 +187,34 @@ export class WalletService {
       };
     }
 
-    const balancesByCurrency: Record<string, { pendingBalance: number; availableBalance: number; totalEarnings: number; totalWithdrawn: number }> = {};
-    
+    const balancesByCurrency: Record<
+      string,
+      {
+        pendingBalance: number;
+        availableBalance: number;
+        totalEarnings: number;
+        totalWithdrawn: number;
+      }
+    > = {};
+
     // Instead of iterating through the truncated walletLedgers array, query all ledgers properly
     const groupedLedgers = await this.prisma.walletLedger.groupBy({
       by: ['currency', 'type'],
-      where: { walletId: wallet.id },
-      _sum: { amount: true },
+      where: {walletId: wallet.id},
+      _sum: {amount: true},
     });
 
-    groupedLedgers.forEach(group => {
+    groupedLedgers.forEach((group) => {
       const cur = group.currency || wallet.currency;
       if (!balancesByCurrency[cur]) {
-        balancesByCurrency[cur] = { pendingBalance: 0, availableBalance: 0, totalEarnings: 0, totalWithdrawn: 0 };
+        balancesByCurrency[cur] = {
+          pendingBalance: 0,
+          availableBalance: 0,
+          totalEarnings: 0,
+          totalWithdrawn: 0,
+        };
       }
-      
+
       const amt = Number(group._sum.amount || 0);
       const bal = balancesByCurrency[cur];
 
@@ -218,11 +301,11 @@ export class WalletService {
     totalGrossAmount: number,
     currency: string = 'KES',
     actualGatewayFee?: number | null,
-    paymentId?: string
+    paymentId?: string,
   ) {
     const tenant = await this.prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { id: true, country: true },
+      where: {id: tenantId},
+      select: {id: true, country: true},
     });
     if (!tenant) throw new Error('Tenant not found');
 
@@ -231,11 +314,11 @@ export class WalletService {
       totalGrossAmount,
       currency,
       actualGatewayFee,
-      tenant.country
+      tenant.country,
     );
 
     // 2. Ensure wallet exists
-    const { wallet } = await this.getWallet(tenantId);
+    const {wallet} = await this.getWallet(tenantId);
 
     // 3. Prevent duplicate credit for the same booking
     const existingLedger = await this.prisma.walletLedger.findFirst({
@@ -247,18 +330,21 @@ export class WalletService {
     });
 
     if (existingLedger) {
-      this.logger.info(`Booking #${bookingId} already credited to wallet escrow. Skipping duplicate.`);
-      return { success: true, message: 'Already credited', breakdown };
+      this.logger.info(
+        `Booking #${bookingId} already credited to wallet escrow. Skipping duplicate.`,
+      );
+      return {success: true, message: 'Already credited', breakdown};
     }
 
     const previousPendingBalance = wallet.pendingBalance;
-    const newPendingBalance = Math.round((previousPendingBalance + breakdown.djNetEarning) * 100) / 100;
+    const newPendingBalance =
+      Math.round((previousPendingBalance + breakdown.djNetEarning) * 100) / 100;
     const referenceId = `ESCROW_CREDIT_${bookingId.substring(0, 8)}_${Date.now()}`;
 
     // 4. Atomic database update & permanent audit ledger record
     await this.prisma.$transaction(async (tx) => {
       await tx.wallet.update({
-        where: { id: wallet.id },
+        where: {id: wallet.id},
         data: {
           pendingBalance: newPendingBalance,
           currency,
@@ -285,7 +371,7 @@ export class WalletService {
       if (paymentId) {
         try {
           await tx.transaction.update({
-            where: { id: paymentId },
+            where: {id: paymentId},
             data: {
               grossAmount: breakdown.grossAmount,
               platformFee: breakdown.platformFee,
@@ -296,13 +382,16 @@ export class WalletService {
           });
         } catch (txErr) {
           // Non-blocking if transaction table record is keyed differently
-          this.logger.warn(`Could not update transaction ${paymentId} with breakdown:`, txErr);
+          this.logger.warn(
+            `Could not update transaction ${paymentId} with breakdown:`,
+            txErr,
+          );
         }
       }
     });
 
     this.logger.info(
-      `Credited ${currency} ${breakdown.djNetEarning} (Gross: ${breakdown.grossAmount}, Fee: ${breakdown.gatewayFee}) into Escrow for DJ ${tenantId} (Booking #${bookingId})`
+      `Credited ${currency} ${breakdown.djNetEarning} (Gross: ${breakdown.grossAmount}, Fee: ${breakdown.gatewayFee}) into Escrow for DJ ${tenantId} (Booking #${bookingId})`,
     );
 
     return {
@@ -325,7 +414,7 @@ export class WalletService {
 
     if (!pendingLedger) {
       this.logger.warn(`No pending escrow found for booking #${bookingId}.`);
-      return { success: false, message: 'No pending escrow found' };
+      return {success: false, message: 'No pending escrow found'};
     }
 
     const alreadyReleased = await this.prisma.walletLedger.findFirst({
@@ -337,7 +426,7 @@ export class WalletService {
 
     if (alreadyReleased) {
       this.logger.info(`Escrow for booking #${bookingId} already released.`);
-      return { success: true, message: 'Already released' };
+      return {success: true, message: 'Already released'};
     }
 
     const amountToRelease = Number(pendingLedger.amount);
@@ -345,17 +434,26 @@ export class WalletService {
 
     await this.prisma.$transaction(async (tx) => {
       const currentWallet = await tx.wallet.findUnique({
-        where: { id: pendingLedger.walletId },
+        where: {id: pendingLedger.walletId},
       });
       if (!currentWallet) throw new Error('Wallet not found');
 
       const prevAvailable = Number(currentWallet.availableBalance);
-      const newAvailable = Math.round((prevAvailable + amountToRelease) * 100) / 100;
-      const newPending = Math.max(0, Math.round((Number(currentWallet.pendingBalance) - amountToRelease) * 100) / 100);
-      const newTotalEarnings = Math.round((Number(currentWallet.totalEarnings || 0) + amountToRelease) * 100) / 100;
+      const newAvailable =
+        Math.round((prevAvailable + amountToRelease) * 100) / 100;
+      const newPending = Math.max(
+        0,
+        Math.round(
+          (Number(currentWallet.pendingBalance) - amountToRelease) * 100,
+        ) / 100,
+      );
+      const newTotalEarnings =
+        Math.round(
+          (Number(currentWallet.totalEarnings || 0) + amountToRelease) * 100,
+        ) / 100;
 
       await tx.wallet.update({
-        where: { id: currentWallet.id },
+        where: {id: currentWallet.id},
         data: {
           pendingBalance: newPending,
           availableBalance: newAvailable,
@@ -379,8 +477,10 @@ export class WalletService {
       });
     });
 
-    this.logger.info(`Released ${pendingLedger.currency} ${amountToRelease} from Escrow into Available Balance (Booking #${bookingId})`);
-    return { success: true, releasedAmount: amountToRelease };
+    this.logger.info(
+      `Released ${pendingLedger.currency} ${amountToRelease} from Escrow into Available Balance (Booking #${bookingId})`,
+    );
+    return {success: true, releasedAmount: amountToRelease};
   }
 
   /**
@@ -390,7 +490,10 @@ export class WalletService {
    *   cancellation compensation. The remainder is removed from the pending balance.
    *   Idempotent: calling it twice for the same booking is a no-op.
    */
-  public async reverseBookingEscrow(bookingId: string, retainedPercent: number = 0) {
+  public async reverseBookingEscrow(
+    bookingId: string,
+    retainedPercent: number = 0,
+  ) {
     const pendingLedger = await this.prisma.walletLedger.findFirst({
       where: {
         bookingId,
@@ -399,44 +502,60 @@ export class WalletService {
     });
 
     if (!pendingLedger) {
-      this.logger.warn(`No pending escrow found to reverse for booking #${bookingId}.`);
-      return { success: false, message: 'No pending escrow found' };
+      this.logger.warn(
+        `No pending escrow found to reverse for booking #${bookingId}.`,
+      );
+      return {success: false, message: 'No pending escrow found'};
     }
 
     const alreadyHandled = await this.prisma.walletLedger.findFirst({
       where: {
         bookingId,
         OR: [
-          { referenceId: { startsWith: 'ESCROW_REVERSAL_' } },
-          { referenceId: { startsWith: 'ESCROW_RELEASE_' } },
+          {referenceId: {startsWith: 'ESCROW_REVERSAL_'}},
+          {referenceId: {startsWith: 'ESCROW_RELEASE_'}},
         ],
       },
     });
 
     if (alreadyHandled) {
-      this.logger.info(`Escrow for booking #${bookingId} already reversed or released. Skipping.`);
-      return { success: true, message: 'Already reversed or released' };
+      this.logger.info(
+        `Escrow for booking #${bookingId} already reversed or released. Skipping.`,
+      );
+      return {success: true, message: 'Already reversed or released'};
     }
 
     const boundedPercent = Math.min(100, Math.max(0, retainedPercent));
     const netEscrow = Number(pendingLedger.amount);
     const djCompensation = Math.round(netEscrow * boundedPercent) / 100;
-    const amountToReverse = Math.round((netEscrow - djCompensation) * 100) / 100;
+    const amountToReverse =
+      Math.round((netEscrow - djCompensation) * 100) / 100;
     const referenceId = `ESCROW_REVERSAL_${bookingId}`;
 
     await this.prisma.$transaction(async (tx) => {
       const currentWallet = await tx.wallet.findUnique({
-        where: { id: pendingLedger.walletId },
+        where: {id: pendingLedger.walletId},
       });
       if (!currentWallet) throw new Error('Wallet not found');
 
-      const newPending = Math.max(0, Math.round((Number(currentWallet.pendingBalance) - Number(pendingLedger.amount)) * 100) / 100);
+      const newPending = Math.max(
+        0,
+        Math.round(
+          (Number(currentWallet.pendingBalance) -
+            Number(pendingLedger.amount)) *
+            100,
+        ) / 100,
+      );
       const prevAvailable = Number(currentWallet.availableBalance);
-      const newAvailable = Math.round((prevAvailable + djCompensation) * 100) / 100;
-      const newTotalEarnings = Math.round((Number(currentWallet.totalEarnings || 0) + djCompensation) * 100) / 100;
+      const newAvailable =
+        Math.round((prevAvailable + djCompensation) * 100) / 100;
+      const newTotalEarnings =
+        Math.round(
+          (Number(currentWallet.totalEarnings || 0) + djCompensation) * 100,
+        ) / 100;
 
       await tx.wallet.update({
-        where: { id: currentWallet.id },
+        where: {id: currentWallet.id},
         data: {
           pendingBalance: newPending,
           availableBalance: newAvailable,
@@ -481,8 +600,14 @@ export class WalletService {
       }
     });
 
-    this.logger.info(`Reversed escrow for Booking #${bookingId}. Reversed: ${amountToReverse}, Kept: ${djCompensation}`);
-    return { success: true, reversedAmount: amountToReverse, compensationAmount: djCompensation };
+    this.logger.info(
+      `Reversed escrow for Booking #${bookingId}. Reversed: ${amountToReverse}, Kept: ${djCompensation}`,
+    );
+    return {
+      success: true,
+      reversedAmount: amountToReverse,
+      compensationAmount: djCompensation,
+    };
   }
 
   /**
@@ -494,19 +619,23 @@ export class WalletService {
       throw new Error('Withdrawal amount must be greater than 0');
     }
 
-    const { wallet, connectedAccount } = await this.getWallet(tenantId);
+    const {wallet, connectedAccount} = await this.getWallet(tenantId);
 
     if (wallet.availableBalance < amount) {
-      throw new Error(`Insufficient balance. Your available balance is ${wallet.currency} ${wallet.availableBalance.toFixed(2)}`);
+      throw new Error(
+        `Insufficient balance. Your available balance is ${wallet.currency} ${wallet.availableBalance.toFixed(2)}`,
+      );
     }
 
     if (!connectedAccount) {
-      throw new Error('No payout account connected. Please connect a bank or mobile money account first.');
+      throw new Error(
+        'No payout account connected. Please connect a bank or mobile money account first.',
+      );
     }
 
     const tenant = await this.prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { country: true, stageName: true },
+      where: {id: tenantId},
+      select: {country: true, stageName: true},
     });
 
     const countryConfig = getCountryFinancialConfig(tenant?.country);
@@ -519,7 +648,7 @@ export class WalletService {
 
     const payoutRequest = await this.prisma.$transaction(async (tx) => {
       await tx.wallet.update({
-        where: { id: wallet.id },
+        where: {id: wallet.id},
         data: {
           availableBalance: newAvailable,
         },
@@ -532,10 +661,13 @@ export class WalletService {
           amount,
           fee: transferFee,
           currency: wallet.currency,
-          gateway: (connectedAccount.gateway as PaymentGateway) || PaymentGateway.PAYSTACK,
+          gateway:
+            (connectedAccount.gateway as PaymentGateway) ||
+            PaymentGateway.PAYSTACK,
           status: PayoutRequestStatus.PROCESSING,
           transferReference,
-          recipientCode: connectedAccount.recipientCode || connectedAccount.accountId,
+          recipientCode:
+            connectedAccount.recipientCode || connectedAccount.accountId,
           accountDetails: connectedAccount as any,
         },
       });
@@ -560,47 +692,105 @@ export class WalletService {
 
     // 2. Dispatch to Payout Provider API via PaymentProviderResolver
     try {
-      const { PaymentProviderResolver } = require('@/Modules/PaymentProvider/PaymentProviderResolver');
+      const {
+        PaymentProviderResolver,
+      } = require('@/Modules/PaymentProvider/PaymentProviderResolver');
       const payoutProvider = PaymentProviderResolver.resolve({
         country: tenant?.country,
         operation: 'PAYOUT',
         requestedGateway: connectedAccount.gateway,
       });
 
-      let recipientCode = (connectedAccount as any).recipientCode || (connectedAccount.metadata as any)?.recipientCode;
+      let recipientCode =
+        (connectedAccount as any).recipientCode ||
+        (connectedAccount.metadata as any)?.recipientCode;
 
-      if (!recipientCode && connectedAccount.gateway === PaymentGateway.PAYSTACK) {
+      const rawBankCode =
+        (connectedAccount.metadata as any)?.bankCode ||
+        (connectedAccount.metadata as any)?.network ||
+        (connectedAccount.metadata as any)?.bankName;
+      const bankCode =
+        rawBankCode && String(rawBankCode).toLowerCase().includes('test')
+          ? '001'
+          : rawBankCode || '001';
+      const accountNumber =
+        connectedAccount.accountId ||
+        (connectedAccount.metadata as any)?.accountNumber ||
+        '';
+      const accountType =
+        (connectedAccount.metadata as any)?.accountType ||
+        ((connectedAccount.metadata as any)?.network ||
+        String(bankCode).toLowerCase().includes('mpesa')
+          ? 'mobile_money'
+          : 'bank');
+
+      if (
+        !recipientCode &&
+        connectedAccount.gateway === PaymentGateway.PAYSTACK
+      ) {
         // Need to generate RCP_ code for Paystack transfers
-        let bankCode = (connectedAccount.metadata as any)?.bankCode;
-        if (!bankCode) {
-          const bankName = (connectedAccount.metadata as any)?.bankName;
-          bankCode = bankName && bankName.toLowerCase().includes('test') ? '001' : (bankName || '001');
-        }
-
         const recRes = await payoutProvider.createPayoutRecipient({
-          name: (connectedAccount.metadata as any)?.accountName || tenant?.stageName || 'UpBeat DJ',
-          accountNumber: connectedAccount.accountId!,
+          name:
+            (connectedAccount.metadata as any)?.accountName ||
+            tenant?.stageName ||
+            'UpBeat DJ',
+          accountNumber: accountNumber,
           bankCode: bankCode,
           currency: wallet.currency,
           country: tenant?.country || 'ke',
         });
         recipientCode = recRes.recipientCode;
-        
+
         // Cache it in DB metadata
-        await this.prisma.tenantPaymentAccount.update({
-          where: { id: (connectedAccount as any).id },
-          data: {
-            metadata: {
-              ...(connectedAccount.metadata as any || {}),
-              recipientCode
-            }
-          }
+        if ((connectedAccount as any).id) {
+          await this.prisma.tenantPaymentAccount.update({
+            where: {id: (connectedAccount as any).id},
+            data: {
+              metadata: {
+                ...((connectedAccount.metadata as any) || {}),
+                recipientCode,
+                bankCode,
+                accountNumber,
+              },
+            },
+          });
+        }
+      } else if (
+        !recipientCode &&
+        connectedAccount.gateway === PaymentGateway.FLUTTERWAVE
+      ) {
+        const recRes = await payoutProvider.createPayoutRecipient({
+          name:
+            (connectedAccount.metadata as any)?.accountName ||
+            tenant?.stageName ||
+            'UpBeat DJ',
+          accountNumber: accountNumber,
+          bankCode: bankCode,
+          currency: wallet.currency,
+          country: tenant?.country || 'ke',
+          accountType,
         });
+        recipientCode = recRes.recipientCode;
+
+        if ((connectedAccount as any).id) {
+          await this.prisma.tenantPaymentAccount.update({
+            where: {id: (connectedAccount as any).id},
+            data: {
+              metadata: {
+                ...((connectedAccount.metadata as any) || {}),
+                recipientCode,
+                bankCode,
+                accountNumber,
+                accountType,
+              },
+            },
+          });
+        }
       }
 
-      // Fallback for non-Paystack
+      // Fallback for non-Paystack / non-Flutterwave
       if (!recipientCode) {
-        recipientCode = connectedAccount.accountId;
+        recipientCode = accountNumber || connectedAccount.accountId;
       }
 
       const transferResult = await payoutProvider.initiatePayout({
@@ -613,11 +803,17 @@ export class WalletService {
           tenantId,
           bankName: (connectedAccount.metadata as any)?.bankName,
           accountName: (connectedAccount.metadata as any)?.accountName,
+          bankCode,
+          accountNumber,
+          accountType,
         },
       });
 
       if (transferResult.status === 'FAILED') {
-        await this.handleTransferFailure(payoutRequest.id, 'Transfer provider rejected request');
+        await this.handleTransferFailure(
+          payoutRequest.id,
+          'Transfer provider rejected request',
+        );
         throw new Error('Failed to dispatch payout transfer');
       }
 
@@ -630,7 +826,10 @@ export class WalletService {
         status: transferResult.status,
       };
     } catch (err: any) {
-      this.logger.error(`Transfer dispatch error for request ${payoutRequest.id}:`, err.message);
+      this.logger.error(
+        `Transfer dispatch error for request ${payoutRequest.id}:`,
+        err.message,
+      );
       await this.handleTransferFailure(payoutRequest.id, err.message);
       throw err;
     }
@@ -641,7 +840,7 @@ export class WalletService {
    */
   public async handleTransferSuccess(payoutRequestId: string) {
     const payout = await this.prisma.payoutRequest.findUnique({
-      where: { id: payoutRequestId },
+      where: {id: payoutRequestId},
     });
     if (!payout || payout.status === PayoutRequestStatus.COMPLETED) {
       return;
@@ -649,7 +848,7 @@ export class WalletService {
 
     await this.prisma.$transaction(async (tx) => {
       await tx.payoutRequest.update({
-        where: { id: payoutRequestId },
+        where: {id: payoutRequestId},
         data: {
           status: PayoutRequestStatus.COMPLETED,
           processedAt: new Date(),
@@ -657,7 +856,7 @@ export class WalletService {
       });
 
       await tx.wallet.update({
-        where: { id: payout.walletId },
+        where: {id: payout.walletId},
         data: {
           totalWithdrawn: {
             increment: payout.amount,
@@ -665,8 +864,20 @@ export class WalletService {
         },
       });
 
-      const currentWallet = await tx.wallet.findUnique({ where: { id: payout.walletId } });
+      const currentWallet = await tx.wallet.findUnique({
+        where: {id: payout.walletId},
+      });
       const currentBalance = Number(currentWallet?.availableBalance || 0);
+
+      await tx.walletLedger.updateMany({
+        where: {
+          transferId: payout.id,
+          type: LedgerType.WITHDRAWAL_REQUESTED,
+        },
+        data: {
+          status: 'COMPLETED',
+        },
+      });
 
       await tx.walletLedger.create({
         data: {
@@ -690,30 +901,44 @@ export class WalletService {
   /**
    * Payout transfer failed: automatically reverses funds back into DJ's Available Balance (Spec #7)
    */
-  public async handleTransferFailure(payoutRequestId: string, failureReason?: string) {
+  public async handleTransferFailure(
+    payoutRequestId: string,
+    failureReason?: string,
+  ) {
     const payout = await this.prisma.payoutRequest.findUnique({
-      where: { id: payoutRequestId },
+      where: {id: payoutRequestId},
     });
-    if (!payout || payout.status === PayoutRequestStatus.FAILED || payout.status === PayoutRequestStatus.REJECTED) {
+    if (
+      !payout ||
+      payout.status === PayoutRequestStatus.FAILED ||
+      payout.status === PayoutRequestStatus.REJECTED
+    ) {
       return;
     }
 
     const refundAmount = Number(payout.amount);
 
     await this.prisma.$transaction(async (tx) => {
-      const currentWallet = await tx.wallet.findUnique({ where: { id: payout.walletId } });
+      const currentWallet = await tx.wallet.findUnique({
+        where: {id: payout.walletId},
+      });
       if (!currentWallet) throw new Error('Wallet not found');
 
       const prevAvailable = Number(currentWallet.availableBalance);
-      const restoredAvailable = Math.round((prevAvailable + refundAmount) * 100) / 100;
+      const restoredAvailable =
+        Math.round((prevAvailable + refundAmount) * 100) / 100;
 
       const rawReason = failureReason || 'Transfer provider payout failed';
-      const safeReason = rawReason.length > 250 ? rawReason.substring(0, 247) + '...' : rawReason;
+      const safeReason =
+        rawReason.length > 250
+          ? rawReason.substring(0, 247) + '...'
+          : rawReason;
       const rawDesc = `Transfer failed: ${refundAmount} ${payout.currency} restored (${safeReason})`;
-      const safeDesc = rawDesc.length > 250 ? rawDesc.substring(0, 247) + '...' : rawDesc;
+      const safeDesc =
+        rawDesc.length > 250 ? rawDesc.substring(0, 247) + '...' : rawDesc;
 
       await tx.payoutRequest.update({
-        where: { id: payoutRequestId },
+        where: {id: payoutRequestId},
         data: {
           status: PayoutRequestStatus.FAILED,
           failureReason: safeReason,
@@ -722,7 +947,7 @@ export class WalletService {
       });
 
       await tx.wallet.update({
-        where: { id: currentWallet.id },
+        where: {id: currentWallet.id},
         data: {
           availableBalance: restoredAvailable,
         },
@@ -744,7 +969,9 @@ export class WalletService {
       });
     });
 
-    this.logger.info(`Payout #${payoutRequestId} failed. Successfully restored ${refundAmount} to DJ wallet`);
+    this.logger.info(
+      `Payout #${payoutRequestId} failed. Successfully restored ${refundAmount} to DJ wallet`,
+    );
   }
 
   /**
@@ -753,33 +980,39 @@ export class WalletService {
   public async handleRefund(
     paymentReference: string,
     refundAmount: number,
-    reason: string = 'Customer booking refund'
+    reason: string = 'Customer booking refund',
   ) {
     const transaction = await this.prisma.transaction.findFirst({
-      where: { gatewayReference: paymentReference },
-      include: { invoice: true },
+      where: {gatewayReference: paymentReference},
+      include: {invoice: true},
     });
 
     if (!transaction || !transaction.tenantId) {
       throw new Error('Transaction or tenant not found for refund');
     }
 
-    const { wallet } = await this.getWallet(transaction.tenantId);
+    const {wallet} = await this.getWallet(transaction.tenantId);
     const originalGross = Number(transaction.grossAmount || transaction.amount);
     const currentRefunded = Number(transaction.refundedAmount || 0);
-    const newRefunded = Math.round((currentRefunded + refundAmount) * 100) / 100;
+    const newRefunded =
+      Math.round((currentRefunded + refundAmount) * 100) / 100;
     const remainingAmount = Math.max(0, originalGross - newRefunded);
 
     const isFullRefund = remainingAmount === 0;
-    const newStatus = isFullRefund ? TransactionStatus.REFUNDED : TransactionStatus.PARTIALLY_REFUNDED;
+    const newStatus = isFullRefund
+      ? TransactionStatus.REFUNDED
+      : TransactionStatus.PARTIALLY_REFUNDED;
 
     // Deduct proportionate DJ net earnings
     const prevAvailable = wallet.availableBalance;
-    const newAvailable = Math.max(0, Math.round((prevAvailable - refundAmount) * 100) / 100);
+    const newAvailable = Math.max(
+      0,
+      Math.round((prevAvailable - refundAmount) * 100) / 100,
+    );
 
     await this.prisma.$transaction(async (tx) => {
       await tx.transaction.update({
-        where: { id: transaction.id },
+        where: {id: transaction.id},
         data: {
           status: newStatus,
           refundedAmount: newRefunded,
@@ -788,7 +1021,7 @@ export class WalletService {
       });
 
       await tx.wallet.update({
-        where: { id: wallet.id },
+        where: {id: wallet.id},
         data: {
           availableBalance: newAvailable,
         },

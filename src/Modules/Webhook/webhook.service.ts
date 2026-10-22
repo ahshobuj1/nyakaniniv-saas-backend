@@ -179,47 +179,8 @@ export class WebhookServices {
       }
     });
 
-    // 4. Handle Booking Confirmation & Escrow Credit
-    if (invoice.bookingId && invoice.type === InvoiceType.BOOKING) {
-      // Late payment: the booking died while the client was still on the gateway checkout
-      const currentBookingStatus = invoice.booking?.status;
-      if (currentBookingStatus && DEAD_BOOKING_STATUSES.includes(currentBookingStatus) && transaction) {
-        try {
-          const policyService = new CancellationPolicyService(this.prisma, new WalletService(this.prisma));
-          const { refundStatus } = await policyService.refundLatePayment(invoice.bookingId, transaction.id);
-          return { received: true, success: true, message: `Late payment refund: ${refundStatus}` };
-        } catch (err: any) {
-          this.logger.error(`Failed to refund late payment for booking #${invoice.bookingId}:`, err);
-          return { received: true, success: false, message: 'Late payment requires manual refund' };
-        }
-      }
-
-      try {
-        // Transition booking to CONFIRMED (Spec: Never COMPLETED on payment!)
-        await this.bookingStatusService.transition({
-          bookingId: invoice.bookingId,
-          targetStatus: BookingStatus.CONFIRMED,
-          reason: `Payment verified via ${params.gateway}`,
-        });
-
-        // Credit Escrow in DJ Wallet
-        if (invoice.tenantId) {
-          const { WalletService } = require('@/Modules/Wallet/wallet.service');
-          const walletService = new WalletService(this.prisma);
-          await walletService.creditBookingEscrow(
-            invoice.tenantId,
-            invoice.bookingId,
-            amountPaid,
-            currency,
-            0,
-            transaction?.id
-          );
-        }
-      } catch (err: any) {
-        this.logger.error(`Failed to transition booking #${invoice.bookingId} to CONFIRMED:`, err);
-      }
-    }
-
+    // Booking payments are now arranged directly between client and DJ without platform escrow or gateway checkout.
+    // Subscription payments continue to be processed above.
     return { received: true, success: true };
   }
 
@@ -285,8 +246,14 @@ export class WebhookServices {
       const { WalletService } = await import('@/Modules/Wallet/wallet.service');
       const walletService = new WalletService(this.prisma);
 
+      const cleanRef = webhookResult.reference.replace(/_PMCK$/, '');
       const payout = await this.prisma.payoutRequest.findFirst({
-        where: { transferReference: webhookResult.reference },
+        where: {
+          OR: [
+            { transferReference: webhookResult.reference },
+            { transferReference: cleanRef },
+          ],
+        },
       });
 
       if (payout) {

@@ -3,8 +3,6 @@ import {
   BookingStatus,
   PaymentStatus,
   InvoiceStatus,
-  InvoiceType,
-  NotificationType,
   TransactionStatus,
   Prisma,
 } from '@/prisma/generated/client';
@@ -13,6 +11,7 @@ import { AppLogger } from '@/core/logging/logger';
 import { IEmailProvider } from '@/providers/EmailProvider';
 import { EmailTemplates } from '@/utils/EmailTemplates';
 import { config } from '@/core/config';
+import { generateBookingAccessToken } from '@/utils/jwt';
 
 export interface TransitionBookingInput {
   bookingId: string;
@@ -27,15 +26,22 @@ export interface TransitionBookingInput {
 export class BookingStatusService {
   private logger = new AppLogger('BookingStatusService');
 
-  // Strict valid transition map from specification
+  // Strict valid transition map for Direct Payment workflow
   private static readonly VALID_TRANSITIONS: Record<BookingStatus, BookingStatus[]> = {
     [BookingStatus.PENDING]: [
+      BookingStatus.ACCEPTED,
       BookingStatus.AWAITING_PAYMENT,
       BookingStatus.REJECTED,
       BookingStatus.CANCELLED,
       BookingStatus.EXPIRED,
     ],
+    [BookingStatus.ACCEPTED]: [
+      BookingStatus.CONFIRMED,
+      BookingStatus.REJECTED,
+      BookingStatus.CANCELLED,
+    ],
     [BookingStatus.AWAITING_PAYMENT]: [
+      BookingStatus.ACCEPTED,
       BookingStatus.CONFIRMED,
       BookingStatus.REJECTED,
       BookingStatus.CANCELLED,
@@ -45,10 +51,12 @@ export class BookingStatusService {
       BookingStatus.IN_PROGRESS,
       BookingStatus.COMPLETED,
       BookingStatus.CANCELLED,
+      BookingStatus.DISPUTED,
     ],
     [BookingStatus.IN_PROGRESS]: [
       BookingStatus.COMPLETED,
       BookingStatus.CANCELLED,
+      BookingStatus.DISPUTED,
       BookingStatus.NO_SHOW,
     ],
     [BookingStatus.COMPLETED]: [
@@ -76,31 +84,11 @@ export class BookingStatusService {
     return allowed.includes(target);
   }
 
-  /** Voids the unpaid invoice and any in-flight checkout attempts of a booking. */
-  private async voidUnpaidInvoice(
-    tx: Prisma.TransactionClient,
-    booking: { id: string; invoice?: { id: string } | null },
-    transactionStatus: TransactionStatus = TransactionStatus.CANCELLED
-  ) {
-    await tx.invoice.updateMany({
-      where: { bookingId: booking.id, status: InvoiceStatus.UNPAID },
-      data: { status: InvoiceStatus.OVERDUE },
-    });
-
-    if (booking.invoice?.id) {
-      await tx.transaction.updateMany({
-        where: { invoiceId: booking.invoice.id, status: TransactionStatus.PENDING },
-        data: { status: transactionStatus },
-      });
-    }
-  }
-
   public async transition(input: TransitionBookingInput) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: input.bookingId },
       include: {
         client: true,
-        invoice: true,
         tenant: { include: { user: true } },
       },
     });
@@ -124,62 +112,45 @@ export class BookingStatusService {
 
     this.logger.info(`Transitioning booking #${booking.id} from ${currentStatus} to ${targetStatus}`);
 
-    // State machine side effects based on target status
-    let updatedBooking = await this.prisma.$transaction(async (tx) => {
+    // State machine updates based on target status
+    const updatedBooking = await this.prisma.$transaction(async (tx) => {
       const updateData: any = {
         status: targetStatus,
       };
 
-      // 1. Moving to AWAITING_PAYMENT (DJ accepted request and set price)
-      if (targetStatus === BookingStatus.AWAITING_PAYMENT) {
-        
-        // Payout Account Validation
-        const payoutAccount = await tx.tenantPaymentAccount.findFirst({
-          where: { tenantId: booking.tenantId!, isActive: true },
-        });
-        
-        if (!payoutAccount) {
-          throw new BadRequestError('You must connect a payout account in your wallet before accepting bookings.');
-        }
-
-        if (!input.totalAmount && Number(booking.totalAmount) <= 0) {
-          throw new BadRequestError('Total amount must be specified when accepting a booking.');
-        }
-
-        const amount = input.totalAmount ? input.totalAmount : Number(booking.totalAmount);
+      // 1. Moving to ACCEPTED (DJ accepted booking and provided initial quote)
+      if (targetStatus === BookingStatus.ACCEPTED || targetStatus === BookingStatus.AWAITING_PAYMENT) {
+        const amount = input.totalAmount ?? Number(booking.totalAmount);
         const currency = input.currencyCode || booking.currencyCode || 'KES';
 
-        updateData.totalAmount = amount;
-        updateData.currencyCode = currency;
-        updateData.paymentStatus = PaymentStatus.PENDING;
-        // 48 hour payment due window
-        updateData.paymentDueAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+        if (amount > 0) {
+          updateData.totalAmount = amount;
+          updateData.currencyCode = currency;
 
-        // Upsert Invoice
-        await tx.invoice.upsert({
-          where: { bookingId: booking.id },
-          update: {
-            amount,
-            currencyCode: currency,
-            status: InvoiceStatus.UNPAID,
-            dueDate: updateData.paymentDueAt,
-          },
-          create: {
-            tenantId: booking.tenantId,
-            bookingId: booking.id,
-            amount,
-            currencyCode: currency,
-            status: InvoiceStatus.UNPAID,
-            type: InvoiceType.BOOKING,
-            dueDate: updateData.paymentDueAt,
-          },
-        });
+          // Create initial BookingQuote if none exists yet
+          const existingQuote = await tx.bookingQuote.findFirst({
+            where: { bookingId: booking.id },
+          });
+
+          if (!existingQuote) {
+            await tx.bookingQuote.create({
+              data: {
+                bookingId: booking.id,
+                version: 1,
+                amount,
+                currency,
+                proposedBy: 'DJ',
+                status: 'PROPOSED',
+                notes: 'Initial quotation from DJ upon accepting request',
+              },
+            });
+          }
+        }
       }
 
-      // 2. Moving to CONFIRMED (Verified Payment received)
+      // 2. Moving to CONFIRMED (Price agreed and date locked)
       if (targetStatus === BookingStatus.CONFIRMED) {
         updateData.confirmedAt = new Date();
-        updateData.paymentStatus = PaymentStatus.PAID;
       }
 
       // 3. Moving to COMPLETED (Event ended)
@@ -201,19 +172,6 @@ export class BookingStatusService {
         updatedDetails.cancelledBy = cancelledBy;
         updatedDetails.cancellationReason = input.reason || 'Cancelled';
         updateData.eventDetails = updatedDetails;
-
-        if (booking.paymentStatus === PaymentStatus.PAID) {
-          updateData.paymentStatus = PaymentStatus.REFUND_PENDING;
-        } else if (booking.invoice?.status !== InvoiceStatus.PAID) {
-          // Unpaid booking: void the invoice and any in-flight checkout attempts
-          await this.voidUnpaidInvoice(tx, booking);
-        }
-      }
-
-      // 4b. Moving to EXPIRED (payment window elapsed)
-      if (targetStatus === BookingStatus.EXPIRED) {
-        updateData.paymentStatus = PaymentStatus.FAILED;
-        await this.voidUnpaidInvoice(tx, booking);
       }
 
       // 5. Moving to REJECTED (DJ declines booking request)
@@ -229,40 +187,27 @@ export class BookingStatusService {
         }
         updatedDetails.declineReason = input.reason.trim();
         updateData.eventDetails = updatedDetails;
-        updateData.paymentStatus = PaymentStatus.FAILED;
-
-        // Invalidate unpaid invoice and cancel any pending transactions
-        await tx.invoice.updateMany({
-          where: { bookingId: booking.id, status: InvoiceStatus.UNPAID },
-          data: { status: InvoiceStatus.OVERDUE },
-        });
-
-        const invoiceId = booking.invoice?.id;
-        if (invoiceId) {
-          await tx.transaction.updateMany({
-            where: { invoiceId, status: TransactionStatus.PENDING },
-            data: { status: TransactionStatus.FAILED },
-          });
-        }
       }
 
       const res = await tx.booking.update({
         where: { id: booking.id },
         data: updateData,
-        include: { client: true, invoice: true, tenant: { include: { user: true } } },
+        include: { client: true, tenant: { include: { user: true } } },
       });
 
-      // Audit log entry
-      await tx.auditLog.create({
+      // Record in BookingAuditEvent
+      await tx.bookingAuditEvent.create({
         data: {
-          userId: input.userId || booking.tenant?.userId || null,
-          action: 'BOOKING_STATUS_TRANSITION',
+          bookingId: booking.id,
+          actorType: input.cancelledBy || (input.userId ? 'DJ' : 'SYSTEM'),
+          actorId: input.userId || null,
+          eventType: `STATUS_CHANGED_TO_${targetStatus}`,
           metadata: {
-            bookingId: booking.id,
             fromStatus: currentStatus,
             toStatus: targetStatus,
             reason: input.reason,
-            timestamp: new Date().toISOString(),
+            totalAmount: input.totalAmount,
+            currencyCode: input.currencyCode,
           },
         },
       });
@@ -270,7 +215,7 @@ export class BookingStatusService {
       return res;
     });
 
-    // Side-effects outside of DB transaction (Escrow release & emails)
+    // Side-effects outside of DB transaction (Email notifications)
     await this.handlePostTransitionSideEffects(booking, updatedBooking, targetStatus, input.reason, input.cancelledBy);
 
     return updatedBooking;
@@ -289,165 +234,134 @@ export class BookingStatusService {
     const eventName = updated.eventType || 'Event';
     const amount = Number(updated.totalAmount || 0);
     const currency = updated.currencyCode || 'KES';
+    const orderReference = updated.orderReference || `UB-${updated.id.slice(0, 8).toUpperCase()}`;
     const targetTz = updated.eventTimezone || updated.tenant?.timezone || 'Africa/Nairobi';
 
     let eventDate = '';
-    let eventTime = '';
-
     if (updated.eventDate) {
-      const d = new Date(updated.eventDate);
-      if (!isNaN(d.getTime())) {
-        try {
-          eventDate = d.toLocaleDateString('en-US', {
-            timeZone: targetTz,
-            weekday: 'short',
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-          });
-          const timeFormatted = d.toLocaleTimeString('en-US', {
-            timeZone: targetTz,
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true,
-          });
-          eventTime = timeFormatted;
-        } catch {
-          eventDate = d.toLocaleDateString('en-US', {
-            weekday: 'short',
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-          });
-          eventTime = d.toLocaleTimeString('en-US', {
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true,
-          });
-        }
-      }
+      eventDate = EmailTemplates.formatEventDateTimeWithZone(updated.eventDate, targetTz);
     }
 
-    const venue = updated.address || '';
+    const clientAccessToken = clientEmail
+      ? generateBookingAccessToken({
+          bookingId: updated.id,
+          orderReference,
+          clientEmail,
+          role: 'CLIENT',
+        })
+      : null;
 
-    // AWAITING_PAYMENT: send customer email with direct checkout link and manage link
-    if (targetStatus === BookingStatus.AWAITING_PAYMENT && clientEmail) {
-      const checkoutUrl = `${config.clientUrl}/checkout/${updated.id}`;
-      const manageUrl = `${config.clientUrl}/booking/manage/${updated.id}`;
-      const checkoutRedirectUrl = `${config.apiUrl}/bookings/v1/${updated.id}/checkout-redirect`;
+    const portalUrl = clientAccessToken
+      ? `${config.clientUrl}/booking/manage/${updated.id}?ref=${encodeURIComponent(orderReference)}&token=${encodeURIComponent(clientAccessToken)}`
+      : `${config.clientUrl}/booking/manage/${updated.id}?ref=${encodeURIComponent(orderReference)}`;
+    const dashboardUrl = `${config.clientUrl}/dashboard/bookings/${updated.id}`;
 
-      const amountFormatted = amount > 0 ? ` (${currency} ${amount.toLocaleString()})` : '';
-      const emailSubject = `Booking Accepted by ${djName}! Complete Payment${amountFormatted} to Lock Your Date - UpBeat Entertainment Africa`;
-
+    // ACCEPTED: Notify client with quote and secure booking page access instructions
+    if ((targetStatus === BookingStatus.ACCEPTED || targetStatus === BookingStatus.AWAITING_PAYMENT) && clientEmail) {
       this.emailProvider.sendEmail(
         clientEmail,
-        emailSubject,
-        EmailTemplates.getBookingAcceptedTemplate({
+        `Booking Accepted by ${djName} - Initial Quote Ready (Ref: ${orderReference})`,
+        EmailTemplates.getBookingAcceptedWithQuoteTemplate({
           clientName,
           djName,
           eventType: eventName,
           eventDate,
-          eventTime,
-          venue,
           currency,
           amount,
-          paymentUrl: checkoutUrl || checkoutRedirectUrl,
-          manageUrl,
+          orderReference,
+          portalUrl,
         })
       );
     }
 
-    // CONFIRMED: notify both client and DJ
+    // CONFIRMED: Notify client and DJ that agreement is reached and date locked
     if (targetStatus === BookingStatus.CONFIRMED) {
-      const manageUrl = `${config.clientUrl}/booking/manage/${updated.id}`;
-      const dashboardUrl = `${config.clientUrl}/dashboard/bookings/${updated.id}`;
-      const eventDateDisplay = updated.eventDate ? new Date(updated.eventDate).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }) : 'your event date';
-
       if (clientEmail) {
         const clientContent = `
-          <p style="margin-top: 0; font-size: 16px;">Hi <strong>${updated.client?.name || 'there'}</strong>,</p>
+          <p style="margin-top: 0; font-size: 16px;">Hi <strong>${clientName}</strong>,</p>
           <p style="font-size: 15px; line-height: 1.6;">
-            Your payment for <strong>${eventName}</strong> with <strong>${djName}</strong> on <strong>${eventDateDisplay}</strong> has been successfully verified and secured in UpBeat Escrow.
+            Your booking for <strong>${eventName}</strong> with <strong>${djName}</strong> on <strong>${eventDate}</strong> is officially <strong>confirmed</strong>!
           </p>
-          <p style="font-size: 14px; color: #475569; line-height: 1.6;">
-            Your date is 100% locked on ${djName}&apos;s schedule. You can access your artist contact details, schedule, and cancellation policy at any time through your booking portal:
-          </p>
-          <div style="text-align: center; margin: 28px 0 20px 0;">
-            <a href="${manageUrl}" style="display: inline-block; padding: 14px 28px; background-color: #0f172a; color: #ffffff; text-decoration: none; border-radius: 4px; font-weight: 700; font-size: 15px;">
-              View / Manage Your Booking &rarr;
+          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 16px; margin: 20px 0;">
+            <p style="margin: 0; font-size: 14px;"><strong>Booking Reference:</strong> <code>${orderReference}</code></p>
+            <p style="margin: 6px 0 0 0; font-size: 14px;"><strong>Agreed Performance Fee:</strong> <strong>${currency} ${amount.toLocaleString()}</strong></p>
+            <p style="margin: 6px 0 0 0; font-size: 13px; color: #64748b;">Payment terms are handled directly between you and the artist as agreed.</p>
+          </div>
+          <div style="text-align: center; margin: 28px 0 16px 0;">
+            <a href="${portalUrl}" style="display: inline-block; padding: 14px 28px; background-color: #0f172a; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 15px;">
+              View Your Booking Details &rarr;
             </a>
           </div>
         `;
         this.emailProvider.sendEmail(
           clientEmail,
-          `Booking Confirmed! Payment Received - UpBeat Entertainment Africa`,
+          `Booking Confirmed with ${djName} (Ref: ${orderReference})`,
           EmailTemplates.getHtmlShell('Booking Confirmed', clientContent)
         );
       }
 
       if (updated.tenant?.user?.email) {
         const djContent = `
-          <p style="margin-top: 0; font-size: 16px;">Great news, <strong>${djName}</strong>!</p>
+          <p style="margin-top: 0; font-size: 16px;">Hi <strong>${djName}</strong>,</p>
           <p style="font-size: 15px; line-height: 1.6;">
-            The client <strong>${updated.client?.name || 'Client'}</strong> has successfully completed payment for <strong>${eventName}</strong> on <strong>${eventDateDisplay}</strong>.
+            Booking <code>${orderReference}</code> for <strong>${eventName}</strong> with <strong>${clientName}</strong> on <strong>${eventDate}</strong> is now confirmed!
           </p>
-          <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 4px; padding: 16px; margin: 20px 0;">
-            <p style="margin: 0; font-size: 14px; color: #166534; line-height: 1.6;">
-              <strong>Escrow Protection:</strong> Funds are secured in your UpBeat Pending Escrow Wallet and will be released to your Available Balance immediately upon completing the event.
-            </p>
+          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 16px; margin: 20px 0;">
+            <p style="margin: 0; font-size: 14px;"><strong>Agreed Fee:</strong> ${currency} ${amount.toLocaleString()}</p>
+            <p style="margin: 6px 0 0 0; font-size: 13px; color: #64748b;">Payment arrangements are handled directly between you and the client.</p>
           </div>
-          <div style="text-align: center; margin: 28px 0 20px 0;">
-            <a href="${dashboardUrl}" style="display: inline-block; padding: 14px 28px; background-color: #0f172a; color: #ffffff; text-decoration: none; border-radius: 4px; font-weight: 700; font-size: 15px;">
+          <div style="text-align: center; margin: 28px 0 16px 0;">
+            <a href="${dashboardUrl}" style="display: inline-block; padding: 14px 28px; background-color: #0f172a; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 15px;">
               View Booking in Dashboard &rarr;
             </a>
           </div>
         `;
         this.emailProvider.sendEmail(
           updated.tenant.user.email,
-          `Payment Received! Booking #${updated.id.substring(0, 8)} Confirmed`,
-          EmailTemplates.getHtmlShell('Payment Confirmed', djContent)
+          `Booking Confirmed! ${eventName} on ${eventDate}`,
+          EmailTemplates.getHtmlShell('Booking Confirmed', djContent)
         );
       }
     }
 
-    // COMPLETED: automatically release escrow funds from Pending -> Available
-    if (targetStatus === BookingStatus.COMPLETED) {
-      try {
-        const { WalletService } = require('@/Modules/Wallet/wallet.service');
-        const walletService = new WalletService(this.prisma);
-        await walletService.releaseBookingEscrow(updated.id);
-      } catch (err: any) {
-        this.logger.error(`Failed to release escrow for booking ${updated.id}:`, err);
-      }
-    }
-
-    // REJECTED: send DJ decline notification
-    if (targetStatus === BookingStatus.REJECTED && clientEmail) {
-      const manageUrl = `${config.clientUrl}/booking/manage/${updated.id}`;
+    // COMPLETED: Invite client to leave rating and review
+    if (targetStatus === BookingStatus.COMPLETED && clientEmail) {
       this.emailProvider.sendEmail(
         clientEmail,
-        `Booking Declined: ${eventName} - UpBeat Entertainment Africa`,
-        EmailTemplates.getBookingRejectedTemplate(djName, eventName, reason, config.clientUrl, manageUrl)
+        `How was your event with ${djName}? - UpBeat Entertainment Africa`,
+        EmailTemplates.getReviewRequestTemplate({
+          clientName,
+          djName,
+          portalUrl,
+        })
       );
     }
 
-    // CANCELLED: send cancellation notification to client & DJ
+    // REJECTED: Send DJ decline notification
+    if (targetStatus === BookingStatus.REJECTED && clientEmail) {
+      this.emailProvider.sendEmail(
+        clientEmail,
+        `Booking Declined: ${eventName} - UpBeat Entertainment Africa`,
+        EmailTemplates.getBookingRejectedTemplate(djName, eventName, reason, config.clientUrl, portalUrl)
+      );
+    }
+
+    // CANCELLED: Send cancellation notification
     if (targetStatus === BookingStatus.CANCELLED) {
       const details = (updated.eventDetails as any) || {};
       const cancelledBy = cancelledByParam || details.cancelledBy || 'DJ';
-      const manageUrl = `${config.clientUrl}/booking/manage/${updated.id}`;
 
       if (clientEmail) {
         this.emailProvider.sendEmail(
           clientEmail,
           `Booking Cancelled: ${eventName} - UpBeat Entertainment Africa`,
           EmailTemplates.getBookingCancelledTemplate({
-            recipientName: updated.client?.name || 'there',
+            recipientName: clientName,
             cancelledBy: cancelledBy as any,
             djName,
             eventType: eventName,
             reason,
-            manageUrl,
+            manageUrl: portalUrl,
           })
         );
       }
@@ -462,19 +376,9 @@ export class BookingStatusService {
             djName,
             eventType: eventName,
             reason,
-            manageUrl,
+            manageUrl: dashboardUrl,
           })
         );
-      }
-
-      try {
-        const { WalletService } = require('@/Modules/Wallet/wallet.service');
-        const { CancellationPolicyService } = require('./cancellation-policy.service');
-        const walletService = new WalletService(this.prisma);
-        const policyService = new CancellationPolicyService(this.prisma, walletService);
-        await policyService.processRefund(updated.id, cancelledBy, reason);
-      } catch (err: any) {
-        this.logger.error(`Failed to process refund for booking ${updated.id}:`, err);
       }
     }
   }

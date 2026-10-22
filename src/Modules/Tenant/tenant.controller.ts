@@ -76,4 +76,18 @@ export class TenantController extends BaseController {
     const updatedTenant = await this.tenantService.updateTenantStatus(tenantId, data);
     return this.sendResponse(req, res, "Tenant status updated successfully", 200, updatedTenant);
   }
+
+  public async getPaymentInstructions(req: Request, res: Response) {
+    const userId = req.user!.id;
+    const instructions = await this.tenantService.getPaymentInstructions(userId);
+    return this.sendResponse(req, res, "Payment instructions retrieved successfully", 200, instructions);
+  }
+
+  public async updatePaymentInstructions(req: Request, res: Response) {
+    const userId = req.user!.id;
+    const data = req.validatedBody || req.body;
+    const instructions = await this.tenantService.updatePaymentInstructions(userId, data);
+    return this.sendResponse(req, res, "Payment instructions updated successfully", 200, instructions);
+  }
 }
+

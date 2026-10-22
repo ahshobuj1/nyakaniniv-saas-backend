@@ -136,7 +136,10 @@ export class PaystackConnectService {
           metadata: {
             accountName: valRes.accountName || businessName,
             network: bankCode,
-            bankName: bankCode,
+            bankCode: bankCode,
+            bankName: bankNameParam || bankCode,
+            accountNumber: accountNumber,
+            recipientCode: `flw_rcp_bank_${bankCode}_${accountNumber}`,
             country,
           },
           isActive: true,
@@ -148,7 +151,10 @@ export class PaystackConnectService {
           metadata: {
             accountName: valRes.accountName || businessName,
             network: bankCode,
-            bankName: bankCode,
+            bankCode: bankCode,
+            bankName: bankNameParam || bankCode,
+            accountNumber: accountNumber,
+            recipientCode: `flw_rcp_bank_${bankCode}_${accountNumber}`,
             country,
           },
           isActive: true,

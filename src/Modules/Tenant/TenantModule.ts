@@ -96,5 +96,19 @@ export class TenantModule extends BaseModule {
       validateRequest(updateTenantStatusSchema),
       controller.updateTenantStatus.bind(controller),
     );
+
+    // Direct Payment Instructions (DJ only)
+    this.router.get(
+      '/payment-instructions',
+      authenticateUser,
+      controller.getPaymentInstructions.bind(controller),
+    );
+
+    this.router.patch(
+      '/payment-instructions',
+      authenticateUser,
+      controller.updatePaymentInstructions.bind(controller),
+    );
   }
 }
+

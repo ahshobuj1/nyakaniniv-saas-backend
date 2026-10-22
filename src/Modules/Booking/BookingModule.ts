@@ -3,7 +3,12 @@ import { AppLogger } from "@/core/logging/logger";
 import { BookingServices } from "./booking.service";
 import { BookingController } from "./booking.controller";
 import { validateRequest } from "@/middleware/validation";
-import { authenticateUser, authorizeRole, optionalAuth } from "@/middleware/auth";
+import {
+  authenticateUser,
+  authorizeRole,
+  optionalAuth,
+  authenticateBookingAccess,
+} from "@/middleware/auth";
 import { UserRole } from "@/prisma/generated/client";
 import {
   createBookingSchema,
@@ -11,11 +16,21 @@ import {
   verifyBookingOtpSchema,
   resendBookingOtpSchema,
   updateBookingStatusSchema,
+  requestBookingAccessOtpSchema,
+  verifyBookingAccessOtpSchema,
+  resendBookingAccessOtpSchema,
+  createBookingMessageSchema,
+  proposeQuoteSchema,
+  acceptQuoteSchema,
+  rejectQuoteSchema,
+  reportDirectPaymentSchema,
+  reportIssueSchema,
+  submitReviewSchema,
 } from "./BookingDTO";
 
 export class BookingModule extends BaseModule {
   public name: string = "BookingModule";
-  public version: string = "1.0.0";
+  public version: string = "2.0.0";
   public basePath: string = "/bookings/v1/";
   public dependencies?: string[] | undefined;
 
@@ -35,7 +50,9 @@ export class BookingModule extends BaseModule {
   protected async setupRoutes(): Promise<void> {
     const controller = this.getController<BookingController>("BookingController");
 
-    // Public Routes for Booking Client Verification & Submission
+    // ==========================================
+    // 1. Public Routes: Booking Creation & Guest OTP
+    // ==========================================
     this.router.post(
       "/initiate",
       validateRequest(initiateBookingSchema),
@@ -54,14 +71,36 @@ export class BookingModule extends BaseModule {
       controller.resendBookingOtp.bind(controller),
     );
 
-    // Direct create route (fallback)
     this.router.post(
       "/",
       validateRequest(createBookingSchema),
       controller.createBooking.bind(controller),
     );
 
-    // DJ Routes
+    // ==========================================
+    // 2. Booking Portal Access (Order Ref + OTP)
+    // ==========================================
+    this.router.post(
+      "/access/request-otp",
+      validateRequest(requestBookingAccessOtpSchema),
+      controller.requestBookingAccessOtp.bind(controller),
+    );
+
+    this.router.post(
+      "/access/verify-otp",
+      validateRequest(verifyBookingAccessOtpSchema),
+      controller.verifyBookingAccessOtp.bind(controller),
+    );
+
+    this.router.post(
+      "/access/resend-otp",
+      validateRequest(resendBookingAccessOtpSchema),
+      controller.resendBookingAccessOtp.bind(controller),
+    );
+
+    // ==========================================
+    // 3. DJ Dashboard Routes
+    // ==========================================
     this.router.get(
       "/my-bookings",
       authenticateUser,
@@ -70,9 +109,10 @@ export class BookingModule extends BaseModule {
     );
 
     this.router.get(
-      "/:id",
-      optionalAuth,
-      controller.getBookingById.bind(controller),
+      "/schedule",
+      authenticateUser,
+      authorizeRole([UserRole.DJ]),
+      controller.getDjSchedule.bind(controller),
     );
 
     this.router.patch(
@@ -84,68 +124,115 @@ export class BookingModule extends BaseModule {
     );
 
     this.router.post(
-      "/:id/remind-payment",
+      "/:id/confirm-payment",
       authenticateUser,
       authorizeRole([UserRole.DJ]),
-      controller.resendPaymentReminder.bind(controller),
+      controller.confirmDirectPayment.bind(controller),
     );
 
     this.router.post(
-      "/:id/refund",
-      authenticateUser,
-      authorizeRole([UserRole.DJ]), // Only DJ can initiate refund for now
-      controller.refundBooking.bind(controller),
-    );
-
-    // Client/Public route to generate fresh checkout session
-    this.router.get(
-      "/:id/payment-link",
-      controller.getPaymentLink.bind(controller),
-    );
-
-    // Client/Public route to automatically redirect to checkout
-    this.router.get(
-      "/:id/checkout-redirect",
-      controller.checkoutRedirect.bind(controller),
-    );
-
-    // Client/Public route to request cash payment
-    this.router.patch(
-      "/:id/request-cash",
-      controller.requestCashPayment.bind(controller),
-    );
-
-    // Client/Public route to request cash payment via email button (redirects to success page)
-    this.router.get(
-      "/:id/request-cash-redirect",
-      controller.requestCashRedirect.bind(controller),
-    );
-
-    // DJ Action: Approve/Reject cash payment
-    this.router.post(
-      "/:id/cash-decision",
+      "/:id/request-completion",
       authenticateUser,
       authorizeRole([UserRole.DJ]),
-      controller.handleCashRequestDecision.bind(controller),
+      controller.requestCompletion.bind(controller),
     );
 
-    // DJ Action: Mark cash as paid (fulfill)
+    // ==========================================
+    // 4. Secure Booking Portal Routes
+    // Protected by authenticateBookingAccess (allows authenticated Client OR DJ)
+    // ==========================================
+    this.router.get(
+      "/:id/portal",
+      authenticateBookingAccess,
+      controller.getBookingPortalDetails.bind(controller),
+    );
+
+    this.router.get(
+      "/:id/messages",
+      authenticateBookingAccess,
+      controller.getBookingMessages.bind(controller),
+    );
+
     this.router.post(
-      "/:id/mark-cash-paid",
-      authenticateUser,
-      authorizeRole([UserRole.DJ]),
-      controller.markCashAsPaid.bind(controller),
+      "/:id/messages",
+      authenticateBookingAccess,
+      validateRequest(createBookingMessageSchema),
+      controller.sendBookingMessage.bind(controller),
     );
 
-    // Client Portal Routes (Magic Link)
+    this.router.post(
+      "/:id/quotes",
+      authenticateBookingAccess,
+      validateRequest(proposeQuoteSchema),
+      controller.proposeQuote.bind(controller),
+    );
+
+    this.router.post(
+      "/:id/quotes/:quoteId/accept",
+      authenticateBookingAccess,
+      validateRequest(acceptQuoteSchema),
+      controller.acceptQuote.bind(controller),
+    );
+
+    this.router.post(
+      "/:id/quotes/:quoteId/reject",
+      authenticateBookingAccess,
+      validateRequest(rejectQuoteSchema),
+      controller.rejectQuote.bind(controller),
+    );
+
+    this.router.post(
+      "/:id/report-payment",
+      authenticateBookingAccess,
+      validateRequest(reportDirectPaymentSchema),
+      controller.reportDirectPayment.bind(controller),
+    );
+
+    this.router.post(
+      "/:id/confirm-completion",
+      authenticateBookingAccess,
+      controller.confirmCompletion.bind(controller),
+    );
+
+    this.router.post(
+      "/:id/report-issue",
+      authenticateBookingAccess,
+      validateRequest(reportIssueSchema),
+      controller.reportIssue.bind(controller),
+    );
+
+    this.router.post(
+      "/:id/review",
+      authenticateBookingAccess,
+      validateRequest(submitReviewSchema),
+      controller.submitReview.bind(controller),
+    );
+
+    this.router.post(
+      "/:id/cancel",
+      authenticateBookingAccess,
+      controller.clientCancelBooking.bind(controller),
+    );
+
+    // ==========================================
+    // 5. General & Legacy Routes
+    // ==========================================
     this.router.get(
       "/client/:id",
+      optionalAuth,
       controller.getClientBooking.bind(controller),
     );
 
     this.router.post(
       "/client/:id/cancel",
+      optionalAuth,
       controller.clientCancelBooking.bind(controller),
+    );
+
+    this.router.get(
+      "/:id",
+      optionalAuth,
+      controller.getBookingById.bind(controller),
     );
   }
 }

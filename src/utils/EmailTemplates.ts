@@ -121,15 +121,39 @@ export class EmailTemplates {
     return this.getHtmlShell("Reset Your Password", content);
   }
 
+  /** Formats a date/time into a specified timezone with timezone label for email clients */
+  static formatEventDateTimeWithZone(dateInput?: Date | string | null, timezone?: string | null): string {
+    if (!dateInput) return 'TBD';
+    const tz = timezone || 'UTC';
+    try {
+      const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+      if (isNaN(d.getTime())) return `${String(dateInput)} (${tz})`;
+      const formatted = d.toLocaleString('en-US', {
+        timeZone: tz,
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      });
+      return `${formatted} (${tz})`;
+    } catch {
+      return `${String(dateInput)} (${tz})`;
+    }
+  }
+
   // Case 5: New Booking Request Alert for DJ
   static getNewBookingAlertTemplate(clientName: string, eventType: string, date: string, timezone?: string): string {
+    const dateDisplay = date.includes('(') ? date : this.formatEventDateTimeWithZone(date, timezone);
     const content = `
       <p>You have received a new booking request from <strong>${clientName}</strong>.</p>
       <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 20px; margin: 20px 0;">
         <h3 style="margin-top: 0; color: #334155; font-size: 18px;">Booking Details</h3>
         <ul style="list-style: none; padding: 0; margin: 0;">
           <li style="margin-bottom: 10px;"><strong>Event Type:</strong> ${eventType}</li>
-          <li><strong>Date:</strong> ${new Date(date).toLocaleString()}${timezone ? ` (${timezone})` : ''}</li>
+          <li><strong>Event Date & Time:</strong> ${dateDisplay}</li>
         </ul>
       </div>
       <p>Please log in to your dashboard to review and accept the booking.</p>
@@ -145,6 +169,7 @@ export class EmailTemplates {
       eventType: string;
       eventDate?: string;
       eventTime?: string;
+      orderReference?: string;
       manageUrl?: string;
     } | string,
     legacyEventType?: string
@@ -160,16 +185,28 @@ export class EmailTemplates {
       return this.getHtmlShell("Booking Request Received", content);
     }
 
-    const { clientName, djName, eventType, eventDate, eventTime, manageUrl } = optionsOrDjName;
+    const { clientName, djName, eventType, eventDate, eventTime, orderReference, manageUrl } = optionsOrDjName;
     const content = `
       <p>Hi <strong>${clientName || 'there'}</strong>,</p>
       <p>Thank you for submitting your booking request for <strong>${djName}</strong> on UpBeat Entertainment Africa.</p>
-      <p>Your request for a <strong>${eventType}</strong> is currently pending review.</p>
+      <p>Your request for a <strong>${eventType}</strong> has been received and is currently pending DJ review.</p>
       ${eventDate ? `<p><strong>Event Date:</strong> ${eventDate}${eventTime ? ` at ${eventTime}` : ''}</p>` : ''}
+      
+      ${orderReference ? `
+      <div style="background-color: #f8fafc; border: 2px dashed #0f172a; border-radius: 8px; padding: 16px; text-align: center; margin: 20px 0;">
+        <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #64748b; font-weight: 700; display: block; margin-bottom: 4px;">Your Official Booking Reference ID</span>
+        <span style="font-family: 'Courier New', Courier, monospace; font-size: 22px; font-weight: 800; color: #0f172a; letter-spacing: 2px; display: block;">${orderReference}</span>
+        <p style="margin: 6px 0 0 0; font-size: 12px; color: #64748b;">Save this Reference ID. You can use it anytime along with your email to track your booking progress.</p>
+      </div>
+      ` : ''}
+
       ${manageUrl ? `
         <div style="text-align: center; margin: 25px 0;">
-          <a href="${manageUrl}" style="display: inline-block; padding: 12px 24px; background-color: #111827; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">Manage Your Booking</a>
+          <a href="${manageUrl}" style="display: inline-block; padding: 13px 28px; background-color: #0f172a; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px;">Track & Manage Your Booking &rarr;</a>
         </div>
+        <p style="text-align: center; font-size: 11px; color: #94a3b8; margin-top: 8px;">
+          🔒 Secure 1-click access for ${clientName || 'you'} &bull; Valid for 7 days
+        </p>
       ` : ''}
     `;
     return this.getHtmlShell("Booking Request Received", content);
@@ -801,4 +838,232 @@ export class EmailTemplates {
     `;
     return this.getHtmlShell("Upcoming Event Reminder", content);
   }
+
+  // Booking Portal Access OTP Template
+  static getBookingAccessOtpTemplate(otp: string, orderReference: string): string {
+    const content = `
+      <p>Hello,</p>
+      <p>A request was made to access your booking portal for reference <strong>${orderReference}</strong>.</p>
+      <p>Please enter the 6-digit One-Time Password below to securely open your booking page:</p>
+      <div style="background-color: #f3f4f6; padding: 18px; text-align: center; border-radius: 8px; margin: 25px 0; border: 1px dashed #dc2626;">
+        <span style="color: #dc2626; font-size: 34px; font-weight: 800; letter-spacing: 6px;">${otp}</span>
+      </div>
+      <p style="font-size: 14px; color: #4b5563;">This code is valid for <strong>10 minutes</strong>. Never share this code with anyone.</p>
+      <p style="font-size: 13px; color: #9ca3af; margin-top: 20px;">If you did not request access, you can safely ignore this email.</p>
+    `;
+    return this.getHtmlShell("Your Booking Access Code - UpBeat Entertainment Africa", content);
+  }
+
+  // Booking Accepted with Initial Quote Template
+  static getBookingAcceptedWithQuoteTemplate(data: {
+    clientName: string;
+    djName: string;
+    eventType: string;
+    eventDate: string;
+    currency: string;
+    amount: number;
+    orderReference: string;
+    portalUrl: string;
+  }): string {
+    const content = `
+      <p>Hi <strong>${data.clientName}</strong>,</p>
+      <p>Great news! <strong>${data.djName}</strong> has accepted your booking request for <strong>${data.eventType}</strong> on <strong>${data.eventDate}</strong>.</p>
+      
+      <!-- Prominent Booking Reference Card -->
+      <div style="background-color: #f8fafc; border: 2px dashed #0f172a; border-radius: 8px; padding: 18px; text-align: center; margin: 22px 0;">
+        <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #64748b; font-weight: 700; display: block; margin-bottom: 6px;">Your Official Booking Reference ID</span>
+        <span style="font-family: 'Courier New', Courier, monospace; font-size: 24px; font-weight: 800; color: #0f172a; letter-spacing: 2px; display: block;">${data.orderReference}</span>
+        <p style="margin: 8px 0 0 0; font-size: 12px; color: #64748b; line-height: 1.4;">
+          📌 <strong>Important:</strong> Save this reference code. You can use it at any time to look up your booking, track performance arrangements, and communicate directly with the artist.
+        </p>
+      </div>
+
+      <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin: 20px 0;">
+        <h3 style="margin-top: 0; color: #1e293b; font-size: 16px;">Initial Quote & Details</h3>
+        <p style="margin: 4px 0; font-size: 14px;"><strong>Artist:</strong> ${data.djName}</p>
+        <p style="margin: 4px 0; font-size: 14px;"><strong>Event Date:</strong> ${data.eventDate}</p>
+        <p style="margin: 4px 0; font-size: 14px;"><strong>Initial Quote:</strong> <strong style="color: #166534; font-size: 18px;">${data.currency} ${data.amount.toLocaleString()}</strong></p>
+      </div>
+
+      <p style="font-size: 14px; color: #475569; line-height: 1.6;">
+        Click below to access your secure agreement page directly. You can review the quote, submit a counterproposal, coordinate event logistics, or confirm terms with 1 click.
+      </p>
+
+      <div style="text-align: center; margin: 28px 0 16px 0;">
+        <a href="${data.portalUrl}" style="display: inline-block; padding: 14px 30px; background-color: #0f172a; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 15px; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);">
+          Review Quote & Manage Booking &rarr;
+        </a>
+      </div>
+      <p style="text-align: center; font-size: 11px; color: #94a3b8; margin-top: 8px;">
+        🔒 Direct 1-Click Access for ${data.clientName} &bull; Valid for 7 days on this device
+      </p>
+    `;
+    return this.getHtmlShell(`Booking Accepted by ${data.djName} - Initial Quote Ready`, content);
+  }
+
+  // Booking Message Notification
+  static getBookingNewMessageTemplate(data: {
+    recipientName: string;
+    senderName: string;
+    eventType: string;
+    orderReference: string;
+    portalUrl: string;
+  }): string {
+    const content = `
+      <p>Hi <strong>${data.recipientName}</strong>,</p>
+      <p>You have received a new message from <strong>${data.senderName}</strong> regarding your booking for <strong>${data.eventType}</strong> (Ref: <code>${data.orderReference}</code>).</p>
+      
+      <p style="font-size: 14px; color: #475569; line-height: 1.6;">
+        To protect your privacy and ensure an auditable agreement record, please view and reply to the message on your secure booking portal:
+      </p>
+
+      <div style="text-align: center; margin: 28px 0 16px 0;">
+        <a href="${data.portalUrl}" style="display: inline-block; padding: 13px 26px; background-color: #0f172a; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 14px;">
+          View Message on Booking Portal &rarr;
+        </a>
+      </div>
+    `;
+    return this.getHtmlShell(`New Message from ${data.senderName}`, content);
+  }
+
+  // Quote Proposed Notification
+  static getQuoteProposedTemplate(data: {
+    recipientName: string;
+    proposerName: string;
+    amount: number;
+    currency: string;
+    notes?: string;
+    orderReference: string;
+    portalUrl: string;
+  }): string {
+    const content = `
+      <p>Hi <strong>${data.recipientName}</strong>,</p>
+      <p><strong>${data.proposerName}</strong> has proposed a quote of <strong style="color: #166534; font-size: 16px;">${data.currency} ${data.amount.toLocaleString()}</strong> for your booking.</p>
+      
+      <div style="background-color: #f8fafc; border: 2px dashed #0f172a; border-radius: 8px; padding: 16px; text-align: center; margin: 18px 0;">
+        <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #64748b; font-weight: 700; display: block; margin-bottom: 4px;">Booking Reference ID</span>
+        <span style="font-family: 'Courier New', Courier, monospace; font-size: 22px; font-weight: 800; color: #0f172a; letter-spacing: 2px; display: block;">${data.orderReference}</span>
+        <p style="margin: 6px 0 0 0; font-size: 12px; color: #64748b;">Save this Reference ID to track this booking anytime.</p>
+      </div>
+
+      ${data.notes ? `<p style="font-size: 14px; color: #475569;"><em>Note from ${data.proposerName}: "${data.notes}"</em></p>` : ''}
+      <p style="font-size: 14px; color: #475569; line-height: 1.6;">
+        Please review the proposed quote. You can accept it to finalize the booking agreement or submit a counterproposal.
+      </p>
+      <div style="text-align: center; margin: 28px 0 16px 0;">
+        <a href="${data.portalUrl}" style="display: inline-block; padding: 13px 28px; background-color: #0f172a; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 14px;">
+          Review Quote on Booking Portal &rarr;
+        </a>
+      </div>
+      <p style="text-align: center; font-size: 11px; color: #94a3b8; margin-top: 8px;">
+        🔒 Direct 1-Click Access for ${data.recipientName} &bull; Valid for 7 days
+      </p>
+    `;
+    return this.getHtmlShell(`New Quote Proposed by ${data.proposerName}`, content);
+  }
+
+  // Quote Accepted Notification
+  static getQuoteAcceptedTemplate(data: {
+    recipientName: string;
+    acceptedByName: string;
+    amount: number;
+    currency: string;
+    orderReference: string;
+    portalUrl: string;
+  }): string {
+    const content = `
+      <p>Hi <strong>${data.recipientName}</strong>,</p>
+      <p>The quote of <strong style="color: #166534;">${data.currency} ${data.amount.toLocaleString()}</strong> for booking <code>${data.orderReference}</code> has been accepted by <strong>${data.acceptedByName}</strong>.</p>
+      
+      <div style="background-color: #f8fafc; border: 2px dashed #0f172a; border-radius: 8px; padding: 16px; text-align: center; margin: 18px 0;">
+        <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #64748b; font-weight: 700; display: block; margin-bottom: 4px;">Booking Reference ID</span>
+        <span style="font-family: 'Courier New', Courier, monospace; font-size: 22px; font-weight: 800; color: #0f172a; letter-spacing: 2px; display: block;">${data.orderReference}</span>
+        <p style="margin: 6px 0 0 0; font-size: 12px; color: #64748b;">Save this Reference ID to track this booking anytime.</p>
+      </div>
+
+      <p style="font-size: 14px; color: #475569; line-height: 1.6;">
+        Your booking is now confirmed! The agreed terms and performance details have been recorded in your timestamped agreement snapshot.
+      </p>
+      <div style="text-align: center; margin: 28px 0 16px 0;">
+        <a href="${data.portalUrl}" style="display: inline-block; padding: 13px 26px; background-color: #0f172a; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 14px;">
+          View Agreed Booking &rarr;
+        </a>
+      </div>
+      <p style="text-align: center; font-size: 11px; color: #94a3b8; margin-top: 8px;">
+        🔒 Direct 1-Click Access &bull; Valid for 7 days
+      </p>
+    `;
+    return this.getHtmlShell("Quote Accepted - Booking Confirmed", content);
+  }
+
+  // Completion Confirmation Request
+  static getCompletionConfirmationRequestTemplate(data: {
+    clientName: string;
+    djName: string;
+    eventType: string;
+    portalUrl: string;
+  }): string {
+    const content = `
+      <p>Hi <strong>${data.clientName}</strong>,</p>
+      <p>We hope your <strong>${data.eventType}</strong> with <strong>${data.djName}</strong> went well!</p>
+      <p style="font-size: 14px; color: #475569; line-height: 1.6;">
+        Please take a moment to visit your booking portal to confirm whether the event was successfully completed or report any issue:
+      </p>
+      <div style="text-align: center; margin: 28px 0 16px 0;">
+        <a href="${data.portalUrl}" style="display: inline-block; padding: 13px 26px; background-color: #0f172a; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 14px;">
+          Confirm Completion or Report Issue &rarr;
+        </a>
+      </div>
+    `;
+    return this.getHtmlShell(`Confirm Event Completion - ${data.djName}`, content);
+  }
+
+  // Issue Reported Notification (Sent to DJ & Admin)
+  static getIssueReportedTemplate(data: {
+    recipientName: string;
+    reporterName: string;
+    orderReference: string;
+    description: string;
+    portalUrl: string;
+  }): string {
+    const content = `
+      <p>Hi <strong>${data.recipientName}</strong>,</p>
+      <p>An issue has been reported by <strong>${data.reporterName}</strong> regarding booking reference <code>${data.orderReference}</code>.</p>
+      <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 16px; margin: 20px 0;">
+        <p style="margin: 0; font-size: 14px; color: #991b1b;"><strong>Reported Issue:</strong></p>
+        <p style="margin: 6px 0 0 0; font-size: 14px; color: #374151;">${data.description}</p>
+      </div>
+      <p style="font-size: 14px; color: #475569;">
+        The booking status has been marked for review. Please view the booking details on the portal:
+      </p>
+      <div style="text-align: center; margin: 25px 0;">
+        <a href="${data.portalUrl}" style="display: inline-block; padding: 12px 24px; background-color: #0f172a; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">
+          View Booking Record &rarr;
+        </a>
+      </div>
+    `;
+    return this.getHtmlShell(`Issue Reported for Booking ${data.orderReference}`, content);
+  }
+
+  // Review & Feedback Request
+  static getReviewRequestTemplate(data: {
+    clientName: string;
+    djName: string;
+    portalUrl: string;
+  }): string {
+    const content = `
+      <p>Hi <strong>${data.clientName}</strong>,</p>
+      <p>Thank you for confirming the completion of your event with <strong>${data.djName}</strong>!</p>
+      <p style="font-size: 14px; color: #475569; line-height: 1.6;">
+        How did ${data.djName} do? Your feedback helps other clients and supports the artist. Please leave a rating and review:
+      </p>
+      <div style="text-align: center; margin: 28px 0 16px 0;">
+        <a href="${data.portalUrl}" style="display: inline-block; padding: 13px 26px; background-color: #0f172a; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 14px;">
+          ⭐ Leave a Review &rarr;
+        </a>
+      </div>
+    `;
+    return this.getHtmlShell(`Review Your Experience with ${data.djName}`, content);
+  }
 }
+
