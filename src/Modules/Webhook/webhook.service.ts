@@ -163,19 +163,48 @@ export class WebhookServices {
 
       // Handle Subscription activation
       if (invoice.type === InvoiceType.SUBSCRIPTION && invoice.userId && invoice.planId) {
-        await tx.subscription.upsert({
-          where: { id: invoice.id },
-          update: {
-            status: SubscriptionStatus.active,
-            periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-          },
-          create: {
-            userId: invoice.userId,
-            planId: invoice.planId,
-            status: SubscriptionStatus.active,
-            periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-          },
+        // Dynamic period calculation based on billing cycle (annually: 365 days, monthly: 30 days)
+        const txMeta = (transaction?.metadata as any) || (params.metadata as any) || {};
+        const cycle = txMeta.billingCycle || 'monthly';
+        const durationDays = cycle === 'annually' ? 365 : 30;
+        const newPeriodEnd = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000);
+
+        // Find existing active subscription to update, or create a new one
+        const existingSub = await tx.subscription.findFirst({
+          where: { userId: invoice.userId, status: SubscriptionStatus.active },
+          orderBy: { createdAt: 'desc' },
         });
+
+        if (existingSub) {
+          await tx.subscription.update({
+            where: { id: existingSub.id },
+            data: {
+              planId: invoice.planId,
+              status: SubscriptionStatus.active,
+              periodEnd: newPeriodEnd,
+            },
+          });
+        } else {
+          await tx.subscription.create({
+            data: {
+              userId: invoice.userId,
+              planId: invoice.planId,
+              status: SubscriptionStatus.active,
+              periodEnd: newPeriodEnd,
+            },
+          });
+        }
+
+        // Atomically update Tenant activePlanId & subscriptionStatus inside the transaction
+        if (invoice.tenantId) {
+          await tx.tenant.update({
+            where: { id: invoice.tenantId },
+            data: {
+              subscriptionStatus: SubscriptionStatus.active,
+              activePlanId: invoice.planId,
+            },
+          });
+        }
       }
     });
 

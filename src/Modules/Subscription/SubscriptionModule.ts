@@ -5,7 +5,7 @@ import { SubscriptionController } from "./subscription.controller";
 import { validateRequest } from "@/middleware/validation";
 import { authenticateUser, authorizeRole } from "@/middleware/auth";
 import { UserRole } from "@/prisma/generated/client";
-import { createSubscriptionPlanSchema, updateSubscriptionPlanSchema, subscribeSchema } from "./SubscriptionDTO";
+import { createSubscriptionPlanSchema, updateSubscriptionPlanSchema, subscribeSchema, previewUpgradeSchema } from "./SubscriptionDTO";
 import express from 'express';
 
 export class SubscriptionModule extends BaseModule {
@@ -77,6 +77,14 @@ export class SubscriptionModule extends BaseModule {
       authenticateUser,
       authorizeRole([UserRole.DJ]),
       controller.getMySubscription.bind(controller),
+    );
+
+    this.router.get(
+      "/preview-upgrade",
+      authenticateUser,
+      authorizeRole([UserRole.DJ]),
+      validateRequest(previewUpgradeSchema),
+      controller.previewUpgrade.bind(controller),
     );
 
     this.router.post(

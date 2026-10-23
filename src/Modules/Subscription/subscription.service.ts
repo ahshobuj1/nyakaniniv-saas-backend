@@ -1,17 +1,32 @@
-import { PrismaClient } from '@/prisma/generated/client';
-import { NotFoundError, BadRequestError, AuthorizationError } from '@/core/errors/AppError';
+import {PrismaClient} from '@/prisma/generated/client';
+import {
+  NotFoundError,
+  BadRequestError,
+  AuthorizationError,
+} from '@/core/errors/AppError';
 import axios from 'axios';
-import { CreateSubscriptionPlanDTO, SubscribeDTO, UpdateSubscriptionPlanDTO } from './SubscriptionDTO';
-import { SubscriptionStatus, InvoiceStatus, InvoiceType, PaymentChannel, TransactionStatus } from '@/prisma/generated/client';
-import { IEmailProvider } from '@/providers/EmailProvider';
-import { EmailTemplates } from '@/utils/EmailTemplates';
-import { PaymentProviderResolver } from '@/Modules/PaymentProvider/PaymentProviderResolver';
-import { config } from '@/core/config';
+import {
+  CreateSubscriptionPlanDTO,
+  SubscribeDTO,
+  UpdateSubscriptionPlanDTO,
+} from './SubscriptionDTO';
+import {
+  SubscriptionStatus,
+  InvoiceStatus,
+  InvoiceType,
+  PaymentChannel,
+  TransactionStatus,
+  PaymentGateway,
+} from '@/prisma/generated/client';
+import {IEmailProvider} from '@/providers/EmailProvider';
+import {EmailTemplates} from '@/utils/EmailTemplates';
+import {PaymentProviderResolver} from '@/Modules/PaymentProvider/PaymentProviderResolver';
+import {config} from '@/core/config';
 
 export class SubscriptionServices {
   constructor(
     private prisma: PrismaClient,
-    private emailProvider: IEmailProvider
+    private emailProvider: IEmailProvider,
   ) {}
 
   async createPlan(data: CreateSubscriptionPlanDTO) {
@@ -28,18 +43,18 @@ export class SubscriptionServices {
   }
 
   async getAllPlans(all?: boolean) {
-    const where = all ? {} : { isActive: true };
+    const where = all ? {} : {isActive: true};
     return this.prisma.subscriptionPlan.findMany({
       where,
-      orderBy: { priceMonthly: 'asc' },
+      orderBy: {priceMonthly: 'asc'},
     });
   }
 
   async getMySubscription(userId: string) {
     const subscription = await this.prisma.subscription.findFirst({
-      where: { userId, status: SubscriptionStatus.active },
-      include: { plan: true },
-      orderBy: { createdAt: 'desc' }
+      where: {userId, status: SubscriptionStatus.active},
+      include: {plan: true},
+      orderBy: {createdAt: 'desc'},
     });
 
     if (!subscription) {
@@ -50,80 +65,80 @@ export class SubscriptionServices {
   }
 
   async updatePlan(id: number, data: UpdateSubscriptionPlanDTO) {
-    const existing = await this.prisma.subscriptionPlan.findUnique({ where: { id } });
+    const existing = await this.prisma.subscriptionPlan.findUnique({
+      where: {id},
+    });
     if (!existing) {
       throw new NotFoundError();
     }
 
     return this.prisma.subscriptionPlan.update({
-      where: { id },
+      where: {id},
       data: {
         name: data.name !== undefined ? data.name : existing.name,
-        priceMonthly: data.priceMonthly !== undefined ? data.priceMonthly : existing.priceMonthly,
-        priceAnnually: data.priceAnnually !== undefined ? data.priceAnnually : existing.priceAnnually,
-        discountPercentage: data.discountPercentage !== undefined ? data.discountPercentage : existing.discountPercentage,
-        isActive: data.isActive !== undefined ? data.isActive : existing.isActive,
-        features: data.features !== undefined ? data.features : (existing.features as any),
+        priceMonthly:
+          data.priceMonthly !== undefined
+            ? data.priceMonthly
+            : existing.priceMonthly,
+        priceAnnually:
+          data.priceAnnually !== undefined
+            ? data.priceAnnually
+            : existing.priceAnnually,
+        discountPercentage:
+          data.discountPercentage !== undefined
+            ? data.discountPercentage
+            : existing.discountPercentage,
+        isActive:
+          data.isActive !== undefined ? data.isActive : existing.isActive,
+        features:
+          data.features !== undefined
+            ? data.features
+            : (existing.features as any),
       },
     });
   }
 
   async deletePlan(id: number) {
-    const existing = await this.prisma.subscriptionPlan.findUnique({ where: { id } });
+    const existing = await this.prisma.subscriptionPlan.findUnique({
+      where: {id},
+    });
     if (!existing) {
       throw new NotFoundError();
     }
 
     // Make sure no active subscriptions are linked to this plan before deleting.
     const activeSubs = await this.prisma.subscription.count({
-      where: { planId: id, status: SubscriptionStatus.active }
+      where: {planId: id, status: SubscriptionStatus.active},
     });
 
     if (activeSubs > 0) {
-      throw new BadRequestError('Cannot delete plan with active subscriptions.');
+      throw new BadRequestError(
+        'Cannot delete plan with active subscriptions.',
+      );
     }
 
-    await this.prisma.subscriptionPlan.delete({ where: { id } });
-    return { success: true };
+    await this.prisma.subscriptionPlan.delete({where: {id}});
+    return {success: true};
   }
 
-  async subscribe(userId: string, data: SubscribeDTO) {
-    const plan = await this.prisma.subscriptionPlan.findUnique({ where: { id: data.planId } });
-    if (!plan) {
-      throw new NotFoundError('Subscription plan not found');
+  async previewUpgrade(
+    userId: string,
+    targetPlanId: number,
+    targetCycle: 'monthly' | 'annually',
+  ) {
+    const targetPlan = await this.prisma.subscriptionPlan.findUnique({
+      where: {id: targetPlanId},
+    });
+    if (!targetPlan || !targetPlan.isActive) {
+      throw new NotFoundError('Subscription plan not found or inactive');
     }
 
-    const amountStr = data.billingCycle === 'monthly' ? plan.priceMonthly : plan.priceAnnually;
-    const amount = Number(amountStr) || 0;
-
-    const activeSub = await this.prisma.subscription.findFirst({
-      where: { userId, status: SubscriptionStatus.active }
+    const user = await this.prisma.user.findUnique({
+      where: {id: userId},
+      include: {tenant: true},
     });
 
-    if (activeSub) {
-      if (activeSub.planId === data.planId) {
-        throw new BadRequestError('You are already subscribed to this plan.');
-      } else {
-        throw new BadRequestError('You already have an active subscription. Please cancel your current plan before switching.');
-      }
-    }
-
-    const user = await this.prisma.user.findUnique({ 
-      where: { id: userId },
-      include: { tenant: true }
-    });
-    
-    if (!user || !user.email) {
-       throw new BadRequestError('User email is required for subscription payments');
-    }
-
-    const country = user.tenant?.country || 'KE';
-    const provider = PaymentProviderResolver.resolve({
-      country,
-      operation: 'COLLECTION',
-      requestedGateway: data.gateway,
-    });
-
+    const country = user?.tenant?.country || 'KE';
     const currencyMap: Record<string, string> = {
       NG: 'NGN',
       GH: 'GHS',
@@ -136,6 +151,283 @@ export class SubscriptionServices {
     const countryCode = PaymentProviderResolver.normalizeCountryCode(country);
     const currency = currencyMap[countryCode] || 'KES';
 
+    const targetRawPrice =
+      targetCycle === 'monthly'
+        ? targetPlan.priceMonthly
+        : targetPlan.priceAnnually;
+    const targetPrice = Number(targetRawPrice) || 0;
+
+    const activeSub = await this.prisma.subscription.findFirst({
+      where: {userId, status: SubscriptionStatus.active},
+      include: {plan: true},
+      orderBy: {createdAt: 'desc'},
+    });
+
+    if (!activeSub) {
+      return {
+        isUpgrade: false,
+        isSamePlanAndCycle: false,
+        currentPlan: null,
+        targetPlan: {
+          id: targetPlan.id,
+          name: targetPlan.name,
+          billingCycle: targetCycle,
+          price: targetPrice,
+        },
+        unusedCredit: 0,
+        appliedCredit: 0,
+        amountToPay: targetPrice,
+        currency,
+      };
+    }
+
+    // Determine current plan cycle and paid amount
+    const lastInvoice = await this.prisma.invoice.findFirst({
+      where: {
+        userId,
+        planId: activeSub.planId,
+        type: InvoiceType.SUBSCRIPTION,
+        status: InvoiceStatus.PAID,
+      },
+      orderBy: {createdAt: 'desc'},
+      include: {transactions: true},
+    });
+
+    const lastTx = lastInvoice?.transactions?.[0];
+    const currentCycle: 'monthly' | 'annually' =
+      (lastTx?.metadata as any)?.billingCycle ||
+      (activeSub.periodEnd &&
+      activeSub.periodEnd.getTime() - (activeSub.createdAt?.getTime() || 0) >
+        40 * 86400000
+        ? 'annually'
+        : 'monthly');
+
+    const currentPrice = Number(
+      lastInvoice?.amount ||
+        (currentCycle === 'annually'
+          ? activeSub.plan?.priceAnnually
+          : activeSub.plan?.priceMonthly) ||
+        0,
+    );
+
+    const now = new Date();
+    let remainingDays = 0;
+    const totalDays = currentCycle === 'annually' ? 365 : 30;
+    let unusedCredit = 0;
+
+    if (activeSub.periodEnd && activeSub.periodEnd > now) {
+      const startMs = activeSub.createdAt
+        ? activeSub.createdAt.getTime()
+        : activeSub.periodEnd.getTime() - totalDays * 86400000;
+      const totalMs = Math.max(1, activeSub.periodEnd.getTime() - startMs);
+      const remainingMs = Math.max(
+        0,
+        activeSub.periodEnd.getTime() - now.getTime(),
+      );
+      const ratio = Math.min(1, Math.max(0, remainingMs / totalMs));
+      unusedCredit = Math.round(currentPrice * ratio * 100) / 100;
+      remainingDays = Math.max(0, Math.ceil(remainingMs / 86400000));
+    }
+
+    const isSamePlanAndCycle =
+      activeSub.planId === targetPlan.id && currentCycle === targetCycle;
+    const isDowngradeFromAnnual =
+      currentCycle === 'annually' && targetCycle === 'monthly';
+    const isLowerValueDowngrade = targetPrice < unusedCredit;
+    const isDowngrade =
+      isDowngradeFromAnnual || (isLowerValueDowngrade && !isSamePlanAndCycle);
+
+    const formattedDate = activeSub.periodEnd
+      ? new Date(activeSub.periodEnd).toLocaleDateString('en-GB')
+      : 'end of period';
+    let downgradeMessage: string | null = null;
+    if (isDowngradeFromAnnual) {
+      downgradeMessage = `You currently have an active Annual subscription valid until ${formattedDate}. Annual subscriptions cannot be downgraded to monthly mid-cycle.`;
+    } else if (isLowerValueDowngrade && !isSamePlanAndCycle) {
+      downgradeMessage = `Downgrading to a lower plan tier is not supported mid-cycle. Your current plan remains fully active until ${formattedDate}.`;
+    }
+
+    const amountToPay =
+      isSamePlanAndCycle || isDowngrade
+        ? 0
+        : Math.max(0, Math.round((targetPrice - unusedCredit) * 100) / 100);
+    const appliedCredit =
+      isSamePlanAndCycle || isDowngrade
+        ? 0
+        : Math.min(targetPrice, unusedCredit);
+
+    return {
+      isUpgrade: !isSamePlanAndCycle && !isDowngrade,
+      isSamePlanAndCycle,
+      isDowngrade,
+      downgradeMessage,
+      currentPlan: {
+        id: activeSub.planId,
+        name: activeSub.plan?.name || 'Current Plan',
+        billingCycle: currentCycle,
+        pricePaid: currentPrice,
+        periodEnd: activeSub.periodEnd,
+        remainingDays,
+      },
+      targetPlan: {
+        id: targetPlan.id,
+        name: targetPlan.name,
+        billingCycle: targetCycle,
+        price: targetPrice,
+      },
+      unusedCredit,
+      appliedCredit,
+      amountToPay,
+      currency,
+    };
+  }
+
+  async subscribe(userId: string, data: SubscribeDTO) {
+    const plan = await this.prisma.subscriptionPlan.findUnique({
+      where: {id: data.planId},
+    });
+    if (!plan || !plan.isActive) {
+      throw new NotFoundError('Subscription plan not found or inactive');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: {id: userId},
+      include: {tenant: true},
+    });
+
+    if (!user || !user.email) {
+      throw new BadRequestError(
+        'User email is required for subscription payments',
+      );
+    }
+
+    const country = user.tenant?.country || 'KE';
+    const currencyMap: Record<string, string> = {
+      NG: 'NGN',
+      GH: 'GHS',
+      ZA: 'ZAR',
+      UG: 'UGX',
+      RW: 'RWF',
+      TZ: 'TZS',
+      KE: 'KES',
+    };
+    const countryCode = PaymentProviderResolver.normalizeCountryCode(country);
+    const currency = currencyMap[countryCode] || 'KES';
+
+    // Check upgrade / active subscription status with full proration
+    const preview = await this.previewUpgrade(
+      userId,
+      data.planId,
+      data.billingCycle,
+    );
+
+    if (preview.isSamePlanAndCycle) {
+      throw new BadRequestError(
+        'You are already subscribed to this plan with the same billing cycle.',
+      );
+    }
+
+    if (preview.isDowngrade) {
+      throw new BadRequestError(
+        preview.downgradeMessage ||
+          'Mid-cycle downgrades are not supported. Your current plan remains active until period end.',
+      );
+    }
+
+    const amount = preview.amountToPay;
+    const isInstantUpgrade = preview.isUpgrade && amount === 0;
+
+    // Handle instant upgrade if unused credit covers full target plan price
+    if (isInstantUpgrade) {
+      const activeSub = await this.prisma.subscription.findFirst({
+        where: {userId, status: SubscriptionStatus.active},
+      });
+
+      await this.prisma.$transaction(async (tx) => {
+        const zeroInvoice = await tx.invoice.create({
+          data: {
+            userId,
+            tenantId: user.tenant?.id,
+            planId: plan.id,
+            amount: 0,
+            currencyCode: currency,
+            type: InvoiceType.SUBSCRIPTION,
+            status: InvoiceStatus.PAID,
+          },
+        });
+
+        const zeroRef = `upgrade_zero_${zeroInvoice.id.substring(0, 8)}_${Date.now()}`;
+        await tx.transaction.create({
+          data: {
+            invoiceId: zeroInvoice.id,
+            userId,
+            tenantId: user.tenant?.id,
+            amount: 0,
+            currency,
+            gateway: PaymentGateway.MANUAL,
+            channel: PaymentChannel.UNKNOWN,
+            status: TransactionStatus.SUCCEEDED,
+            gatewayReference: zeroRef,
+            idempotencyKey: zeroRef,
+            grossAmount: 0,
+            djNetEarning: 0,
+            metadata: {
+              isUpgrade: true,
+              billingCycle: data.billingCycle,
+              appliedCredit: preview.appliedCredit,
+              oldPlanId: preview.currentPlan?.id,
+            },
+          },
+        });
+
+        const durationDays = data.billingCycle === 'annually' ? 365 : 30;
+        const newPeriodEnd = new Date(Date.now() + durationDays * 86400000);
+
+        if (activeSub) {
+          await tx.subscription.update({
+            where: {id: activeSub.id},
+            data: {
+              planId: plan.id,
+              status: SubscriptionStatus.active,
+              periodEnd: newPeriodEnd,
+            },
+          });
+        } else {
+          await tx.subscription.create({
+            data: {
+              userId,
+              planId: plan.id,
+              status: SubscriptionStatus.active,
+              periodEnd: newPeriodEnd,
+            },
+          });
+        }
+
+        if (user.tenant?.id) {
+          await tx.tenant.update({
+            where: {id: user.tenant.id},
+            data: {
+              activePlanId: plan.id,
+              subscriptionStatus: SubscriptionStatus.active,
+            },
+          });
+        }
+      });
+
+      return {
+        success: true,
+        url: null,
+        isInstantUpgrade: true,
+        message: 'Plan upgraded successfully using your remaining balance!',
+      };
+    }
+
+    const provider = PaymentProviderResolver.resolve({
+      country,
+      operation: 'COLLECTION',
+      requestedGateway: data.gateway,
+    });
+
     // Create unpaid subscription invoice
     const invoice = await this.prisma.invoice.create({
       data: {
@@ -146,12 +438,20 @@ export class SubscriptionServices {
         currencyCode: currency,
         type: InvoiceType.SUBSCRIPTION,
         status: InvoiceStatus.UNPAID,
-      }
+      },
     });
 
     const reference = `sub_${invoice.id.substring(0, 8)}_${Date.now()}`;
-    const callbackUrl = data.successUrl || `${config.clientUrl}/dashboard/billing?success=true&reference=${reference}`;
-    const cancelUrl = data.cancelUrl || `${config.clientUrl}/dashboard/billing?canceled=true&reference=${reference}`;
+    const callbackUrl =
+      data.successUrl ||
+      `${config.clientUrl}/dashboard/billing?success=true&reference=${reference}`;
+    const cancelUrl =
+      data.cancelUrl ||
+      `${config.clientUrl}/dashboard/billing?canceled=true&reference=${reference}`;
+
+    const paymentDescription = preview.isUpgrade
+      ? `UpBeat Upgrade: ${plan.name} (${data.billingCycle}) - Prorated (Credit: ${currency} ${preview.appliedCredit})`
+      : `UpBeat Subscription: ${plan.name} (${data.billingCycle})`;
 
     const paymentResult = await provider.initializePayment({
       reference,
@@ -159,7 +459,7 @@ export class SubscriptionServices {
       currency,
       email: user.email,
       name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'DJ',
-      description: `UpBeat Subscription: ${plan.name} (${data.billingCycle})`,
+      description: paymentDescription,
       callbackUrl,
       cancelUrl,
       paymentType: 'SUBSCRIPTION',
@@ -169,6 +469,8 @@ export class SubscriptionServices {
         planId: String(plan.id),
         billingCycle: data.billingCycle,
         invoiceId: invoice.id,
+        isUpgrade: preview.isUpgrade,
+        appliedCredit: preview.appliedCredit,
       },
     });
 
@@ -190,16 +492,32 @@ export class SubscriptionServices {
         metadata: {
           planId: plan.id,
           billingCycle: data.billingCycle,
+          isUpgrade: preview.isUpgrade,
+          appliedCredit: preview.appliedCredit,
         },
       },
     });
 
-    return { url: paymentResult.checkoutUrl };
+    return {
+      url: paymentResult.checkoutUrl,
+      isUpgrade: preview.isUpgrade,
+      appliedCredit: preview.appliedCredit,
+      amountToPay: amount,
+    };
   }
 
   getAvailableGateways(country?: string) {
     const c = (country || '').trim().toLowerCase();
-    const isEastAfrica = ['tanzania', 'tz', 'kenya', 'ke', 'uganda', 'ug', 'rwanda', 'rw'].includes(c);
+    const isEastAfrica = [
+      'tanzania',
+      'tz',
+      'kenya',
+      'ke',
+      'uganda',
+      'ug',
+      'rwanda',
+      'rw',
+    ].includes(c);
 
     if (isEastAfrica) {
       return [
@@ -211,18 +529,19 @@ export class SubscriptionServices {
           currencies: ['TZS', 'KES', 'UGX', 'RWF', 'USD'],
           isRecommended: true,
           badge: 'Recommended for East Africa',
-          paymentMethods: ['M-Pesa', 'Tigo Pesa', 'Airtel Money', 'Cards']
+          paymentMethods: ['M-Pesa', 'Tigo Pesa', 'Airtel Money', 'Cards'],
         },
         {
           id: 'paystack',
           name: 'Paystack',
           title: 'Direct Card & Bank Checkout',
-          description: 'Visa, Mastercard, Verve and direct international checkout',
+          description:
+            'Visa, Mastercard, Verve and direct international checkout',
           currencies: ['KES', 'NGN', 'GHS', 'ZAR', 'USD'],
           isRecommended: false,
           badge: 'Debit / Credit Cards',
-          paymentMethods: ['Cards', 'Bank Transfer', 'Apple Pay']
-        }
+          paymentMethods: ['Cards', 'Bank Transfer', 'Apple Pay'],
+        },
       ];
     }
 
@@ -235,7 +554,7 @@ export class SubscriptionServices {
         currencies: ['NGN', 'GHS', 'ZAR', 'KES', 'USD'],
         isRecommended: true,
         badge: 'Recommended',
-        paymentMethods: ['Cards', 'Bank Transfer', 'USSD']
+        paymentMethods: ['Cards', 'Bank Transfer', 'USSD'],
       },
       {
         id: 'pesapal',
@@ -245,8 +564,8 @@ export class SubscriptionServices {
         currencies: ['TZS', 'KES', 'UGX', 'USD'],
         isRecommended: false,
         badge: 'East Africa / Mobile Money',
-        paymentMethods: ['M-Pesa', 'Airtel Money', 'Cards']
-      }
+        paymentMethods: ['M-Pesa', 'Airtel Money', 'Cards'],
+      },
     ];
   }
 
@@ -257,19 +576,23 @@ export class SubscriptionServices {
     country?: string;
   }) {
     const gateway = (data.gateway || '').toLowerCase();
-    const { bankCode, accountNumber, country } = data;
+    const {bankCode, accountNumber, country} = data;
 
     if (!accountNumber || !accountNumber.trim()) {
-      return { valid: false, message: 'Account or phone number is required.' };
+      return {valid: false, message: 'Account or phone number is required.'};
     }
 
     if (gateway === 'paystack') {
       if (!bankCode) {
-        return { valid: false, message: 'Bank selection is required for Paystack account verification.' };
+        return {
+          valid: false,
+          message:
+            'Bank selection is required for Paystack account verification.',
+        };
       }
       const secretKey = process.env.PAYSTACK_SECRET_KEY;
       if (!secretKey) {
-        return { valid: true, accountName: 'Test Verified Account (Dev Mode)' };
+        return {valid: true, accountName: 'Test Verified Account (Dev Mode)'};
       }
 
       try {
@@ -279,7 +602,7 @@ export class SubscriptionServices {
             headers: {
               Authorization: `Bearer ${secretKey}`,
             },
-          }
+          },
         );
         if (response.data?.status && response.data?.data?.account_name) {
           return {
@@ -290,12 +613,15 @@ export class SubscriptionServices {
         } else {
           return {
             valid: false,
-            message: response.data?.message || 'Could not verify account name with bank.',
+            message:
+              response.data?.message ||
+              'Could not verify account name with bank.',
           };
         }
       } catch (err: any) {
-        const errMsg = err.response?.data?.message || 'Invalid account number or bank code.';
-        return { valid: false, message: errMsg };
+        const errMsg =
+          err.response?.data?.message || 'Invalid account number or bank code.';
+        return {valid: false, message: errMsg};
       }
     }
 
@@ -305,19 +631,20 @@ export class SubscriptionServices {
     if (!isDigitsOnly || cleaned.length < 9 || cleaned.length > 13) {
       return {
         valid: false,
-        message: 'Invalid phone number. Mobile money numbers must be 9 to 12 digits (e.g. 0712345678).'
+        message:
+          'Invalid phone number. Mobile money numbers must be 9 to 12 digits (e.g. 0712345678).',
       };
     }
 
     return {
       valid: true,
-      accountName: 'Verified Mobile Money Account'
+      accountName: 'Verified Mobile Money Account',
     };
   }
 
   async cancelSubscription(userId: string) {
     const subscription = await this.prisma.subscription.findFirst({
-      where: { userId, status: SubscriptionStatus.active }
+      where: {userId, status: SubscriptionStatus.active},
     });
 
     if (!subscription) {
@@ -329,25 +656,25 @@ export class SubscriptionServices {
 
     await this.prisma.$transaction(async (tx) => {
       await tx.subscription.update({
-        where: { id: subscription.id },
-        data: { status: SubscriptionStatus.canceled }
+        where: {id: subscription.id},
+        data: {status: SubscriptionStatus.canceled},
       });
-      
+
       await tx.tenant.updateMany({
-        where: { userId },
-        data: { subscriptionStatus: 'canceled' }
+        where: {userId},
+        data: {subscriptionStatus: 'canceled'},
       });
     });
 
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.user.findUnique({where: {id: userId}});
     if (user && user.email) {
       this.emailProvider.sendEmail(
         user.email,
-        "Subscription Canceled - UpBeat Entertainment Africa",
-        EmailTemplates.getSubscriptionCanceledTemplate()
+        'Subscription Canceled - UpBeat Entertainment Africa',
+        EmailTemplates.getSubscriptionCanceledTemplate(),
       );
     }
 
-    return { success: true, message: 'Subscription canceled' };
+    return {success: true, message: 'Subscription canceled'};
   }
 }

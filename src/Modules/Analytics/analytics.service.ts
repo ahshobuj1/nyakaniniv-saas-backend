@@ -116,24 +116,41 @@ export class AnalyticsServices {
     if (!tenant) return null;
 
     const [
-      totalEarnings,
-      pendingInvoices,
+      completedEarnings,
+      pendingBookingAmounts,
       bookingStats,
       recentRequests
     ] = await Promise.all([
-      this.prisma.invoice.aggregate({
-        _sum: { amount: true },
-        where: { tenantId: tenant.id, status: InvoiceStatus.PAID, type: InvoiceType.BOOKING }
+      // 1. Total Earnings: Sum of totalAmount for all COMPLETED bookings
+      this.prisma.booking.aggregate({
+        _sum: { totalAmount: true },
+        where: {
+          tenantId: tenant.id,
+          status: BookingStatus.COMPLETED,
+        }
       }),
-      this.prisma.invoice.aggregate({
-        _sum: { amount: true },
-        where: { tenantId: tenant.id, status: InvoiceStatus.UNPAID, type: InvoiceType.BOOKING }
+      // 2. Pending / In-progress: Sum of totalAmount for confirmed/accepted bookings awaiting completion
+      this.prisma.booking.aggregate({
+        _sum: { totalAmount: true },
+        where: {
+          tenantId: tenant.id,
+          status: {
+            in: [
+              BookingStatus.ACCEPTED,
+              BookingStatus.AWAITING_PAYMENT,
+              BookingStatus.CONFIRMED,
+              BookingStatus.IN_PROGRESS,
+            ]
+          }
+        }
       }),
+      // 3. Status breakdown
       this.prisma.booking.groupBy({
         by: ['status'],
         where: { tenantId: tenant.id },
         _count: true
       }),
+      // 4. Recent Requests
       this.prisma.booking.findMany({
         where: { tenantId: tenant.id },
         take: 10,
@@ -153,13 +170,19 @@ export class AnalyticsServices {
 
     const bookings = {
       pending: bookingStats.find((s: any) => s.status === BookingStatus.PENDING)?._count || 0,
-      accepted: bookingStats.find((s: any) => s.status === BookingStatus.CONFIRMED || s.status === BookingStatus.AWAITING_PAYMENT)?._count || 0,
+      accepted: bookingStats.reduce((sum: number, s: any) => {
+        if ([BookingStatus.ACCEPTED, BookingStatus.AWAITING_PAYMENT, BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS].includes(s.status)) {
+          return sum + s._count;
+        }
+        return sum;
+      }, 0),
       completed: bookingStats.find((s: any) => s.status === BookingStatus.COMPLETED)?._count || 0,
     };
 
     return {
-      totalEarnings: totalEarnings._sum.amount || 0,
-      pendingInvoices: pendingInvoices._sum.amount || 0,
+      totalEarnings: completedEarnings._sum.totalAmount ? Number(completedEarnings._sum.totalAmount) : 0,
+      pendingInvoices: pendingBookingAmounts._sum.totalAmount ? Number(pendingBookingAmounts._sum.totalAmount) : 0,
+      currencyCode: tenant.currencyCode || 'KES',
       bookings,
       recentRequests
     };
@@ -190,9 +213,9 @@ export class AnalyticsServices {
     if (!tenant) return null;
 
     const earningsChart = await this.prisma.$queryRaw`
-      SELECT to_char(DATE_TRUNC('month', created_at), 'YYYY-MM') as month, COALESCE(SUM(amount), 0)::float as amount
-      FROM invoices
-      WHERE tenant_id = CAST(${tenant.id} AS UUID) AND status = 'PAID' AND type = 'BOOKING' AND created_at >= CURRENT_DATE - INTERVAL '12 months'
+      SELECT to_char(DATE_TRUNC('month', created_at), 'YYYY-MM') as month, COALESCE(SUM(total_amount), 0)::float as amount
+      FROM bookings
+      WHERE tenant_id = CAST(${tenant.id} AS UUID) AND status = 'COMPLETED' AND created_at >= CURRENT_DATE - INTERVAL '12 months'
       GROUP BY month
       ORDER BY month ASC;
     `;

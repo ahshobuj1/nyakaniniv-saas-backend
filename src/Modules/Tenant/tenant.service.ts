@@ -142,6 +142,15 @@ export class TenantServices {
         events: {
           orderBy: {eventDate: 'asc'},
         },
+        user: {
+          select: {
+            subscriptions: {
+              where: { status: 'active' },
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+            },
+          },
+        },
       },
     });
 
@@ -149,7 +158,16 @@ export class TenantServices {
       throw new NotFoundError('Tenant profile not found');
     }
 
-    return tenant;
+    const hasActiveSubscription =
+      tenant.subscriptionStatus === 'active' ||
+      Boolean(tenant.user?.subscriptions && tenant.user.subscriptions.length > 0);
+
+    const isPublished = Boolean(tenant.isActive !== false && hasActiveSubscription);
+
+    return {
+      ...tenant,
+      isPublished,
+    };
   }
 
   public async updateTenantProfile(userId: string, data: UpdateTenantDTO) {

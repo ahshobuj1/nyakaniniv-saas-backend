@@ -46,6 +46,17 @@ export const subscribeSchema = {
   }),
 };
 
+export const previewUpgradeSchema = {
+  query: z.object({
+    planId: z.string().regex(/^\d+$/, "planId must be a valid number"),
+    billingCycle: z.enum(['monthly', 'annually']),
+  }),
+};
+
 export type CreateSubscriptionPlanDTO = z.infer<typeof createSubscriptionPlanSchema.body>;
 export type UpdateSubscriptionPlanDTO = z.infer<typeof updateSubscriptionPlanSchema.body>;
 export type SubscribeDTO = z.infer<typeof subscribeSchema.body>;
+export type PreviewUpgradeDTO = {
+  planId: number;
+  billingCycle: 'monthly' | 'annually';
+};

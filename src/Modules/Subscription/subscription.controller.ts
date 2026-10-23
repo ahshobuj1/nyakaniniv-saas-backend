@@ -37,6 +37,14 @@ export class SubscriptionController extends BaseController {
     this.sendResponse(req, res, 'Plan deleted successfully', undefined, null);
   }
 
+  public async previewUpgrade(req: Request, res: Response): Promise<void> {
+    const userId = req.user!.id;
+    const planId = parseInt(String(req.query.planId), 10);
+    const billingCycle = (req.query.billingCycle as 'monthly' | 'annually') || 'monthly';
+    const preview = await this.subscriptionService.previewUpgrade(userId, planId, billingCycle);
+    this.sendResponse(req, res, 'Subscription upgrade preview generated', undefined, preview);
+  }
+
   public async subscribe(req: Request, res: Response): Promise<void> {
     const userId = req.user!.id;
     const result = await this.subscriptionService.subscribe(userId, req.body);

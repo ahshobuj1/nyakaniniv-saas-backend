@@ -3,7 +3,6 @@ import { AppLogger } from '@/core/logging/logger';
 import { AnalyticsServices } from './analytics.service';
 import { AnalyticsController } from './analytics.controller';
 import { authenticateUser, authorizeRole } from '@/middleware/auth';
-import { checkSubscription } from '@/middleware/checkSubscription';
 import { UserRole } from '@/prisma/generated/client';
 
 export class AnalyticsModule extends BaseModule {
@@ -30,17 +29,13 @@ export class AnalyticsModule extends BaseModule {
     // Admin analytics route
     this.router.get('/admin', authenticateUser, authorizeRole([UserRole.SUPER_ADMIN, UserRole.ADMIN]), controller.getAdminAnalytics.bind(controller));
 
-    // Tenant (DJ) analytics route - Requires basic active subscription to view dashboard analytics
-    this.router.get('/tenant', authenticateUser, authorizeRole([UserRole.DJ]), 
-    checkSubscription(), 
-    controller.getTenantAnalytics.bind(controller));
+    // Tenant (DJ) analytics route - Accessible to DJs to view their own stats
+    this.router.get('/tenant', authenticateUser, authorizeRole([UserRole.DJ]), controller.getTenantAnalytics.bind(controller));
 
     // Admin charts route
     this.router.get('/admin/charts', authenticateUser, authorizeRole([UserRole.SUPER_ADMIN, UserRole.ADMIN]), controller.getAdminCharts.bind(controller));
 
     // Tenant (DJ) charts route
-    this.router.get('/tenant/charts', authenticateUser, authorizeRole([UserRole.DJ]), 
-    checkSubscription(), 
-    controller.getTenantCharts.bind(controller));
+    this.router.get('/tenant/charts', authenticateUser, authorizeRole([UserRole.DJ]), controller.getTenantCharts.bind(controller));
   }
 }
