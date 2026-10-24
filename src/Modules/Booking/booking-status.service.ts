@@ -67,6 +67,7 @@ export class BookingStatusService {
     ],
     [BookingStatus.DISPUTED]: [
       BookingStatus.COMPLETED,
+      BookingStatus.CONFIRMED,
       BookingStatus.CANCELLED,
     ],
     [BookingStatus.REJECTED]: [],
@@ -155,6 +156,16 @@ export class BookingStatusService {
 
       // 3. Moving to COMPLETED (Event ended)
       if (targetStatus === BookingStatus.COMPLETED) {
+        if (booking.eventDate && new Date(booking.eventDate).getTime() > Date.now()) {
+          const dateStr = new Date(booking.eventDate).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+          });
+          throw new BadRequestError(
+            `Cannot mark booking as completed before its scheduled date (${dateStr}). The event has not taken place yet.`
+          );
+        }
         updateData.completedAt = new Date();
       }
 

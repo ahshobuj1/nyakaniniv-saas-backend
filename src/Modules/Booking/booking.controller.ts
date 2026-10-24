@@ -322,7 +322,7 @@ export class BookingController extends BaseController {
   // 9. DJ Schedule Query
   public async getDjSchedule(req: Request, res: Response): Promise<void> {
     const userId = req.user!.id;
-    const view = (req.query.view as any) || 'upcoming';
+    const view = req.query.view ? (req.query.view as any) : 'all';
     const schedule = await this.bookingService.getDjSchedule(userId, view);
     this.sendResponse(
       req,

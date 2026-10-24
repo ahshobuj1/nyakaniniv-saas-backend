@@ -31,6 +31,23 @@ export class InvoiceServices {
     return tenant.id;
   }
 
+  private async findMatchingInvoiceIdsBySearch(
+    cleanSearch: string,
+  ): Promise<string[]> {
+    if (!cleanSearch) return [];
+    try {
+      const rawMatches = await this.prisma.$queryRaw<{id: string}[]>`
+        SELECT id FROM invoices WHERE id::text ILIKE ${`%${cleanSearch}%`}
+        UNION
+        SELECT invoice_id as id FROM transactions WHERE invoice_id IS NOT NULL AND id::text ILIKE ${`%${cleanSearch}%`}
+        LIMIT 100
+      `;
+      return rawMatches.map((r) => r.id);
+    } catch {
+      return [];
+    }
+  }
+
   async getMyInvoices(userId: string, query: Record<string, unknown> = {}) {
     const tenantId = await this.getTenantIdByUserId(userId).catch(() => null);
 
@@ -52,28 +69,65 @@ export class InvoiceServices {
       whereClause.type = type.toUpperCase();
     }
 
-    const searchTerm = (
+    const rawSearch = (
       (query?.searchTerm as string) || (query?.search as string)
     )?.trim();
-    if (searchTerm) {
+    const cleanSearch = rawSearch?.replace(/^(inv-|#)/i, '').trim();
+    if (cleanSearch) {
+      const matchedInvoiceIds =
+        await this.findMatchingInvoiceIdsBySearch(cleanSearch);
+      const searchConditions: any[] = [
+        // 1. Transactions (Gateway Reference, Idempotency Key)
+        {
+          transactions: {
+            some: {
+              OR: [
+                {
+                  gatewayReference: {
+                    contains: cleanSearch,
+                    mode: 'insensitive',
+                  },
+                },
+                {
+                  idempotencyKey: {
+                    contains: cleanSearch,
+                    mode: 'insensitive',
+                  },
+                },
+              ],
+            },
+          },
+        },
+
+        // 2. Client / User Email
+        {
+          booking: {
+            client: {
+              email: {
+                contains: cleanSearch,
+                mode: 'insensitive',
+              },
+            },
+          },
+        },
+        {
+          user: {
+            email: {
+              contains: cleanSearch,
+              mode: 'insensitive',
+            },
+          },
+        },
+      ];
+
+      if (matchedInvoiceIds.length > 0) {
+        searchConditions.unshift({id: {in: matchedInvoiceIds}});
+      }
+
       whereClause.AND = [
         ...(whereClause.AND || []),
         {
-          OR: [
-            {id: {contains: searchTerm, mode: 'insensitive'}},
-            {user: {email: {contains: searchTerm, mode: 'insensitive'}}},
-            {
-              booking: {
-                client: {email: {contains: searchTerm, mode: 'insensitive'}},
-              },
-            },
-            {
-              booking: {
-                client: {name: {contains: searchTerm, mode: 'insensitive'}},
-              },
-            },
-            {booking: {eventType: {contains: searchTerm, mode: 'insensitive'}}},
-          ],
+          OR: searchConditions,
         },
       ];
     }
@@ -123,6 +177,9 @@ export class InvoiceServices {
         createdAt: inv.createdAt,
         gateway: latestTx?.gateway || null,
         method: latestTx?.channel || (inv.status === 'PAID' ? 'ONLINE' : null),
+        transactionId: latestTx?.id || null,
+        gatewayReference: latestTx?.gatewayReference || null,
+        transactions: inv.transactions,
       };
 
       if (isBooking && inv.booking) {
@@ -171,30 +228,62 @@ export class InvoiceServices {
 
   async getAllInvoices(query: Record<string, unknown> = {}) {
     const invQuery = new QueryBuilder(this.prisma.invoice, query)
-      .search(['id'])
       .filter()
       .sort()
       .pagination();
 
     // 1. Complex Search
-    const searchTerm = (
+    const rawSearch = (
       (query?.searchTerm as string) || (query?.search as string)
-    )?.toLowerCase();
-    if (searchTerm) {
-      invQuery.prismaArgs.where.OR = [
-        {id: {contains: searchTerm, mode: 'insensitive'}},
-        {user: {email: {contains: searchTerm, mode: 'insensitive'}}},
+    )?.trim();
+    const cleanSearch = rawSearch?.replace(/^(inv-|#)/i, '').trim();
+    if (cleanSearch) {
+      const matchedInvoiceIds =
+        await this.findMatchingInvoiceIdsBySearch(cleanSearch);
+      const searchConditions: any[] = [
+        // 1. Transactions (Gateway Reference, Idempotency Key)
+        {
+          transactions: {
+            some: {
+              OR: [
+                {
+                  gatewayReference: {
+                    contains: cleanSearch,
+                    mode: 'insensitive',
+                  },
+                },
+                {idempotencyKey: {contains: cleanSearch, mode: 'insensitive'}},
+              ],
+            },
+          },
+        },
+
+        // 2. Client / User Email
         {
           booking: {
-            client: {email: {contains: searchTerm, mode: 'insensitive'}},
+            client: {
+              email: {
+                contains: cleanSearch,
+                mode: 'insensitive',
+              },
+            },
           },
         },
         {
-          booking: {
-            client: {name: {contains: searchTerm, mode: 'insensitive'}},
+          user: {
+            email: {
+              contains: cleanSearch,
+              mode: 'insensitive',
+            },
           },
         },
       ];
+
+      if (matchedInvoiceIds.length > 0) {
+        searchConditions.unshift({id: {in: matchedInvoiceIds}});
+      }
+
+      invQuery.prismaArgs.where.OR = searchConditions;
     }
 
     // 2. Filter by status
@@ -244,6 +333,9 @@ export class InvoiceServices {
         createdAt: inv.createdAt,
         gateway: latestTx?.gateway || null,
         method: latestTx?.channel || (inv.status === 'PAID' ? 'ONLINE' : null),
+        transactionId: latestTx?.id || null,
+        gatewayReference: latestTx?.gatewayReference || null,
+        transactions: inv.transactions,
       };
 
       if (isBooking && inv.booking) {
@@ -322,10 +414,13 @@ export class InvoiceServices {
           orderBy: {createdAt: 'desc'},
           take: 1,
           select: {
+            id: true,
             gateway: true,
             channel: true,
             cardBrand: true,
             cardLast4: true,
+            gatewayReference: true,
+            idempotencyKey: true,
             createdAt: true,
           },
         },
@@ -348,6 +443,8 @@ export class InvoiceServices {
       createdAt: invoice.createdAt,
       gateway: mainTx?.gateway || null,
       method: mainTx?.channel || (invoice.status === 'PAID' ? 'ONLINE' : null),
+      transactionId: mainTx?.id || null,
+      gatewayReference: mainTx?.gatewayReference || null,
     };
 
     if (mainTx?.cardBrand) result.cardBrand = mainTx.cardBrand;

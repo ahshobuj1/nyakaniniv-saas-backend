@@ -1252,9 +1252,27 @@ export class BookingServices {
       throw new NotFoundError('Booking not found');
     }
 
+    const existingDetails =
+      typeof booking.eventDetails === 'object' && booking.eventDetails !== null
+        ? { ...(booking.eventDetails as Record<string, any>) }
+        : {};
+
+    const directPaymentReport = {
+      method: data.method,
+      reference: data.reference ? data.reference.trim() : undefined,
+      notes: data.notes ? data.notes.trim() : undefined,
+      reportedAt: new Date().toISOString(),
+    };
+
     const updated = await this.prisma.booking.update({
       where: {id: bookingId},
-      data: {directPaymentStatus: DirectPaymentStatus.CLIENT_REPORTED},
+      data: {
+        directPaymentStatus: DirectPaymentStatus.CLIENT_REPORTED,
+        eventDetails: {
+          ...existingDetails,
+          directPaymentReport,
+        },
+      },
     });
 
     await this.prisma.bookingAuditEvent.create({
@@ -1300,9 +1318,20 @@ export class BookingServices {
       throw new NotFoundError('Booking not found');
     }
 
+    const existingDetails =
+      typeof booking.eventDetails === 'object' && booking.eventDetails !== null
+        ? { ...(booking.eventDetails as Record<string, any>) }
+        : {};
+
     const updated = await this.prisma.booking.update({
       where: {id: bookingId},
-      data: {directPaymentStatus: DirectPaymentStatus.DJ_CONFIRMED},
+      data: {
+        directPaymentStatus: DirectPaymentStatus.DJ_CONFIRMED,
+        eventDetails: {
+          ...existingDetails,
+          directPaymentConfirmedAt: new Date().toISOString(),
+        },
+      },
     });
 
     await this.prisma.bookingAuditEvent.create({
@@ -1336,6 +1365,17 @@ export class BookingServices {
 
     if (!booking) {
       throw new NotFoundError('Booking not found');
+    }
+
+    if (booking.eventDate && new Date(booking.eventDate).getTime() > Date.now()) {
+      const dateStr = new Date(booking.eventDate).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+      throw new BadRequestError(
+        `Cannot request event completion before its scheduled date (${dateStr}). The event has not taken place yet.`
+      );
     }
 
     const now = new Date();
@@ -1390,13 +1430,35 @@ export class BookingServices {
       throw new NotFoundError('Booking not found');
     }
 
+    if (booking.eventDate && new Date(booking.eventDate).getTime() > Date.now()) {
+      const dateStr = new Date(booking.eventDate).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+      throw new BadRequestError(
+        `Cannot mark event as completed before its scheduled date (${dateStr}). The event has not taken place yet.`
+      );
+    }
+
     const now = new Date();
+    const existingDetails =
+      typeof booking.eventDetails === 'object' && booking.eventDetails !== null
+        ? { ...(booking.eventDetails as Record<string, any>) }
+        : {};
+
+    if (booking.status === BookingStatus.DISPUTED) {
+      existingDetails.issueResolvedAt = now.toISOString();
+      existingDetails.issueResolution = 'CONFIRMED_COMPLETED';
+    }
+
     const updated = await this.prisma.booking.update({
       where: {id: bookingId},
       data: {
         status: BookingStatus.COMPLETED,
         completionConfirmedAt: now,
         completedAt: now,
+        eventDetails: existingDetails,
       },
     });
 
@@ -1549,19 +1611,16 @@ export class BookingServices {
   async getDjSchedule(
     userId: string,
     view:
+      | 'all'
       | 'today'
       | 'tomorrow'
       | 'upcoming'
       | 'past'
-      | 'needs_action' = 'upcoming',
+      | 'needs_action' = 'all',
   ) {
     const tenantId = await this.getTenantIdByUserId(userId);
-    const tenant = await this.prisma.tenant.findUnique({where: {id: tenantId}});
-    const targetTz = tenant?.timezone || 'Africa/Nairobi';
 
     const now = new Date();
-    // Calculate start & end of today and tomorrow in target timezone
-    // Approximate UTC bounds
     const startOfToday = new Date(
       now.getFullYear(),
       now.getMonth(),
@@ -1573,6 +1632,90 @@ export class BookingServices {
     const startOfDayAfterTomorrow = new Date(
       startOfTomorrow.getTime() + 24 * 60 * 60 * 1000,
     );
+
+    const includeRelations = {
+      client: true,
+      quotes: {orderBy: {version: 'desc' as const}, take: 1},
+      agreement: true,
+      review: true,
+    };
+
+    if (view === 'all') {
+      const [today, tomorrow, upcoming, past, needsAction] = await Promise.all([
+        this.prisma.booking.findMany({
+          where: {
+            tenantId,
+            eventDate: {gte: startOfToday, lt: startOfTomorrow},
+            status: {notIn: [BookingStatus.CANCELLED, BookingStatus.REJECTED]},
+          },
+          include: includeRelations,
+          orderBy: {eventDate: 'asc'},
+        }),
+        this.prisma.booking.findMany({
+          where: {
+            tenantId,
+            eventDate: {gte: startOfTomorrow, lt: startOfDayAfterTomorrow},
+            status: {notIn: [BookingStatus.CANCELLED, BookingStatus.REJECTED]},
+          },
+          include: includeRelations,
+          orderBy: {eventDate: 'asc'},
+        }),
+        this.prisma.booking.findMany({
+          where: {
+            tenantId,
+            eventDate: {gte: startOfToday},
+            status: {
+              in: [
+                BookingStatus.ACCEPTED,
+                BookingStatus.AWAITING_PAYMENT,
+                BookingStatus.CONFIRMED,
+                BookingStatus.IN_PROGRESS,
+              ],
+            },
+          },
+          include: includeRelations,
+          orderBy: {eventDate: 'asc'},
+        }),
+        this.prisma.booking.findMany({
+          where: {
+            tenantId,
+            OR: [
+              {status: BookingStatus.COMPLETED},
+              {eventDate: {lt: startOfToday}},
+            ],
+            status: {notIn: [BookingStatus.CANCELLED, BookingStatus.REJECTED]},
+          },
+          include: includeRelations,
+          orderBy: {eventDate: 'desc'},
+          take: 50,
+        }),
+        this.prisma.booking.findMany({
+          where: {
+            tenantId,
+            OR: [
+              {status: BookingStatus.PENDING},
+              {status: BookingStatus.DISPUTED},
+              {directPaymentStatus: DirectPaymentStatus.CLIENT_REPORTED},
+              {
+                status: {in: [BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS]},
+                eventDate: {lt: now},
+                completedAt: null,
+              },
+            ],
+          },
+          include: includeRelations,
+          orderBy: {createdAt: 'desc'},
+        }),
+      ]);
+
+      return {
+        today,
+        tomorrow,
+        upcoming,
+        past,
+        needsAction,
+      };
+    }
 
     const baseWhere: any = {tenantId};
 
@@ -1593,6 +1736,7 @@ export class BookingServices {
       baseWhere.status = {
         in: [
           BookingStatus.ACCEPTED,
+          BookingStatus.AWAITING_PAYMENT,
           BookingStatus.CONFIRMED,
           BookingStatus.IN_PROGRESS,
         ],
@@ -1609,7 +1753,7 @@ export class BookingServices {
         {
           status: {in: [BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS]},
           eventDate: {lt: now},
-          completionRequestedAt: null,
+          completedAt: null,
         },
       ];
     }

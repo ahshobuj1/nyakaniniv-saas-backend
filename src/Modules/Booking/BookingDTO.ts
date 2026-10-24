@@ -126,6 +126,7 @@ export const rejectQuoteSchema = {
 export const reportDirectPaymentSchema = {
   body: z.object({
     method: z.enum(['CASH', 'BANK_TRANSFER', 'MOBILE_MONEY', 'OTHER']),
+    reference: z.string().max(100, 'Reference cannot exceed 100 characters').optional(),
     notes: z.string().max(500, 'Notes cannot exceed 500 characters').optional(),
   }),
 };

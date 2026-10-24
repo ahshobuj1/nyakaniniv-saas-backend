@@ -1,9 +1,5 @@
 import {PrismaClient} from '@/prisma/generated/client';
-import {
-  NotFoundError,
-  BadRequestError,
-  AuthorizationError,
-} from '@/core/errors/AppError';
+import {NotFoundError, BadRequestError} from '@/core/errors/AppError';
 import axios from 'axios';
 import {
   CreateSubscriptionPlanDTO,
@@ -19,7 +15,6 @@ import {
   PaymentGateway,
 } from '@/prisma/generated/client';
 import {IEmailProvider} from '@/providers/EmailProvider';
-import {EmailTemplates} from '@/utils/EmailTemplates';
 import {PaymentProviderResolver} from '@/Modules/PaymentProvider/PaymentProviderResolver';
 import {config} from '@/core/config';
 
@@ -203,11 +198,9 @@ export class SubscriptionServices {
         : 'monthly');
 
     const currentPrice = Number(
-      lastInvoice?.amount ||
-        (currentCycle === 'annually'
-          ? activeSub.plan?.priceAnnually
-          : activeSub.plan?.priceMonthly) ||
-        0,
+      (currentCycle === 'annually'
+        ? activeSub.plan?.priceAnnually
+        : activeSub.plan?.priceMonthly) || 0,
     );
 
     const now = new Date();
@@ -216,26 +209,34 @@ export class SubscriptionServices {
     let unusedCredit = 0;
 
     if (activeSub.periodEnd && activeSub.periodEnd > now) {
-      const startMs = activeSub.createdAt
-        ? activeSub.createdAt.getTime()
-        : activeSub.periodEnd.getTime() - totalDays * 86400000;
-      const totalMs = Math.max(1, activeSub.periodEnd.getTime() - startMs);
       const remainingMs = Math.max(
         0,
         activeSub.periodEnd.getTime() - now.getTime(),
       );
-      const ratio = Math.min(1, Math.max(0, remainingMs / totalMs));
+
+      // Any started day (whether used for 1 second or 23h59m) counts as consumed today.
+      // Therefore, only fully unstarted remaining days are credited.
+      const fullDaysRemaining = Math.floor(remainingMs / 86400000);
+      remainingDays = Math.max(0, Math.min(totalDays - 1, fullDaysRemaining));
+      const ratio = remainingDays / totalDays;
       unusedCredit = Math.round(currentPrice * ratio * 100) / 100;
-      remainingDays = Math.max(0, Math.ceil(remainingMs / 86400000));
     }
 
     const isSamePlanAndCycle =
       activeSub.planId === targetPlan.id && currentCycle === targetCycle;
     const isDowngradeFromAnnual =
       currentCycle === 'annually' && targetCycle === 'monthly';
-    const isLowerValueDowngrade = targetPrice < unusedCredit;
+
+    const currentTierPrice = Number(activeSub.plan?.priceMonthly || 0);
+    const targetTierPrice = Number(targetPlan.priceMonthly || 0);
+    const isLowerTier =
+      currentCycle === 'annually' && targetCycle === 'annually'
+        ? Number(targetPlan.priceAnnually || 0) <
+          Number(activeSub.plan?.priceAnnually || 0)
+        : targetTierPrice < currentTierPrice;
+
     const isDowngrade =
-      isDowngradeFromAnnual || (isLowerValueDowngrade && !isSamePlanAndCycle);
+      isDowngradeFromAnnual || (isLowerTier && !isSamePlanAndCycle);
 
     const formattedDate = activeSub.periodEnd
       ? new Date(activeSub.periodEnd).toLocaleDateString('en-GB')
@@ -243,7 +244,7 @@ export class SubscriptionServices {
     let downgradeMessage: string | null = null;
     if (isDowngradeFromAnnual) {
       downgradeMessage = `You currently have an active Annual subscription valid until ${formattedDate}. Annual subscriptions cannot be downgraded to monthly mid-cycle.`;
-    } else if (isLowerValueDowngrade && !isSamePlanAndCycle) {
+    } else if (isLowerTier && !isSamePlanAndCycle) {
       downgradeMessage = `Downgrading to a lower plan tier is not supported mid-cycle. Your current plan remains fully active until ${formattedDate}.`;
     }
 
@@ -642,39 +643,9 @@ export class SubscriptionServices {
     };
   }
 
-  async cancelSubscription(userId: string) {
-    const subscription = await this.prisma.subscription.findFirst({
-      where: {userId, status: SubscriptionStatus.active},
-    });
-
-    if (!subscription) {
-      throw new NotFoundError();
-    }
-
-    // If we have Paystack recurring integrations in the future, cancel here.
-    // For now, we rely on local DB cancellation.
-
-    await this.prisma.$transaction(async (tx) => {
-      await tx.subscription.update({
-        where: {id: subscription.id},
-        data: {status: SubscriptionStatus.canceled},
-      });
-
-      await tx.tenant.updateMany({
-        where: {userId},
-        data: {subscriptionStatus: 'canceled'},
-      });
-    });
-
-    const user = await this.prisma.user.findUnique({where: {id: userId}});
-    if (user && user.email) {
-      this.emailProvider.sendEmail(
-        user.email,
-        'Subscription Canceled - UpBeat Entertainment Africa',
-        EmailTemplates.getSubscriptionCanceledTemplate(),
-      );
-    }
-
-    return {success: true, message: 'Subscription canceled'};
+  async cancelSubscription(_userId: string) {
+    throw new BadRequestError(
+      'Subscription cancellation is disabled. Subscriptions are prepaid and remain active for their full paid duration without auto-renewal.',
+    );
   }
 }

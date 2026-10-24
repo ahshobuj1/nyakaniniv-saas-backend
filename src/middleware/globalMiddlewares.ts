@@ -1,17 +1,17 @@
 // src/middleware/globalMiddlewares.ts
-import express, { Express, Request, Response, NextFunction } from "express";
-import cors from "cors";
-import helmet from "helmet";
-import rateLimit from "express-rate-limit";
-import cookieParser from "cookie-parser";
-import { config } from "@/core/config";
-import { requestLogger } from "./requestLogger";
-import { requestId } from "./requestId";
-import { TimeoutError, RateLimitError } from "@/core/errors/AppError";
-import timeout from "connect-timeout";
+import express, {Express, Request, Response, NextFunction} from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import cookieParser from 'cookie-parser';
+import {config} from '@/core/config';
+import {requestLogger} from './requestLogger';
+import {requestId} from './requestId';
+import {TimeoutError, RateLimitError} from '@/core/errors/AppError';
+import timeout from 'connect-timeout';
 
 export function setupGlobalMiddlewares(app: Express) {
-  app.set("trust proxy", 1);
+  app.set('trust proxy', 1);
   app.use(requestId());
   app.use(
     helmet({
@@ -30,15 +30,19 @@ export function setupGlobalMiddlewares(app: Express) {
           const hostname = originUrl.hostname;
 
           // Allow local development and multi-tenant testing
-          if (hostname === "localhost" || hostname.endsWith(".localhost")) {
+          if (hostname === 'localhost' || hostname.endsWith('.localhost')) {
             return callback(null, true);
           }
 
           // Allow production domains and wildcard subdomains
-          const allowedDomains = ["upbeatafrica.com", "upbeat.africa", "deejay.africa"];
-          
+          const allowedDomains = [
+            'upbeatafrica.com',
+            'upbeat.africa',
+            'deejay.africa',
+          ];
+
           const isAllowedDomain = allowedDomains.some(
-            domain => hostname === domain || hostname.endsWith(`.${domain}`)
+            (domain) => hostname === domain || hostname.endsWith(`.${domain}`),
           );
 
           if (isAllowedDomain) {
@@ -46,14 +50,17 @@ export function setupGlobalMiddlewares(app: Express) {
           }
 
           // Fallback to explicit env allowed list
-          const allowedList = config.security.cors.allowedOrigins?.split(",").map((url) => url.trim()) || [];
+          const allowedList =
+            config.security.cors.allowedOrigins
+              ?.split(',')
+              .map((url) => url.trim()) || [];
           if (allowedList.includes(origin)) {
             return callback(null, true);
           }
 
-          callback(new Error("Not allowed by CORS"));
+          callback(new Error('Not allowed by CORS'));
         } catch (error) {
-          callback(new Error("Invalid Origin"));
+          callback(new Error('Invalid Origin'));
         }
       },
       credentials: true,
@@ -64,14 +71,14 @@ export function setupGlobalMiddlewares(app: Express) {
   app.use(cookieParser());
   app.use(
     express.json({
-      limit: "10mb",
+      limit: '10mb',
       verify: (req, res, buf) => {
         // Save the raw buffer to req.rawBody for Stripe Webhook signature validation
         (req as any).rawBody = buf;
       },
-    })
+    }),
   );
-  app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+  app.use(express.urlencoded({extended: true, limit: '10mb'}));
   app.use(requestLogger());
 
   // Timeout middleware
@@ -83,14 +90,14 @@ export function setupGlobalMiddlewares(app: Express) {
     req.abortSignal = controller.signal;
 
     // Trigger AbortSignal if connect-timeout fires
-    req.on("timeout", () => {
-      controller.abort("Request Timeout");
+    req.on('timeout', () => {
+      controller.abort('Request Timeout');
     });
 
     // Trigger AbortSignal if the user closes their browser tab early
-    res.on("close", () => {
+    res.on('close', () => {
       if (!res.writableFinished && !req.timedout) {
-        controller.abort("Client Disconnected");
+        controller.abort('Client Disconnected');
       }
     });
 
@@ -104,9 +111,9 @@ export function setupGlobalMiddlewares(app: Express) {
         windowMs: config.security.rateLimit.windowMs,
         max: config.security.rateLimit.max,
         handler: (_: Request, __: Response, next: NextFunction) => {
-          next(new RateLimitError("Too many requests"));
+          next(new RateLimitError('Too many requests'));
         },
-        skip: (req) => req.path === "/health",
+        skip: (req) => req.path === '/health',
       }),
     );
   }
