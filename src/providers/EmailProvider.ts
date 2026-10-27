@@ -46,12 +46,20 @@ export class EmailProvider implements InfrastructureProvider<IEmailProvider>, IE
       if (html.includes('cid:upbeat-logo')) {
         const hasLogoAttachment = emailAttachments.some(a => a.cid === 'upbeat-logo');
         if (!hasLogoAttachment) {
-          const logoPath = path.resolve(process.cwd(), "public/logo.png");
-          if (fs.existsSync(logoPath)) {
+          const candidatePaths = [
+            path.resolve(__dirname, '../../public/logo.png'),
+            path.resolve(__dirname, '../public/logo.png'),
+            path.resolve(process.cwd(), 'public/logo.png'),
+            path.resolve(process.cwd(), 'nyakaniniv-saas-backend/public/logo.png'),
+          ];
+          const logoPath = candidatePaths.find(p => fs.existsSync(p));
+          if (logoPath) {
             emailAttachments.push({
               filename: 'logo.png',
               path: logoPath,
               cid: 'upbeat-logo',
+              contentType: 'image/png',
+              contentDisposition: 'inline',
             });
           }
         }

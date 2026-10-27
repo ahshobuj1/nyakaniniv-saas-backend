@@ -18,6 +18,7 @@ import { PaymentProviderResolver } from '@/Modules/PaymentProvider/PaymentProvid
 import { BookingStatusService } from '@/Modules/Booking/booking-status.service';
 import { CancellationPolicyService } from '@/Modules/Booking/cancellation-policy.service';
 import { WalletService } from '@/Modules/Wallet/wallet.service';
+import { FxService } from '@/core/services/FxService';
 
 /** Booking states that can no longer accept a payment. */
 const DEAD_BOOKING_STATUSES: BookingStatus[] = [BookingStatus.CANCELLED, BookingStatus.EXPIRED, BookingStatus.REJECTED];
@@ -117,8 +118,35 @@ export class WebhookServices {
       return { received: true, message: 'Invoice not found' };
     }
 
-    const amountPaid = params.amountPaid || Number(invoice.amount);
-    const currency = params.currency || invoice.currencyCode || 'KES';
+    const invoiceAmount = Number(invoice.amount);
+    const invoiceCurrency = (invoice.currencyCode || 'KES').trim().toUpperCase();
+    const paidAmount = params.amountPaid !== undefined && params.amountPaid !== null ? Number(params.amountPaid) : invoiceAmount;
+    const paidCurrency = (params.currency || invoiceCurrency).trim().toUpperCase();
+
+    // Requirement 4: Verify that the paid amount and currency match the invoice
+    if (paidCurrency !== invoiceCurrency) {
+      this.logger.error(
+        `Payment verification failed: Currency mismatch for invoice ${invoice.id}. Expected ${invoiceCurrency}, received ${paidCurrency}`,
+      );
+      throw new BadRequestError(
+        `Currency mismatch: Invoice is in ${invoiceCurrency} but payment was in ${paidCurrency}`,
+      );
+    }
+
+    if (Math.abs(paidAmount - invoiceAmount) > 0.05) {
+      this.logger.error(
+        `Payment verification failed: Amount mismatch for invoice ${invoice.id}. Expected ${invoiceAmount}, received ${paidAmount}`,
+      );
+      throw new BadRequestError(
+        `Amount mismatch: Invoice amount is ${invoiceAmount} but payment received was ${paidAmount}`,
+      );
+    }
+
+    // Requirement 4: Set amountUsd and fxRate only once (idempotent permanent snapshot)
+    let fxData: { amountUsd: number; fxRate: number } | null = null;
+    if (!transaction || transaction.amountUsd === null || transaction.amountUsd === undefined) {
+      fxData = FxService.calculateUsdAmount(paidAmount, paidCurrency);
+    }
 
     // 3. Atomic financial update: Invoice -> PAID, Transaction -> SUCCEEDED
     await this.prisma.$transaction(async (tx) => {
@@ -134,9 +162,10 @@ export class WebhookServices {
             status: TransactionStatus.SUCCEEDED,
             channel: params.channel || transaction.channel || PaymentChannel.UNKNOWN,
             gatewayReference: params.reference,
-            grossAmount: amountPaid,
-            djNetEarning: amountPaid,
-            remainingAmount: amountPaid,
+            grossAmount: paidAmount,
+            djNetEarning: paidAmount,
+            remainingAmount: paidAmount,
+            ...(fxData ? { amountUsd: fxData.amountUsd, fxRate: fxData.fxRate } : {}),
           },
         });
       } else {
@@ -145,16 +174,18 @@ export class WebhookServices {
             invoiceId: invoice.id,
             userId: invoice.userId,
             tenantId: invoice.tenantId,
-            amount: amountPaid,
-            currency,
+            amount: paidAmount,
+            currency: paidCurrency,
             gateway: params.gateway,
             channel: params.channel || PaymentChannel.UNKNOWN,
             status: TransactionStatus.SUCCEEDED,
             gatewayReference: params.reference,
             idempotencyKey: params.reference,
-            grossAmount: amountPaid,
-            djNetEarning: amountPaid,
-            remainingAmount: amountPaid,
+            grossAmount: paidAmount,
+            djNetEarning: paidAmount,
+            remainingAmount: paidAmount,
+            amountUsd: fxData?.amountUsd,
+            fxRate: fxData?.fxRate,
             metadata: params.metadata,
           },
           include: { invoice: { include: { booking: { include: { client: true } } } } },

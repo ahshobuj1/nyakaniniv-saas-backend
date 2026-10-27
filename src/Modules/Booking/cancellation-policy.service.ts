@@ -160,7 +160,11 @@ export class CancellationPolicyService {
       });
 
       const transaction = await this.findRefundableTransaction(bookingId);
-      outcome = await this.refundTransaction(transaction, refundCalc.refundAmount, booking.currencyCode || 'KES');
+      outcome = await this.refundTransaction(
+        transaction,
+        refundCalc.refundAmount,
+        transaction?.currency || booking.currencyCode || 'USD',
+      );
     }
 
     await this.saveDetails(
@@ -236,7 +240,11 @@ export class CancellationPolicyService {
       }
 
       const transaction = await this.findRefundableTransaction(booking.id);
-      const outcome = await this.refundTransaction(transaction, amount, booking.currencyCode || 'KES');
+      const outcome = await this.refundTransaction(
+        transaction,
+        amount,
+        transaction?.currency || booking.currencyCode || 'USD',
+      );
 
       await this.saveDetails(
         booking.id,

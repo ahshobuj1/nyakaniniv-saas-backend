@@ -96,6 +96,7 @@ model SubscriptionPlan {
   isActive           Boolean        @default(true) @map("is_active")
   invoices           Invoice[]
   subscriptions      Subscription[]
+  prices             SubscriptionPlanPrice[]
 
   @@map("subscription_plans")
 }
@@ -258,6 +259,8 @@ model Transaction {
   platformFee      Decimal?          @default(0.00) @map("platform_fee") @db.Decimal(18, 2)
   refundedAmount   Decimal?          @default(0.00) @map("refunded_amount") @db.Decimal(18, 2)
   remainingAmount  Decimal?          @default(0.00) @map("remaining_amount") @db.Decimal(18, 2)
+  amountUsd        Decimal?          @map("amount_usd") @db.Decimal(18, 2)
+  fxRate           Decimal?          @map("fx_rate") @db.Decimal(18, 8)
   invoice          Invoice?          @relation(fields: [invoiceId], references: [id])
   tenant           Tenant?           @relation(fields: [tenantId], references: [id])
   user             User?             @relation(fields: [userId], references: [id])
@@ -704,3 +707,19 @@ model BookingReview {
   @@index([tenantId])
   @@map("booking_reviews")
 }
+
+model SubscriptionPlanPrice {
+  id            String           @id @default(uuid()) @db.Uuid
+  planId        Int              @map("plan_id")
+  currencyCode  String           @map("currency_code") @db.VarChar(10)
+  priceMonthly  Decimal          @map("price_monthly") @db.Decimal(10, 2)
+  priceAnnually Decimal          @map("price_annually") @db.Decimal(10, 2)
+  isActive      Boolean          @default(true) @map("is_active")
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
+  plan          SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, currencyCode])
+  @@map("subscription_plan_prices")
+}
+

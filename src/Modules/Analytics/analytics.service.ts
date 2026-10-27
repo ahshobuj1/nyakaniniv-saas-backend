@@ -1,14 +1,18 @@
-import { PrismaClient, BookingStatus, SubscriptionStatus, InvoiceStatus, InvoiceType } from '@/prisma/generated/client';
+import { PrismaClient, BookingStatus, SubscriptionStatus, InvoiceStatus, InvoiceType, TransactionStatus } from '@/prisma/generated/client';
 
 export class AnalyticsServices {
   constructor(private prisma: PrismaClient) {}
 
-  async getAdminAnalytics() {
+  async getAdminAnalytics(filterCurrency?: string) {
+    const isSpecificCurrency = !!filterCurrency && filterCurrency.trim().toUpperCase() !== 'ALL';
+    const targetCurrency = isSpecificCurrency ? filterCurrency!.trim().toUpperCase() : 'USD';
+
     const [
       totalUsers,
       totalTenants,
       totalBookings,
-      revenueInvoices,
+      revenueAggregation,
+      currencyBreakdown,
       subscriptionStats,
       subscriptionPlans,
       recentBookings
@@ -16,13 +20,36 @@ export class AnalyticsServices {
       this.prisma.user.count(),
       this.prisma.tenant.count(),
       this.prisma.booking.count(),
-      this.prisma.invoice.aggregate({
-        _sum: { amount: true },
-        where: { status: InvoiceStatus.PAID, type: InvoiceType.SUBSCRIPTION }
+      // Aggregate revenue based on filter (USD consolidated or specific currency)
+      isSpecificCurrency
+        ? this.prisma.transaction.aggregate({
+            _sum: { amount: true, amountUsd: true },
+            where: {
+              status: TransactionStatus.SUCCEEDED,
+              currency: targetCurrency,
+              invoice: { type: InvoiceType.SUBSCRIPTION },
+            },
+          })
+        : this.prisma.transaction.aggregate({
+            _sum: { amount: true, amountUsd: true },
+            where: {
+              status: TransactionStatus.SUCCEEDED,
+              invoice: { type: InvoiceType.SUBSCRIPTION },
+            },
+          }),
+      // Breakdown across all currencies
+      this.prisma.transaction.groupBy({
+        by: ['currency'],
+        where: {
+          status: TransactionStatus.SUCCEEDED,
+          invoice: { type: InvoiceType.SUBSCRIPTION },
+        },
+        _sum: { amount: true, amountUsd: true },
+        _count: true,
       }),
       this.prisma.subscription.groupBy({
         by: ['status'],
-        _count: true
+        _count: true,
       }),
       this.prisma.subscriptionPlan.findMany({
         select: {
@@ -33,11 +60,11 @@ export class AnalyticsServices {
           isActive: true,
           subscriptions: {
             select: {
-              status: true
-            }
-          }
+              status: true,
+            },
+          },
         },
-        orderBy: { priceMonthly: 'asc' }
+        orderBy: { priceMonthly: 'asc' },
       }),
       this.prisma.booking.findMany({
         take: 10,
@@ -72,7 +99,7 @@ export class AnalyticsServices {
             },
           },
         },
-      })
+      }),
     ]);
 
     const activeCount = subscriptionStats.find((s: any) => s.status === SubscriptionStatus.active)?._count || 0;
@@ -89,7 +116,7 @@ export class AnalyticsServices {
         priceAnnually: Number(plan.priceAnnually || 0),
         isActive: plan.isActive,
         activeSubscribers,
-        totalPurchases
+        totalPurchases,
       };
     });
 
@@ -98,16 +125,29 @@ export class AnalyticsServices {
       canceled: canceledCount,
       pastDue: pastDueCount,
       total: activeCount + canceledCount + pastDueCount,
-      byPlan
+      byPlan,
     };
+
+    const totalRevenue = isSpecificCurrency
+      ? Number(revenueAggregation._sum.amount || 0)
+      : Number(revenueAggregation._sum.amountUsd || 0);
+
+    const revenueByCurrency = currencyBreakdown.map((item) => ({
+      currency: item.currency,
+      amount: Number(item._sum.amount || 0),
+      amountUsd: Number(item._sum.amountUsd || 0),
+      count: item._count,
+    }));
 
     return {
       totalUsers,
       totalTenants,
       totalBookings,
-      totalRevenue: revenueInvoices._sum.amount || 0,
+      reportingCurrency: targetCurrency,
+      totalRevenue,
+      revenueByCurrency,
       subscriptions,
-      recentBookings
+      recentBookings,
     };
   }
 

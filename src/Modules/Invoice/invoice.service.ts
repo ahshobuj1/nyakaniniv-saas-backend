@@ -171,7 +171,11 @@ export class InvoiceServices {
       const item: any = {
         id: inv.id,
         amount: Number(inv.amount),
-        currencyCode: inv.currencyCode || 'KES',
+        currencyCode:
+          inv.currencyCode ||
+          latestTx?.currency ||
+          inv.booking?.currencyCode ||
+          'USD',
         status: inv.status,
         type: inv.type,
         createdAt: inv.createdAt,
@@ -439,7 +443,7 @@ export class InvoiceServices {
       type: invoice.type,
       status: invoice.status,
       amount: Number(invoice.amount),
-      currencyCode: invoice.currencyCode || 'KES',
+      currencyCode: invoice.currencyCode || 'USD',
       createdAt: invoice.createdAt,
       gateway: mainTx?.gateway || null,
       method: mainTx?.channel || (invoice.status === 'PAID' ? 'ONLINE' : null),
@@ -946,7 +950,8 @@ export class InvoiceServices {
           .fillColor(textMain)
           .text(description, boxX, currentY);
 
-        const displayCurrency = mainTx?.currency || 'KES';
+        const displayCurrency =
+          mainTx?.currency || invoice.currencyCode || 'USD';
         const displayAmount = Number(mainTx?.amount || invoice.amount).toFixed(
           2,
         );

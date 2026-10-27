@@ -9,7 +9,8 @@ export class AnalyticsController extends BaseController {
 
   getAdminAnalytics = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const result = await this.analyticsServices.getAdminAnalytics();
+      const currency = req.query.currency as string | undefined;
+      const result = await this.analyticsServices.getAdminAnalytics(currency);
       return this.sendResponse(req, res, 'Admin analytics retrieved successfully', 200, result);
     } catch (error) {
       next(error);

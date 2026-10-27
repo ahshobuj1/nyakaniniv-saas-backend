@@ -122,7 +122,11 @@ export class BookingStatusService {
       // 1. Moving to ACCEPTED (DJ accepted booking and provided initial quote)
       if (targetStatus === BookingStatus.ACCEPTED || targetStatus === BookingStatus.AWAITING_PAYMENT) {
         const amount = input.totalAmount ?? Number(booking.totalAmount);
-        const currency = input.currencyCode || booking.currencyCode || 'KES';
+        const currency =
+          input.currencyCode ||
+          booking.currencyCode ||
+          booking.tenant?.currencyCode ||
+          'USD';
 
         if (amount > 0) {
           updateData.totalAmount = amount;
@@ -244,7 +248,8 @@ export class BookingStatusService {
     const clientName = updated.client?.name || 'Client';
     const eventName = updated.eventType || 'Event';
     const amount = Number(updated.totalAmount || 0);
-    const currency = updated.currencyCode || 'KES';
+    const currency =
+      updated.currencyCode || updated.tenant?.currencyCode || 'USD';
     const orderReference = updated.orderReference || `UB-${updated.id.slice(0, 8).toUpperCase()}`;
     const targetTz = updated.eventTimezone || updated.tenant?.timezone || 'Africa/Nairobi';
 

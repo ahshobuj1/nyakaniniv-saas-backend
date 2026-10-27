@@ -143,6 +143,13 @@ export class EmailCronJobs {
         data: { status: SubscriptionStatus.past_due }
       });
 
+      if (sub.userId) {
+        await this.prisma.tenant.updateMany({
+          where: { userId: sub.userId },
+          data: { subscriptionStatus: SubscriptionStatus.past_due }
+        });
+      }
+
       if (sub.user?.email) {
         this.emailProvider.sendEmail(
           sub.user.email,

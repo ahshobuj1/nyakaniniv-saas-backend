@@ -108,8 +108,8 @@ export class BookingServices {
     const tenant = await this.prisma.tenant.findUnique({
       where: {id: data.tenantId},
     });
-    if (!tenant) {
-      throw new NotFoundError('DJ profile not found');
+    if (!tenant || tenant.isActive === false || tenant.subscriptionStatus !== 'active') {
+      throw new BadRequestError('This DJ is currently unavailable or awaiting subscription renewal.');
     }
 
     const stageName = tenant.stageName || 'DJ';
@@ -924,7 +924,11 @@ export class BookingServices {
       );
     }
 
-    const currency = data.currency || booking.currencyCode || 'KES';
+    const currency =
+      data.currency ||
+      booking.currencyCode ||
+      booking.tenant?.currencyCode ||
+      'USD';
 
     // Calculate next version
     const lastQuote = await this.prisma.bookingQuote.findFirst({

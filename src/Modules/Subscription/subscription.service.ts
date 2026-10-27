@@ -5,6 +5,8 @@ import {
   CreateSubscriptionPlanDTO,
   SubscribeDTO,
   UpdateSubscriptionPlanDTO,
+  SetPlanPriceDTO,
+  ToggleCurrencyDTO,
 } from './SubscriptionDTO';
 import {
   SubscriptionStatus,
@@ -24,6 +26,73 @@ export class SubscriptionServices {
     private emailProvider: IEmailProvider,
   ) {}
 
+  /**
+   * Validate requested currency against Currency table on server.
+   * If not enabled or not found, fallback to USD (Requirement 2).
+   */
+  async resolveValidCurrency(requestedCurrency?: string, country?: string | null): Promise<string> {
+    let candidate = (requestedCurrency || '').trim().toUpperCase();
+    if (!candidate && country) {
+      candidate = PaymentProviderResolver.resolveCurrencyFromCountry(country);
+    }
+
+    if (candidate) {
+      const dbCurr = await this.prisma.currency.findUnique({
+        where: { code: candidate },
+      });
+      if (dbCurr && dbCurr.isActive) {
+        return candidate;
+      }
+    }
+
+    // Server-side fallback: If requested currency is not enabled or unknown, use USD
+    return 'USD';
+  }
+
+  /**
+   * Resolve active plan price for a given currency and billing cycle.
+   * If requested currency has no active price, fall back to USD.
+   */
+  async resolvePlanPrice(
+    planId: number,
+    targetCurrency: string,
+    cycle: 'monthly' | 'annually',
+  ): Promise<{ amount: number; currency: string; isFallback: boolean }> {
+    // 1. Check if active price exists for targetCurrency
+    let planPrice = await this.prisma.subscriptionPlanPrice.findFirst({
+      where: { planId, currencyCode: targetCurrency, isActive: true },
+    });
+    let finalCurrency = targetCurrency;
+
+    // 2. If no active price for requested currency, fall back to USD
+    if (!planPrice && targetCurrency !== 'USD') {
+      planPrice = await this.prisma.subscriptionPlanPrice.findFirst({
+        where: { planId, currencyCode: 'USD', isActive: true },
+      });
+      if (planPrice) {
+        finalCurrency = 'USD';
+      }
+    }
+
+    // 3. Return resolved price
+    if (planPrice) {
+      const amount = cycle === 'monthly' ? Number(planPrice.priceMonthly) : Number(planPrice.priceAnnually);
+      return { amount, currency: finalCurrency, isFallback: finalCurrency !== targetCurrency };
+    }
+
+    // 4. Ultimate fallback to USD
+    const usdPrice = await this.prisma.subscriptionPlanPrice.findFirst({
+      where: { planId, currencyCode: 'USD', isActive: true },
+    });
+    if (usdPrice) {
+      const amount = cycle === 'monthly' ? Number(usdPrice.priceMonthly) : Number(usdPrice.priceAnnually);
+      return { amount, currency: 'USD', isFallback: true };
+    }
+    const plan = await this.prisma.subscriptionPlan.findUnique({ where: { id: planId } });
+    const amount = cycle === 'monthly' ? Number(plan?.priceMonthly || 0) : Number(plan?.priceAnnually || 0);
+    return { amount, currency: 'USD', isFallback: true };
+  }
+
   async createPlan(data: CreateSubscriptionPlanDTO) {
     const plan = await this.prisma.subscriptionPlan.create({
       data: {
@@ -37,12 +106,51 @@ export class SubscriptionServices {
     return plan;
   }
 
-  async getAllPlans(all?: boolean) {
+  async getAllPlans(currency?: string, all?: boolean) {
     const where = all ? {} : {isActive: true};
-    return this.prisma.subscriptionPlan.findMany({
+    const targetCurrency = await this.resolveValidCurrency(currency);
+
+    const plans = await this.prisma.subscriptionPlan.findMany({
       where,
-      orderBy: {priceMonthly: 'asc'},
+      include: {
+        prices: {
+          where: { isActive: true },
+        },
+      },
+      orderBy: {id: 'asc'},
     });
+
+    const mappedPlans = plans.map((plan) => {
+      let activePrice = plan.prices.find((p) => p.currencyCode === targetCurrency);
+      let displayCurrency = targetCurrency;
+
+      if (!activePrice && targetCurrency !== 'USD') {
+        activePrice = plan.prices.find((p) => p.currencyCode === 'USD');
+        if (activePrice) displayCurrency = 'USD';
+      }
+
+      const priceMonthly = activePrice
+        ? Number(activePrice.priceMonthly)
+        : Number(plan.priceMonthly || 0);
+
+      const priceAnnually = activePrice
+        ? Number(activePrice.priceAnnually)
+        : Number(plan.priceAnnually || 0);
+
+      if (!activePrice && !plan.prices.length) {
+        displayCurrency = 'USD';
+      }
+
+      return {
+        ...plan,
+        currencyCode: displayCurrency,
+        priceMonthly,
+        priceAnnually,
+        availablePrices: plan.prices,
+      };
+    });
+
+    return mappedPlans.sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
   }
 
   async getMySubscription(userId: string) {
@@ -120,6 +228,7 @@ export class SubscriptionServices {
     userId: string,
     targetPlanId: number,
     targetCycle: 'monthly' | 'annually',
+    requestedCurrency?: string,
   ) {
     const targetPlan = await this.prisma.subscriptionPlan.findUnique({
       where: {id: targetPlanId},
@@ -133,24 +242,16 @@ export class SubscriptionServices {
       include: {tenant: true},
     });
 
-    const country = user?.tenant?.country || 'KE';
-    const currencyMap: Record<string, string> = {
-      NG: 'NGN',
-      GH: 'GHS',
-      ZA: 'ZAR',
-      UG: 'UGX',
-      RW: 'RWF',
-      TZ: 'TZS',
-      KE: 'KES',
-    };
-    const countryCode = PaymentProviderResolver.normalizeCountryCode(country);
-    const currency = currencyMap[countryCode] || 'KES';
+    const currency = await this.resolveValidCurrency(
+      requestedCurrency,
+      user?.tenant?.country,
+    );
 
-    const targetRawPrice =
-      targetCycle === 'monthly'
-        ? targetPlan.priceMonthly
-        : targetPlan.priceAnnually;
-    const targetPrice = Number(targetRawPrice) || 0;
+    const { amount: targetPrice } = await this.resolvePlanPrice(
+      targetPlanId,
+      currency,
+      targetCycle,
+    );
 
     const activeSub = await this.prisma.subscription.findFirst({
       where: {userId, status: SubscriptionStatus.active},
@@ -197,11 +298,23 @@ export class SubscriptionServices {
         ? 'annually'
         : 'monthly');
 
-    const currentPrice = Number(
-      (currentCycle === 'annually'
-        ? activeSub.plan?.priceAnnually
-        : activeSub.plan?.priceMonthly) || 0,
-    );
+    let currentPrice = 0;
+    if (activeSub.planId) {
+      if (
+        lastInvoice &&
+        lastInvoice.currencyCode === currency &&
+        Number(lastInvoice.amount) > 0
+      ) {
+        currentPrice = Number(lastInvoice.amount);
+      } else {
+        const resolvedCurrent = await this.resolvePlanPrice(
+          activeSub.planId,
+          currency,
+          currentCycle,
+        );
+        currentPrice = resolvedCurrent.amount;
+      }
+    }
 
     const now = new Date();
     let remainingDays = 0;
@@ -227,13 +340,7 @@ export class SubscriptionServices {
     const isDowngradeFromAnnual =
       currentCycle === 'annually' && targetCycle === 'monthly';
 
-    const currentTierPrice = Number(activeSub.plan?.priceMonthly || 0);
-    const targetTierPrice = Number(targetPlan.priceMonthly || 0);
-    const isLowerTier =
-      currentCycle === 'annually' && targetCycle === 'annually'
-        ? Number(targetPlan.priceAnnually || 0) <
-          Number(activeSub.plan?.priceAnnually || 0)
-        : targetTierPrice < currentTierPrice;
+    const isLowerTier = targetPlan.id < (activeSub.planId || 0);
 
     const isDowngrade =
       isDowngradeFromAnnual || (isLowerTier && !isSamePlanAndCycle);
@@ -303,23 +410,22 @@ export class SubscriptionServices {
     }
 
     const country = user.tenant?.country || 'KE';
-    const currencyMap: Record<string, string> = {
-      NG: 'NGN',
-      GH: 'GHS',
-      ZA: 'ZAR',
-      UG: 'UGX',
-      RW: 'RWF',
-      TZ: 'TZS',
-      KE: 'KES',
-    };
-    const countryCode = PaymentProviderResolver.normalizeCountryCode(country);
-    const currency = currencyMap[countryCode] || 'KES';
+
+    // Requirement 2: Server-side validation. If requested currency is not enabled or no active price for plan, use USD.
+    const targetCurrency = await this.resolveValidCurrency(data.currency, country);
+    const { currency: finalCurrency } = await this.resolvePlanPrice(
+      data.planId,
+      targetCurrency,
+      data.billingCycle,
+    );
+    const currency = finalCurrency;
 
     // Check upgrade / active subscription status with full proration
     const preview = await this.previewUpgrade(
       userId,
       data.planId,
       data.billingCycle,
+      finalCurrency,
     );
 
     if (preview.isSamePlanAndCycle) {
@@ -423,11 +529,12 @@ export class SubscriptionServices {
       };
     }
 
-    const provider = PaymentProviderResolver.resolve({
-      country,
-      operation: 'COLLECTION',
-      requestedGateway: data.gateway,
-    });
+    // Requirement 3: Use simple config map (not hardcoded in service logic).
+    // For now: USD → Paystack, KES → Pesapal. Other currencies → Flutterwave.
+    const provider = PaymentProviderResolver.resolveByCurrency(
+      currency,
+      data.gateway,
+    );
 
     // Create unpaid subscription invoice
     const invoice = await this.prisma.invoice.create({
@@ -525,7 +632,7 @@ export class SubscriptionServices {
         {
           id: 'pesapal',
           name: 'Pesapal',
-          title: 'Mobile Money & Cards (East Africa)',
+          title: 'Pesapal Mobile Money & Cards (East Africa)',
           description: 'M-Pesa, Tigo Pesa, Airtel Money, Visa & Mastercard',
           currencies: ['TZS', 'KES', 'UGX', 'RWF', 'USD'],
           isRecommended: true,
@@ -538,31 +645,51 @@ export class SubscriptionServices {
           title: 'Direct Card & Bank Checkout',
           description:
             'Visa, Mastercard, Verve and direct international checkout',
-          currencies: ['KES', 'NGN', 'GHS', 'ZAR', 'USD'],
+          currencies: ['KES', 'USD'],
           isRecommended: false,
           badge: 'Debit / Credit Cards',
           paymentMethods: ['Cards', 'Bank Transfer', 'Apple Pay'],
+        },
+        {
+          id: 'flutterwave',
+          name: 'Flutterwave',
+          title: 'Flutterwave Pan-African',
+          description: 'Cards, Mobile Money & Bank Transfer',
+          currencies: ['KES', 'UGX', 'TZS', 'RWF', 'USD'],
+          isRecommended: false,
+          badge: 'Cards & Mobile Money',
+          paymentMethods: ['Mobile Money', 'Cards', 'Bank Transfer'],
         },
       ];
     }
 
     return [
       {
+        id: 'flutterwave',
+        name: 'Flutterwave',
+        title: 'Flutterwave Pan-African',
+        description: 'Cards, Mobile Money (MTN/Vodafone/M-Pesa), Bank Transfer',
+        currencies: ['GHS', 'NGN', 'ZAR', 'USD', 'KES', 'TZS', 'UGX'],
+        isRecommended: true,
+        badge: 'Recommended for West & Southern Africa',
+        paymentMethods: ['Mobile Money', 'Cards', 'Bank Transfer', 'Apple Pay'],
+      },
+      {
         id: 'paystack',
         name: 'Paystack',
         title: 'Paystack Payment Gateway',
-        description: 'Cards, Bank Transfer, USSD & Apple Pay',
+        description: 'Cards, Bank Transfer & Apple Pay',
         currencies: ['NGN', 'GHS', 'ZAR', 'KES', 'USD'],
-        isRecommended: true,
-        badge: 'Recommended',
-        paymentMethods: ['Cards', 'Bank Transfer', 'USSD'],
+        isRecommended: false,
+        badge: 'Card Checkout',
+        paymentMethods: ['Cards', 'Bank Transfer', 'Apple Pay'],
       },
       {
         id: 'pesapal',
         name: 'Pesapal',
-        title: 'Pesapal Gateway',
-        description: 'Mobile Money and Regional Cards',
-        currencies: ['TZS', 'KES', 'UGX', 'USD'],
+        title: 'Pesapal Mobile Money & Cards',
+        description: 'M-Pesa, Airtel Money, Visa & Mastercard',
+        currencies: ['KES', 'TZS', 'UGX', 'USD', 'RWF'],
         isRecommended: false,
         badge: 'East Africa / Mobile Money',
         paymentMethods: ['M-Pesa', 'Airtel Money', 'Cards'],
@@ -647,5 +774,67 @@ export class SubscriptionServices {
     throw new BadRequestError(
       'Subscription cancellation is disabled. Subscriptions are prepaid and remain active for their full paid duration without auto-renewal.',
     );
+  }
+
+  // --- Multi-Currency Admin & Public Price Management ---
+
+  async getCurrencies() {
+    return this.prisma.currency.findMany({
+      orderBy: [{ isActive: 'desc' }, { code: 'asc' }],
+    });
+  }
+
+  async getPlanPrices(planId: number) {
+    const plan = await this.prisma.subscriptionPlan.findUnique({
+      where: { id: planId },
+    });
+    if (!plan) throw new NotFoundError('Subscription plan not found');
+
+    return this.prisma.subscriptionPlanPrice.findMany({
+      where: { planId },
+      orderBy: { currencyCode: 'asc' },
+    });
+  }
+
+  async setPlanPrice(planId: number, currencyCode: string, data: SetPlanPriceDTO) {
+    const plan = await this.prisma.subscriptionPlan.findUnique({
+      where: { id: planId },
+    });
+    if (!plan) throw new NotFoundError('Subscription plan not found');
+
+    const code = currencyCode.trim().toUpperCase();
+    return this.prisma.subscriptionPlanPrice.upsert({
+      where: {
+        planId_currencyCode: {
+          planId,
+          currencyCode: code,
+        },
+      },
+      update: {
+        priceMonthly: data.priceMonthly,
+        priceAnnually: data.priceAnnually,
+        isActive: data.isActive !== undefined ? data.isActive : true,
+      },
+      create: {
+        planId,
+        currencyCode: code,
+        priceMonthly: data.priceMonthly,
+        priceAnnually: data.priceAnnually,
+        isActive: data.isActive !== undefined ? data.isActive : true,
+      },
+    });
+  }
+
+  async toggleCurrency(code: string, isActive: boolean) {
+    const upperCode = code.trim().toUpperCase();
+    const existing = await this.prisma.currency.findUnique({
+      where: { code: upperCode },
+    });
+    if (!existing) throw new NotFoundError(`Currency ${upperCode} not found`);
+
+    return this.prisma.currency.update({
+      where: { code: upperCode },
+      data: { isActive },
+    });
   }
 }

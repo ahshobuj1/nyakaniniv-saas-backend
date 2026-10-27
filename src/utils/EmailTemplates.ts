@@ -21,6 +21,7 @@ export class EmailTemplates {
   }
 
   public static getHtmlShell(title: string, content: string): string {
+    const logoUrl = 'https://upbeat.africa/auth.logo.png';
     return `
       <!DOCTYPE html>
       <html lang="en">
@@ -29,35 +30,36 @@ export class EmailTemplates {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>${title}</title>
       </head>
-      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f3f4f6; margin: 0; padding: 0; -webkit-font-smoothing: antialiased;">
-        <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f3f4f6; padding: 30px 15px;">
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 0; -webkit-font-smoothing: antialiased;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8fafc; padding: 48px 16px; margin: 0;">
           <tr>
             <td align="center">
-              <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05); max-width: 600px; margin: 0 auto; overflow: hidden; border: 1px solid #e5e7eb;">
-                <!-- Header -->
+              <!-- Top Branding Header (Outside card, Paystack style) -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 520px; margin: 0 auto 28px auto;">
                 <tr>
-                  <td style="background-color: #111827; padding: 30px 24px; text-align: center; border-bottom: 3px solid #dc2626;">
-                    <table width="100%" cellpadding="0" cellspacing="0">
-                      <tr>
-                        <td align="center">
-                          <img src="cid:upbeat-logo" alt="UpBeat Entertainment Africa" style="height: 46px; max-height: 46px; width: auto; display: block; margin: 0 auto 10px auto;" />
-                          <h1 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: 0.5px;">UpBeat Entertainment Africa</h1>
-                        </td>
-                      </tr>
-                    </table>
+                  <td align="center">
+                    <a href="https://upbeat.africa" target="_blank" style="text-decoration: none; display: inline-block;">
+                      <img src="${logoUrl}" alt="UpBeat Africa" style="height: 52px; max-height: 52px; width: auto; display: block; border: 0;" />
+                    </a>
                   </td>
                 </tr>
-                <!-- Body -->
+              </table>
+
+              <!-- Main Card Container (Pristine White Card) -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); max-width: 520px; margin: 0 auto; border: 1px solid #e2e8f0; overflow: hidden;">
                 <tr>
-                  <td style="padding: 36px 30px; color: #374151; line-height: 1.65; font-size: 15px;">
+                  <td style="padding: 40px 36px; color: #374151; line-height: 1.6; font-size: 15px;">
                     ${content}
                   </td>
                 </tr>
-                <!-- Footer -->
+              </table>
+
+              <!-- Bottom Footer -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 520px; margin: 32px auto 0 auto;">
                 <tr>
-                  <td style="background-color: #f9fafb; padding: 24px 20px; text-align: center; color: #6b7280; font-size: 13px; border-top: 1px solid #e5e7eb;">
-                    <p style="margin: 0 0 6px 0; font-weight: 600; color: #111827;">UpBeat Entertainment Africa</p>
-                    <p style="margin: 0; line-height: 1.4;">&copy; ${new Date().getFullYear()} UpBeat Entertainment Africa. All rights reserved.</p>
+                  <td align="center" style="color: #9ca3af; font-size: 12px; line-height: 1.6; text-align: center;">
+                    <p style="margin: 0 0 4px 0; color: #9ca3af;">&copy; ${new Date().getFullYear()} UpBeat Entertainment Africa. All rights reserved.</p>
+                    <p style="margin: 0; color: #9ca3af;">The Premier Live Entertainment Platform for Africa</p>
                   </td>
                 </tr>
               </table>
@@ -72,11 +74,16 @@ export class EmailTemplates {
   // Case 1 & 3: User Registration OTP / Resend OTP
   static getOtpTemplate(otp: string): string {
     const content = `
-      <p>Here is your One-Time Password (OTP) to verify your account.</p>
-      <div style="background-color: #f3f4f6; padding: 15px; text-align: center; border-radius: 6px; margin: 25px 0;">
-        <span style="color: #dc2626; font-size: 32px; font-weight: bold; letter-spacing: 4px;">${otp}</span>
+      <h2 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 700; color: #111827;">Account Verification</h2>
+      <p style="margin: 0 0 16px 0; font-size: 15px; color: #4b5563; line-height: 1.6;">
+        Here is your One-Time Password (OTP) to verify your UpBeat Africa account:
+      </p>
+      <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 20px; text-align: center; border-radius: 8px; margin: 24px 0;">
+        <span style="color: #111827; font-size: 34px; font-weight: 800; letter-spacing: 6px; font-family: monospace;">${otp}</span>
       </div>
-      <p>This code will expire in <strong>15 minutes</strong>.</p>
+      <p style="margin: 0; font-size: 13px; color: #6b7280; line-height: 1.5;">
+        This code will expire in <strong>15 minutes</strong>. If you did not request this, you can safely ignore this email.
+      </p>
     `;
     return this.getHtmlShell("Verify your Email Address", content);
   }
@@ -84,25 +91,39 @@ export class EmailTemplates {
   // Booking Client Verification OTP
   static getBookingVerificationOtpTemplate(clientName: string, otp: string, djName: string, eventType: string): string {
     const content = `
-      <p>Hello <strong>${clientName}</strong>,</p>
-      <p>Thank you for initiating a booking request for <strong>${djName}</strong> (${eventType}).</p>
-      <p>To verify your email address and confirm your booking request, please enter the 6-digit verification code below:</p>
-      <div style="background-color: #f3f4f6; padding: 18px; text-align: center; border-radius: 8px; margin: 25px 0; border: 1px dashed #dc2626;">
-        <span style="color: #dc2626; font-size: 34px; font-weight: 800; letter-spacing: 6px;">${otp}</span>
+      <h2 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 700; color: #111827;">Hi ${clientName},</h2>
+      <p style="margin: 0 0 16px 0; font-size: 15px; color: #4b5563; line-height: 1.6;">
+        Thank you for initiating a booking request for <strong>${djName}</strong> (${eventType}).
+      </p>
+      <p style="margin: 0 0 20px 0; font-size: 15px; color: #4b5563; line-height: 1.6;">
+        Please enter the 6-digit verification code below to confirm your request:
+      </p>
+      <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 20px; text-align: center; border-radius: 8px; margin: 24px 0;">
+        <span style="color: #111827; font-size: 34px; font-weight: 800; letter-spacing: 6px; font-family: monospace;">${otp}</span>
       </div>
-      <p style="font-size: 14px; color: #4b5563;">This code is valid for <strong>10 minutes</strong>. Once verified, your booking request will be officially submitted to ${djName}.</p>
-      <p style="font-size: 13px; color: #9ca3af; margin-top: 20px;">If you did not initiate this booking, please disregard this email.</p>
+      <p style="margin: 0 0 12px 0; font-size: 13px; color: #6b7280; line-height: 1.5;">
+        This code is valid for <strong>10 minutes</strong>. Once verified, your booking request will be officially submitted to ${djName}.
+      </p>
+      <p style="margin: 16px 0 0 0; font-size: 12px; color: #9ca3af; border-top: 1px solid #f3f4f6; padding-top: 14px;">
+        If you did not initiate this booking, please disregard this email.
+      </p>
     `;
     return this.getHtmlShell("Verify Your DJ Booking Request - UpBeat Entertainment Africa", content);
   }
 
   // Case 2: Successful Verification (Welcome Email)
   static getWelcomeTemplate(name: string): string {
+    const loginUrl = `${config.clientUrl}/login`;
     const content = `
-      <p>Your email has been successfully verified, and your account is now active on <strong>UpBeat Entertainment Africa</strong>.</p>
-      <p>Log in to your DJ dashboard to set up your portfolio, manage themes, and start taking bookings.</p>
-      <div style="text-align: center; margin-top: 30px;">
-        <a href="https://deejay.africa/login" style="display: inline-block; padding: 12px 24px; background-color: #dc2626; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">Go to Dashboard</a>
+      <h2 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 700; color: #111827;">Hi ${name},</h2>
+      <p style="margin: 0 0 16px 0; font-size: 15px; color: #4b5563; line-height: 1.6;">
+        Welcome to <strong>UpBeat Entertainment Africa</strong>! Your account has been verified and is ready to go.
+      </p>
+      <p style="margin: 0 0 24px 0; font-size: 15px; color: #4b5563; line-height: 1.6;">
+        Log in to your DJ dashboard to customize your portfolio, choose themes, and start managing bookings.
+      </p>
+      <div style="margin: 28px 0;">
+        <a href="${loginUrl}" style="display: block; width: 100%; box-sizing: border-box; background-color: #10B981; color: #ffffff; text-align: center; padding: 14px 20px; font-size: 15px; font-weight: 700; text-decoration: none; border-radius: 6px;">Go to Dashboard</a>
       </div>
     `;
     return this.getHtmlShell("Welcome to UpBeat Entertainment Africa", content);
@@ -111,12 +132,19 @@ export class EmailTemplates {
   // Case 4: Forgot Password Request
   static getPasswordResetTemplate(link: string): string {
     const content = `
-      <p>You recently requested to reset your password for your UpBeat Entertainment Africa account.</p>
-      <p>Click the <strong>Reset Password</strong> button below to create a new password.</p>
-      <div style="text-align: center; margin-top: 30px; margin-bottom: 30px;">
-        <a href="${link}" style="display: inline-block; padding: 12px 24px; background-color: #dc2626; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">Reset Password</a>
+      <h2 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 700; color: #111827;">Reset Your Password</h2>
+      <p style="margin: 0 0 16px 0; font-size: 15px; color: #4b5563; line-height: 1.6;">
+        We received a request to reset the password for your UpBeat Africa account.
+      </p>
+      <p style="margin: 0 0 24px 0; font-size: 15px; color: #4b5563; line-height: 1.6;">
+        Click the button below to create a new password:
+      </p>
+      <div style="margin: 28px 0;">
+        <a href="${link}" style="display: block; width: 100%; box-sizing: border-box; background-color: #10B981; color: #ffffff; text-align: center; padding: 14px 20px; font-size: 15px; font-weight: 700; text-decoration: none; border-radius: 6px;">Reset Password</a>
       </div>
-      <p style="font-size: 14px; color: #6b7280;">If you did not request a password reset, please ignore this email.</p>
+      <p style="margin: 24px 0 0 0; font-size: 13px; color: #6b7280; line-height: 1.5; border-top: 1px solid #f3f4f6; padding-top: 16px;">
+        If you did not request a password reset, you can safely ignore this email.
+      </p>
     `;
     return this.getHtmlShell("Reset Your Password", content);
   }
@@ -709,11 +737,17 @@ export class EmailTemplates {
 
   // Case 17: Payment Failed (Subscription Invoice)
   static getPaymentFailedTemplate(): string {
+    const billingUrl = `${config.clientUrl}/dashboard/billing`;
     const content = `
-      <p>We attempted to process your subscription renewal payment, but the payment was unsuccessful.</p>
-      <p>Please update your billing details as soon as possible to avoid any interruption to your service.</p>
-      <div style="text-align: center; margin-top: 30px;">
-        <a href="https://deejay.africa/dashboard/billing" style="display: inline-block; padding: 12px 24px; background-color: #dc2626; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">Update Billing Details</a>
+      <h2 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 700; color: #111827;">Payment Unsuccessful</h2>
+      <p style="margin: 0 0 16px 0; font-size: 15px; color: #4b5563; line-height: 1.6;">
+        We attempted to process your subscription renewal, but the transaction could not be completed.
+      </p>
+      <p style="margin: 0 0 24px 0; font-size: 15px; color: #4b5563; line-height: 1.6;">
+        Please update your payment method to ensure uninterrupted access to your DJ portfolio and tools.
+      </p>
+      <div style="margin: 28px 0;">
+        <a href="${billingUrl}" style="display: block; width: 100%; box-sizing: border-box; background-color: #10B981; color: #ffffff; text-align: center; padding: 14px 20px; font-size: 15px; font-weight: 700; text-decoration: none; border-radius: 6px;">Update Billing Details</a>
       </div>
     `;
     return this.getHtmlShell("Payment Failed", content);
@@ -721,21 +755,38 @@ export class EmailTemplates {
 
   // Case 18: Subscription Expiring Soon
   static getSubscriptionExpiryWarningTemplate(daysLeft: number): string {
+    const renewUrl = `${config.clientUrl}/dashboard/billing`;
     const content = `
-      <p>Your subscription will expire in <strong>${daysLeft} days</strong>.</p>
-      <p>Please ensure your payment method is up to date to avoid interruption and keep your portfolio online.</p>
+      <h2 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 700; color: #111827;">Subscription Notice</h2>
+      <p style="margin: 0 0 16px 0; font-size: 15px; color: #4b5563; line-height: 1.6;">
+        Your subscription will expire in <strong style="color: #111827;">${daysLeft} days</strong>.
+      </p>
+      <p style="margin: 0 0 24px 0; font-size: 15px; color: #4b5563; line-height: 1.6;">
+        Please renew your plan to prevent any interruption and keep your public DJ portfolio website live online.
+      </p>
+      <div style="margin: 28px 0;">
+        <a href="${renewUrl}" style="display: block; width: 100%; box-sizing: border-box; background-color: #10B981; color: #ffffff; text-align: center; padding: 14px 20px; font-size: 15px; font-weight: 700; text-decoration: none; border-radius: 6px;">Renew Subscription</a>
+      </div>
+      <p style="margin: 24px 0 0 0; font-size: 13px; color: #9ca3af; line-height: 1.5; border-top: 1px solid #f3f4f6; padding-top: 16px;">
+        If you have already renewed, your dashboard will automatically update once verified.
+      </p>
     `;
     return this.getHtmlShell("Subscription Expiring Soon", content);
   }
 
   // Case 19: Subscription Expired
   static getSubscriptionExpiredTemplate(): string {
+    const renewUrl = `${config.clientUrl}/dashboard/billing`;
     const content = `
-      <p>Your subscription has officially expired.</p>
-      <p>Your public portfolio is now offline, and your premium features have been disabled.</p>
-      <p>Please log in and renew your subscription to reactivate your profile.</p>
-      <div style="text-align: center; margin-top: 30px;">
-        <a href="https://deejay.africa/dashboard/billing" style="display: inline-block; padding: 12px 24px; background-color: #dc2626; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">Renew Subscription</a>
+      <h2 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 700; color: #111827;">Portfolio Offline ⚠️</h2>
+      <p style="margin: 0 0 16px 0; font-size: 15px; color: #4b5563; line-height: 1.6;">
+        Your subscription has officially expired, and your public DJ portfolio website has been temporarily taken offline.
+      </p>
+      <p style="margin: 0 0 24px 0; font-size: 15px; color: #4b5563; line-height: 1.6;">
+        To reactivate your website and resume taking client bookings, please renew your subscription below:
+      </p>
+      <div style="margin: 28px 0;">
+        <a href="${renewUrl}" style="display: block; width: 100%; box-sizing: border-box; background-color: #10B981; color: #ffffff; text-align: center; padding: 14px 20px; font-size: 15px; font-weight: 700; text-decoration: none; border-radius: 6px;">Reactivate Portfolio</a>
       </div>
     `;
     return this.getHtmlShell("Subscription Expired", content);

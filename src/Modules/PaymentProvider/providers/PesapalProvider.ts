@@ -115,11 +115,24 @@ export class PesapalProvider implements IPaymentProvider {
 
   public async verifyPayment(reference: string): Promise<PaymentVerificationResult> {
     if (!config.pesapal.consumerKey) {
+      const { prisma } = await import('@/lib/prisma');
+      const tx: any = await prisma.transaction.findFirst({
+        where: {
+          OR: [
+            { gatewayReference: reference },
+            { idempotencyKey: reference },
+          ],
+        },
+        include: { invoice: true },
+      });
+      const currency = tx?.currency || tx?.invoice?.currencyCode || 'USD';
+      const amount = tx ? Number(tx.amount) : tx?.invoice ? Number(tx.invoice.amount) : 0;
+
       return {
         isSuccessful: true,
         reference,
-        amount: 0,
-        currency: 'KES',
+        amount,
+        currency,
         status: 'PAID',
         paidAt: new Date(),
       };

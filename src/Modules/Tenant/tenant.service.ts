@@ -145,7 +145,10 @@ export class TenantServices {
         user: {
           select: {
             subscriptions: {
-              where: { status: 'active' },
+              where: {
+                status: 'active',
+                periodEnd: { gt: new Date() },
+              },
               orderBy: { createdAt: 'desc' },
               take: 1,
             },
@@ -158,9 +161,10 @@ export class TenantServices {
       throw new NotFoundError('Tenant profile not found');
     }
 
+    const activeSub = tenant.user?.subscriptions?.[0];
     const hasActiveSubscription =
-      tenant.subscriptionStatus === 'active' ||
-      Boolean(tenant.user?.subscriptions && tenant.user.subscriptions.length > 0);
+      tenant.subscriptionStatus === 'active' &&
+      Boolean(activeSub && activeSub.periodEnd && new Date(activeSub.periodEnd) > new Date());
 
     const isPublished = Boolean(tenant.isActive !== false && hasActiveSubscription);
 

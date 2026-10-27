@@ -74,23 +74,76 @@ async function main() {
     });
   }
 
-  // Seed Currencies
+  // Seed Currencies (African & Global)
   const currencies = [
-    { code: 'KES', name: 'Kenyan Shilling', symbol: 'KSh', decimals: 2 },
-    { code: 'NGN', name: 'Nigerian Naira', symbol: '₦', decimals: 2 },
-    { code: 'GHS', name: 'Ghanaian Cedi', symbol: 'GH₵', decimals: 2 },
-    { code: 'ZAR', name: 'South African Rand', symbol: 'R', decimals: 2 },
-    { code: 'UGX', name: 'Ugandan Shilling', symbol: 'USh', decimals: 0 },
-    { code: 'TZS', name: 'Tanzanian Shilling', symbol: 'TSh', decimals: 0 },
-    { code: 'RWF', name: 'Rwandan Franc', symbol: 'FRw', decimals: 0 },
-    { code: 'USD', name: 'US Dollar', symbol: '$', decimals: 2 },
+    { code: 'KES', name: 'Kenyan Shilling', symbol: 'KSh', decimals: 2, isActive: true },
+    { code: 'USD', name: 'US Dollar', symbol: '$', decimals: 2, isActive: true },
+    { code: 'NGN', name: 'Nigerian Naira', symbol: '₦', decimals: 2, isActive: true },
+    { code: 'GHS', name: 'Ghanaian Cedi', symbol: 'GH₵', decimals: 2, isActive: true },
+    { code: 'ZAR', name: 'South African Rand', symbol: 'R', decimals: 2, isActive: true },
+    { code: 'UGX', name: 'Ugandan Shilling', symbol: 'USh', decimals: 0, isActive: true },
+    { code: 'TZS', name: 'Tanzanian Shilling', symbol: 'TSh', decimals: 0, isActive: true },
+    { code: 'RWF', name: 'Rwandan Franc', symbol: 'FRw', decimals: 0, isActive: true },
+    { code: 'XOF', name: 'West African CFA Franc', symbol: 'CFA', decimals: 0, isActive: false },
+    { code: 'XAF', name: 'Central African CFA Franc', symbol: 'FCFA', decimals: 0, isActive: false },
+    { code: 'ZMW', name: 'Zambian Kwacha', symbol: 'ZK', decimals: 2, isActive: false },
   ];
 
   for (const c of currencies) {
     await prisma.currency.upsert({
       where: { code: c.code },
-      update: { name: c.name, symbol: c.symbol, decimals: c.decimals, isActive: true },
-      create: { code: c.code, name: c.name, symbol: c.symbol, decimals: c.decimals, isActive: true },
+      update: { name: c.name, symbol: c.symbol, decimals: c.decimals, isActive: c.isActive },
+      create: { code: c.code, name: c.name, symbol: c.symbol, decimals: c.decimals, isActive: c.isActive },
+    });
+  }
+
+  // Seed Subscription Plan Prices for enabled currencies
+  const planPrices = [
+    // Starter (Plan 1)
+    { planId: 1, currencyCode: 'KES', priceMonthly: 500.0, priceAnnually: 5000.0, isActive: true },
+    { planId: 1, currencyCode: 'USD', priceMonthly: 5.0, priceAnnually: 50.0, isActive: true },
+    { planId: 1, currencyCode: 'ZAR', priceMonthly: 90.0, priceAnnually: 900.0, isActive: true },
+    { planId: 1, currencyCode: 'GHS', priceMonthly: 75.0, priceAnnually: 750.0, isActive: true },
+    { planId: 1, currencyCode: 'NGN', priceMonthly: 7500.0, priceAnnually: 75000.0, isActive: true },
+    { planId: 1, currencyCode: 'UGX', priceMonthly: 19000.0, priceAnnually: 190000.0, isActive: true },
+    { planId: 1, currencyCode: 'TZS', priceMonthly: 13000.0, priceAnnually: 130000.0, isActive: true },
+    { planId: 1, currencyCode: 'RWF', priceMonthly: 6500.0, priceAnnually: 65000.0, isActive: true },
+
+    // Pro (Plan 2)
+    { planId: 2, currencyCode: 'KES', priceMonthly: 750.0, priceAnnually: 7500.0, isActive: true },
+    { planId: 2, currencyCode: 'USD', priceMonthly: 7.0, priceAnnually: 70.0, isActive: true },
+    { planId: 2, currencyCode: 'ZAR', priceMonthly: 130.0, priceAnnually: 1300.0, isActive: true },
+    { planId: 2, currencyCode: 'GHS', priceMonthly: 110.0, priceAnnually: 1100.0, isActive: true },
+    { planId: 2, currencyCode: 'NGN', priceMonthly: 11000.0, priceAnnually: 110000.0, isActive: true },
+    { planId: 2, currencyCode: 'UGX', priceMonthly: 27000.0, priceAnnually: 270000.0, isActive: true },
+    { planId: 2, currencyCode: 'TZS', priceMonthly: 18500.0, priceAnnually: 185000.0, isActive: true },
+    { planId: 2, currencyCode: 'RWF', priceMonthly: 9500.0, priceAnnually: 95000.0, isActive: true },
+
+    // Elite (Plan 3)
+    { planId: 3, currencyCode: 'KES', priceMonthly: 950.0, priceAnnually: 9500.0, isActive: true },
+    { planId: 3, currencyCode: 'USD', priceMonthly: 9.0, priceAnnually: 90.0, isActive: true },
+    { planId: 3, currencyCode: 'ZAR', priceMonthly: 170.0, priceAnnually: 1700.0, isActive: true },
+    { planId: 3, currencyCode: 'GHS', priceMonthly: 140.0, priceAnnually: 1400.0, isActive: true },
+    { planId: 3, currencyCode: 'NGN', priceMonthly: 14000.0, priceAnnually: 140000.0, isActive: true },
+    { planId: 3, currencyCode: 'UGX', priceMonthly: 35000.0, priceAnnually: 350000.0, isActive: true },
+    { planId: 3, currencyCode: 'TZS', priceMonthly: 24000.0, priceAnnually: 240000.0, isActive: true },
+    { planId: 3, currencyCode: 'RWF', priceMonthly: 12500.0, priceAnnually: 125000.0, isActive: true },
+  ];
+
+  for (const pp of planPrices) {
+    await prisma.subscriptionPlanPrice.upsert({
+      where: {
+        planId_currencyCode: {
+          planId: pp.planId,
+          currencyCode: pp.currencyCode,
+        },
+      },
+      update: {
+        priceMonthly: pp.priceMonthly,
+        priceAnnually: pp.priceAnnually,
+        isActive: pp.isActive,
+      },
+      create: pp,
     });
   }
 

@@ -15,7 +15,8 @@ export class SubscriptionController extends BaseController {
 
   public async getAllPlans(req: Request, res: Response): Promise<void> {
     const all = req.query.all === 'true';
-    const plans = await this.subscriptionService.getAllPlans(all);
+    const currency = req.query.currency as string | undefined;
+    const plans = await this.subscriptionService.getAllPlans(currency, all);
     this.sendResponse(req, res, 'Plans retrieved successfully', undefined, plans);
   }
 
@@ -41,7 +42,8 @@ export class SubscriptionController extends BaseController {
     const userId = req.user!.id;
     const planId = parseInt(String(req.query.planId), 10);
     const billingCycle = (req.query.billingCycle as 'monthly' | 'annually') || 'monthly';
-    const preview = await this.subscriptionService.previewUpgrade(userId, planId, billingCycle);
+    const currency = req.query.currency as string | undefined;
+    const preview = await this.subscriptionService.previewUpgrade(userId, planId, billingCycle, currency);
     this.sendResponse(req, res, 'Subscription upgrade preview generated', undefined, preview);
   }
 
@@ -66,5 +68,29 @@ export class SubscriptionController extends BaseController {
   public async validatePayout(req: Request, res: Response): Promise<void> {
     const result = await this.subscriptionService.validatePayoutAccount(req.body);
     this.sendResponse(req, res, result.valid ? 'Account validated' : (result.message || 'Validation failed'), undefined, result);
+  }
+
+  public async getCurrencies(req: Request, res: Response): Promise<void> {
+    const currencies = await this.subscriptionService.getCurrencies();
+    this.sendResponse(req, res, 'Currencies retrieved successfully', undefined, currencies);
+  }
+
+  public async getPlanPrices(req: Request, res: Response): Promise<void> {
+    const planId = parseInt(String(req.params.id), 10);
+    const prices = await this.subscriptionService.getPlanPrices(planId);
+    this.sendResponse(req, res, 'Plan prices retrieved successfully', undefined, prices);
+  }
+
+  public async setPlanPrice(req: Request, res: Response): Promise<void> {
+    const planId = parseInt(String(req.params.id), 10);
+    const currencyCode = String(req.params.currencyCode || req.body.currencyCode || '').trim().toUpperCase();
+    const price = await this.subscriptionService.setPlanPrice(planId, currencyCode, req.body);
+    this.sendResponse(req, res, 'Plan price updated successfully', undefined, price);
+  }
+
+  public async toggleCurrency(req: Request, res: Response): Promise<void> {
+    const code = String(req.params.code);
+    const currency = await this.subscriptionService.toggleCurrency(code, req.body.isActive);
+    this.sendResponse(req, res, 'Currency status updated successfully', undefined, currency);
   }
 }

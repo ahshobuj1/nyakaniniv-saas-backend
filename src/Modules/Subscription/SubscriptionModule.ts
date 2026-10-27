@@ -5,7 +5,14 @@ import { SubscriptionController } from "./subscription.controller";
 import { validateRequest } from "@/middleware/validation";
 import { authenticateUser, authorizeRole } from "@/middleware/auth";
 import { UserRole } from "@/prisma/generated/client";
-import { createSubscriptionPlanSchema, updateSubscriptionPlanSchema, subscribeSchema, previewUpgradeSchema } from "./SubscriptionDTO";
+import {
+  createSubscriptionPlanSchema,
+  updateSubscriptionPlanSchema,
+  subscribeSchema,
+  previewUpgradeSchema,
+  setPlanPriceSchema,
+  toggleCurrencySchema,
+} from "./SubscriptionDTO";
 import express from 'express';
 
 export class SubscriptionModule extends BaseModule {
@@ -54,10 +61,44 @@ export class SubscriptionModule extends BaseModule {
       controller.deletePlan.bind(controller),
     );
 
+    this.router.put(
+      "/plans/:id/prices/:currencyCode",
+      authenticateUser,
+      authorizeRole([UserRole.SUPER_ADMIN]),
+      validateRequest(setPlanPriceSchema),
+      controller.setPlanPrice.bind(controller),
+    );
+
+    this.router.put(
+      "/plans/:id/prices",
+      authenticateUser,
+      authorizeRole([UserRole.SUPER_ADMIN]),
+      validateRequest(setPlanPriceSchema),
+      controller.setPlanPrice.bind(controller),
+    );
+
+    this.router.patch(
+      "/currencies/:code",
+      authenticateUser,
+      authorizeRole([UserRole.SUPER_ADMIN]),
+      validateRequest(toggleCurrencySchema),
+      controller.toggleCurrency.bind(controller),
+    );
+
     // Public / Shared Routes
     this.router.get(
       "/plans",
       controller.getAllPlans.bind(controller),
+    );
+
+    this.router.get(
+      "/plans/:id/prices",
+      controller.getPlanPrices.bind(controller),
+    );
+
+    this.router.get(
+      "/currencies",
+      controller.getCurrencies.bind(controller),
     );
 
     // DJ Routes for Subscription
