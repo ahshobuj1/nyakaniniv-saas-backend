@@ -37,7 +37,7 @@ export class WebhookServices {
   /**
    * Universal idempotent webhook processor
    */
-  private async processPaymentSuccess(params: {
+  public async processPaymentSuccess(params: {
     reference: string;
     gateway: PaymentGateway;
     gatewayEventId: string;

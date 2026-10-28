@@ -15,6 +15,7 @@ export const createTenantSchema = {
     stageName: z.string().min(1, "Stage name is required"),
     country: z.string().min(1, "Country is required"),
     city: z.string().min(1, "City is required"),
+    currencyCode: z.string().length(3).optional(),
     genres: z.array(z.string()).max(4, "You can select up to 4 genres").optional(),
   }),
 };

@@ -7,6 +7,7 @@ import {QueryBuilder} from '@/utils/QueryBuilder';
 import {IEmailProvider} from '@/providers/EmailProvider';
 import {EmailTemplates} from '@/utils/EmailTemplates';
 import {UpdateTenantStatusDTO} from './TenantDTO';
+import {PaymentProviderResolver} from '@/Modules/PaymentProvider/PaymentProviderResolver';
 
 export class TenantServices {
   private logger = new AppLogger('TenantServices');
@@ -40,6 +41,13 @@ export class TenantServices {
       throw new ConflictError('Subdomain is already taken');
     }
 
+    // Resolve valid currency from country. If country currency is not active in DB, default to USD.
+    const candidateCurrency = (data.currencyCode || PaymentProviderResolver.resolveCurrencyFromCountry(data.country)).trim().toUpperCase();
+    const activeCurrency = await this.prisma.currency.findUnique({
+      where: { code: candidateCurrency },
+    });
+    const currencyCode = (activeCurrency && activeCurrency.isActive) ? candidateCurrency : 'USD';
+
     const newTenant = await this.prisma.tenant.create({
       data: {
         userId,
@@ -47,6 +55,7 @@ export class TenantServices {
         stageName: data.stageName,
         country: data.country,
         city: data.city,
+        currencyCode,
         genres: data.genres ?? [],
         isActive: true, // Assuming active by default, or depends on subscription later
       },
@@ -185,6 +194,18 @@ export class TenantServices {
       throw new NotFoundError('Tenant profile not found');
     }
 
+    let currencyCode = data.currencyCode;
+    if (data.country && !data.currencyCode) {
+      const candidateCurrency = PaymentProviderResolver.resolveCurrencyFromCountry(data.country);
+      const active = await this.prisma.currency.findUnique({ where: { code: candidateCurrency } });
+      currencyCode = (active && active.isActive) ? candidateCurrency : 'USD';
+    } else if (data.currencyCode) {
+      const active = await this.prisma.currency.findUnique({ where: { code: data.currencyCode.trim().toUpperCase() } });
+      if (!active || !active.isActive) {
+        currencyCode = 'USD';
+      }
+    }
+
     const updatedTenant = await this.prisma.tenant.update({
       where: {id: tenant.id},
       data: {
@@ -195,7 +216,7 @@ export class TenantServices {
         bio: data.bio,
         logoUrl: data.logoUrl,
         timezone: data.timezone,
-        currencyCode: data.currencyCode,
+        currencyCode: currencyCode ?? tenant.currencyCode,
         socialLinks: data.socialLinks,
       },
     });

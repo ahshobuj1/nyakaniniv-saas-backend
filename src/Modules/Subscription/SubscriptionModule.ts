@@ -142,5 +142,12 @@ export class SubscriptionModule extends BaseModule {
       authorizeRole([UserRole.DJ]),
       controller.cancelSubscription.bind(controller),
     );
+
+    this.router.post(
+      "/verify-payment",
+      authenticateUser,
+      authorizeRole([UserRole.DJ]),
+      controller.verifyPayment.bind(controller),
+    );
   }
 }

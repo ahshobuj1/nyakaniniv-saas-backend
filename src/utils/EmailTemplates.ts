@@ -39,7 +39,21 @@ export class EmailTemplates {
                 <tr>
                   <td align="center">
                     <a href="https://upbeat.africa" target="_blank" style="text-decoration: none; display: inline-block;">
-                      <img src="${logoUrl}" alt="UpBeat Africa" style="height: 52px; max-height: 52px; width: auto; display: block; border: 0;" />
+                      <table cellpadding="0" cellspacing="0" border="0" style="margin: 0 auto;">
+                        <tr>
+                          <td style="vertical-align: middle; padding-right: 14px;">
+                            <img src="${logoUrl}" alt="UpBeat Africa" width="54" height="62" style="height: 62px; width: auto; max-height: 62px; display: block; border: 0;" />
+                          </td>
+                          <td style="vertical-align: middle; text-align: left;">
+                            <span style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 22px; font-weight: 800; color: #0f172a; letter-spacing: -0.5px; display: block; line-height: 1.15;">
+                              UpBeat
+                            </span>
+                            <span style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 700; color: #059669; letter-spacing: 0.6px; text-transform: uppercase; display: block; line-height: 1.3; margin-top: 2px;">
+                              Entertainment Africa
+                            </span>
+                          </td>
+                        </tr>
+                      </table>
                     </a>
                   </td>
                 </tr>

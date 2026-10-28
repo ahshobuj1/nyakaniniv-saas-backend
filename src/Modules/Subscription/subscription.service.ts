@@ -300,20 +300,12 @@ export class SubscriptionServices {
 
     let currentPrice = 0;
     if (activeSub.planId) {
-      if (
-        lastInvoice &&
-        lastInvoice.currencyCode === currency &&
-        Number(lastInvoice.amount) > 0
-      ) {
-        currentPrice = Number(lastInvoice.amount);
-      } else {
-        const resolvedCurrent = await this.resolvePlanPrice(
-          activeSub.planId,
-          currency,
-          currentCycle,
-        );
-        currentPrice = resolvedCurrent.amount;
-      }
+      const resolvedCurrent = await this.resolvePlanPrice(
+        activeSub.planId,
+        currency,
+        currentCycle,
+      );
+      currentPrice = resolvedCurrent.amount;
     }
 
     const now = new Date();
@@ -836,5 +828,53 @@ export class SubscriptionServices {
       where: { code: upperCode },
       data: { isActive },
     });
+  }
+
+  async verifyPayment(params: {
+    userId: string;
+    orderTrackingId?: string;
+    reference?: string;
+  }) {
+    const { WebhookServices } = await import('@/Modules/Webhook/webhook.service');
+    const webhookService = new WebhookServices(this.prisma, this.emailProvider);
+
+    if (params.orderTrackingId) {
+      return await webhookService.handlePesapalIPN(params.orderTrackingId, params.reference);
+    }
+
+    if (!params.reference) {
+      throw new BadRequestError('Either orderTrackingId or reference is required for payment verification');
+    }
+
+    const tx = await this.prisma.transaction.findFirst({
+      where: {
+        OR: [
+          { gatewayReference: params.reference },
+          { idempotencyKey: params.reference },
+        ],
+      },
+    });
+
+    const gateway = tx?.gateway || PaymentGateway.PAYSTACK;
+    const provider = PaymentProviderResolver.getGatewayProvider(gateway);
+    const verification = await provider.verifyPayment(params.reference);
+
+    if (!verification.isSuccessful || verification.status !== 'PAID') {
+      return { success: false, status: verification.status, message: 'Payment pending or not completed' };
+    }
+
+    await webhookService.processPaymentSuccess({
+      reference: verification.reference || params.reference,
+      gateway,
+      gatewayEventId: `verify_${params.reference}_${Date.now()}`,
+      amountPaid: verification.amount,
+      currency: verification.currency,
+      paidAt: verification.paidAt,
+      channel: verification.channel,
+      metadata: verification.metadata,
+      rawPayload: { verification, source: 'client_redirect_verify' },
+    });
+
+    return { success: true, status: 'PAID' };
   }
 }

@@ -31,9 +31,9 @@ export class WebhookController {
   pesapalIPN = async (req: Request, res: Response, next: NextFunction) => {
     try {
       console.log('🔔 [IPN] Received Pesapal IPN request');
-      const orderTrackingId = (req.query.OrderTrackingId || req.body.OrderTrackingId) as string;
-      const orderMerchantReference = (req.query.OrderMerchantReference || req.body.OrderMerchantReference) as string;
-      const orderNotificationType = (req.query.OrderNotificationType || req.body.OrderNotificationType) as string;
+      const orderTrackingId = ((req.query?.OrderTrackingId || req.body?.OrderTrackingId) as string) || '';
+      const orderMerchantReference = ((req.query?.OrderMerchantReference || req.body?.OrderMerchantReference) as string) || '';
+      const orderNotificationType = ((req.query?.OrderNotificationType || req.body?.OrderNotificationType) as string) || 'IPNCHANGE';
 
       console.log('🔔 [IPN] Pesapal IPN details:', {
         orderTrackingId,

@@ -79,10 +79,10 @@ export class PesapalProvider implements IPaymentProvider {
       const response = await this.client.post(
         '/api/Transactions/SubmitOrderRequest',
         {
-          id: input.reference.slice(0, 50),
-          currency: input.currency.toUpperCase(),
+          id: (input.reference || '').slice(0, 50),
+          currency: (input.currency || 'KES').toUpperCase(),
           amount: input.amount,
-          description: input.description.slice(0, 100),
+          description: (input.description || 'UpBeat Subscription').slice(0, 100),
           callback_url: input.callbackUrl,
           cancellation_url: input.cancelUrl || input.callbackUrl,
           notification_id: config.pesapal.ipnId || '',
@@ -98,7 +98,11 @@ export class PesapalProvider implements IPaymentProvider {
       );
 
       if (!response.data?.redirect_url) {
-        throw new Error(response.data?.message || 'Pesapal did not return a redirect URL');
+        const errorDetail =
+          response.data?.error?.message ||
+          response.data?.message ||
+          'Pesapal did not return a redirect URL';
+        throw new Error(errorDetail);
       }
 
       return {

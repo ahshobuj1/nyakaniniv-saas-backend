@@ -93,4 +93,15 @@ export class SubscriptionController extends BaseController {
     const currency = await this.subscriptionService.toggleCurrency(code, req.body.isActive);
     this.sendResponse(req, res, 'Currency status updated successfully', undefined, currency);
   }
+
+  public async verifyPayment(req: Request, res: Response): Promise<void> {
+    const userId = (req as any).user?.id;
+    const { orderTrackingId, reference } = req.body;
+    const result = await this.subscriptionService.verifyPayment({
+      userId,
+      orderTrackingId,
+      reference,
+    });
+    this.sendResponse(req, res, 'Payment verified successfully', undefined, result);
+  }
 }
