@@ -27,11 +27,18 @@ export class SubscriptionServices {
   ) {}
 
   /**
-   * Validate requested currency against Currency table on server.
-   * If not enabled or not found, fallback to USD (Requirement 2).
+   * Validate requested currency against the Currency table.
+   * If not found or not active, falls back to KES (Paystack default for Kenya).
+   * USD is NOT accepted on this platform.
    */
   async resolveValidCurrency(requestedCurrency?: string, country?: string | null): Promise<string> {
     let candidate = (requestedCurrency || '').trim().toUpperCase();
+
+    // Reject USD explicitly — platform does not accept USD payments
+    if (candidate === 'USD') {
+      candidate = '';
+    }
+
     if (!candidate && country) {
       candidate = PaymentProviderResolver.resolveCurrencyFromCountry(country);
     }
@@ -45,8 +52,8 @@ export class SubscriptionServices {
       }
     }
 
-    // Server-side fallback: If requested currency is not enabled or unknown, use USD
-    return 'USD';
+    // Server-side fallback: default to KES (Paystack Kenya account)
+    return 'KES';
   }
 
   /**
@@ -64,13 +71,13 @@ export class SubscriptionServices {
     });
     let finalCurrency = targetCurrency;
 
-    // 2. If no active price for requested currency, fall back to USD
-    if (!planPrice && targetCurrency !== 'USD') {
+    // 2. If no active price for requested currency, fall back to KES
+    if (!planPrice && targetCurrency !== 'KES') {
       planPrice = await this.prisma.subscriptionPlanPrice.findFirst({
-        where: { planId, currencyCode: 'USD', isActive: true },
+        where: { planId, currencyCode: 'KES', isActive: true },
       });
       if (planPrice) {
-        finalCurrency = 'USD';
+        finalCurrency = 'KES';
       }
     }
 
@@ -80,17 +87,17 @@ export class SubscriptionServices {
       return { amount, currency: finalCurrency, isFallback: finalCurrency !== targetCurrency };
     }
 
-    // 4. Ultimate fallback to USD
-    const usdPrice = await this.prisma.subscriptionPlanPrice.findFirst({
-      where: { planId, currencyCode: 'USD', isActive: true },
+    // 4. Ultimate fallback to KES (platform default — Paystack Kenya)
+    const kesPrice = await this.prisma.subscriptionPlanPrice.findFirst({
+      where: { planId, currencyCode: 'KES', isActive: true },
     });
-    if (usdPrice) {
-      const amount = cycle === 'monthly' ? Number(usdPrice.priceMonthly) : Number(usdPrice.priceAnnually);
-      return { amount, currency: 'USD', isFallback: true };
+    if (kesPrice) {
+      const amount = cycle === 'monthly' ? Number(kesPrice.priceMonthly) : Number(kesPrice.priceAnnually);
+      return { amount, currency: 'KES', isFallback: true };
     }
     const plan = await this.prisma.subscriptionPlan.findUnique({ where: { id: planId } });
     const amount = cycle === 'monthly' ? Number(plan?.priceMonthly || 0) : Number(plan?.priceAnnually || 0);
-    return { amount, currency: 'USD', isFallback: true };
+    return { amount, currency: 'KES', isFallback: true };
   }
 
   async createPlan(data: CreateSubscriptionPlanDTO) {
@@ -522,7 +529,7 @@ export class SubscriptionServices {
     }
 
     // Requirement 3: Use simple config map (not hardcoded in service logic).
-    // For now: USD → Paystack, KES → Pesapal. Other currencies → Flutterwave.
+    // KES -> Paystack. Other currencies -> Flutterwave / Pesapal.
     const provider = PaymentProviderResolver.resolveByCurrency(
       currency,
       data.gateway,
@@ -637,7 +644,7 @@ export class SubscriptionServices {
           title: 'Direct Card & Bank Checkout',
           description:
             'Visa, Mastercard, Verve and direct international checkout',
-          currencies: ['KES', 'USD'],
+          currencies: ['KES'],
           isRecommended: false,
           badge: 'Debit / Credit Cards',
           paymentMethods: ['Cards', 'Bank Transfer', 'Apple Pay'],
@@ -671,7 +678,7 @@ export class SubscriptionServices {
         name: 'Paystack',
         title: 'Paystack Payment Gateway',
         description: 'Cards, Bank Transfer & Apple Pay',
-        currencies: ['NGN', 'GHS', 'ZAR', 'KES', 'USD'],
+        currencies: ['KES'],
         isRecommended: false,
         badge: 'Card Checkout',
         paymentMethods: ['Cards', 'Bank Transfer', 'Apple Pay'],

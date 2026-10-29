@@ -642,8 +642,8 @@ export class PaystackConnectService {
         gateway: 'PAYSTACK',
         accountId: accountNumber,
         subaccountId: subaccountCode,
-        countryCode: 'NG',
-        currencyCode: 'NGN',
+        countryCode: 'KE',
+        currencyCode: 'KES',
         metadata: {
           accountName: businessName,
           bankName,
@@ -655,6 +655,8 @@ export class PaystackConnectService {
       update: {
         accountId: accountNumber,
         subaccountId: subaccountCode,
+        countryCode: 'KE',
+        currencyCode: 'KES',
         metadata: {
           accountName: businessName,
           bankName,

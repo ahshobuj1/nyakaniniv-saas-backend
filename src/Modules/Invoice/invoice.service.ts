@@ -16,6 +16,7 @@ import {isValidUuid} from '@/utils/uuid';
 import PDFDocument from 'pdfkit';
 import path from 'path';
 import fs from 'fs';
+import {PaymentProviderResolver} from '@/Modules/PaymentProvider/PaymentProviderResolver';
 
 export class InvoiceServices {
   constructor(private prisma: PrismaClient) {}
@@ -175,7 +176,7 @@ export class InvoiceServices {
           inv.currencyCode ||
           latestTx?.currency ||
           inv.booking?.currencyCode ||
-          'USD',
+          'KES',
         status: inv.status,
         type: inv.type,
         createdAt: inv.createdAt,
@@ -443,7 +444,7 @@ export class InvoiceServices {
       type: invoice.type,
       status: invoice.status,
       amount: Number(invoice.amount),
-      currencyCode: invoice.currencyCode || 'USD',
+      currencyCode: invoice.currencyCode || 'KES',
       createdAt: invoice.createdAt,
       gateway: mainTx?.gateway || null,
       method: mainTx?.channel || (invoice.status === 'PAID' ? 'ONLINE' : null),
@@ -626,7 +627,13 @@ export class InvoiceServices {
         const reference = `inv_${invoice.id}_${Date.now()}`;
         const paymentResult = await paymentProvider.initializePayment({
           amount: Number(invoice.amount),
-          currency: (invoice.booking as any).currency || 'NGN',
+          currency:
+            invoice.booking?.currencyCode ||
+            invoice.currencyCode ||
+            PaymentProviderResolver.resolveCurrencyFromCountry(
+              (invoice.booking as any)?.tenant?.country ?? invoice.tenant?.country,
+            ) ||
+            'KES',
           email: clientEmail,
           reference,
           description: `Payment for invoice #${invoice.id.slice(0, 8)}`,
@@ -951,7 +958,7 @@ export class InvoiceServices {
           .text(description, boxX, currentY);
 
         const displayCurrency =
-          mainTx?.currency || invoice.currencyCode || 'USD';
+          mainTx?.currency || invoice.currencyCode || 'KES';
         const displayAmount = Number(mainTx?.amount || invoice.amount).toFixed(
           2,
         );

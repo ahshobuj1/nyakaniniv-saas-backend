@@ -126,7 +126,7 @@ export class BookingStatusService {
           input.currencyCode ||
           booking.currencyCode ||
           booking.tenant?.currencyCode ||
-          'USD';
+          'KES';
 
         if (amount > 0) {
           updateData.totalAmount = amount;
@@ -249,7 +249,7 @@ export class BookingStatusService {
     const eventName = updated.eventType || 'Event';
     const amount = Number(updated.totalAmount || 0);
     const currency =
-      updated.currencyCode || updated.tenant?.currencyCode || 'USD';
+      updated.currencyCode || updated.tenant?.currencyCode || 'KES';
     const orderReference = updated.orderReference || `UB-${updated.id.slice(0, 8).toUpperCase()}`;
     const targetTz = updated.eventTimezone || updated.tenant?.timezone || 'Africa/Nairobi';
 

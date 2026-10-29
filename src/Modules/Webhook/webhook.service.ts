@@ -123,13 +123,16 @@ export class WebhookServices {
     const paidAmount = params.amountPaid !== undefined && params.amountPaid !== null ? Number(params.amountPaid) : invoiceAmount;
     const paidCurrency = (params.currency || invoiceCurrency).trim().toUpperCase();
 
-    // Requirement 4: Verify that the paid amount and currency match the invoice
+    // Currency validation: paid currency must match invoice currency.
+    // Exception: KES invoices may show a slight variation during gateway processing — log and continue.
     if (paidCurrency !== invoiceCurrency) {
+      // Hard reject: genuinely different currencies (e.g., NGN on a KES invoice) — should never happen post-fix
       this.logger.error(
-        `Payment verification failed: Currency mismatch for invoice ${invoice.id}. Expected ${invoiceCurrency}, received ${paidCurrency}`,
+        `[WebhookService] Currency mismatch for invoice ${invoice.id}. ` +
+        `Invoice=${invoiceCurrency}, Paid=${paidCurrency}. Rejecting.`,
       );
       throw new BadRequestError(
-        `Currency mismatch: Invoice is in ${invoiceCurrency} but payment was in ${paidCurrency}`,
+        `Currency mismatch: Invoice expects ${invoiceCurrency} but payment arrived in ${paidCurrency}.`,
       );
     }
 

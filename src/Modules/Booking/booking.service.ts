@@ -928,7 +928,7 @@ export class BookingServices {
       data.currency ||
       booking.currencyCode ||
       booking.tenant?.currencyCode ||
-      'USD';
+      'KES';
 
     // Calculate next version
     const lastQuote = await this.prisma.bookingQuote.findFirst({

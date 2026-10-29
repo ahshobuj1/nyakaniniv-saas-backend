@@ -129,7 +129,7 @@ export class PesapalProvider implements IPaymentProvider {
         },
         include: { invoice: true },
       });
-      const currency = tx?.currency || tx?.invoice?.currencyCode || 'USD';
+      const currency = tx?.currency || tx?.invoice?.currencyCode || 'KES';
       const amount = tx ? Number(tx.amount) : tx?.invoice ? Number(tx.invoice.amount) : 0;
 
       return {

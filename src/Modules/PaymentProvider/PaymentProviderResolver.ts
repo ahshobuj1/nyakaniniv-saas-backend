@@ -131,7 +131,7 @@ export class PaymentProviderResolver {
   }
 
   public static resolveCurrencyFromCountry(country?: string | null): string {
-    if (!country) return 'USD';
+    if (!country) return 'KES';
     const normalized = country.trim().toUpperCase();
     if (COUNTRY_ROUTING_MATRIX[normalized]?.defaultCurrency) {
       return COUNTRY_ROUTING_MATRIX[normalized].defaultCurrency;
@@ -312,7 +312,7 @@ export class PaymentProviderResolver {
       EUROPE: 'EUR',
     };
 
-    return map[normalized] || 'USD';
+    return map[normalized] || 'KES';
   }
 
   public static resolve(params: {
@@ -363,8 +363,10 @@ export class PaymentProviderResolver {
   }
 
   /**
-   * Resolve provider directly from currency based on SUBSCRIPTION_CURRENCY_ROUTING config map.
-   * For now: USD → Paystack, KES → Pesapal. Other currencies → Flutterwave when enabled.
+   * Resolve payment provider directly from currency code using SUBSCRIPTION_CURRENCY_ROUTING.
+   * KES → Paystack. NGN/GHS/ZAR/UGX/RWF → Flutterwave. TZS → Pesapal.
+   * USD is not accepted on this platform.
+   * Falls back to Paystack if currency is not in the routing map (should not happen in production).
    */
   public static resolveByCurrency(
     currency: string,
@@ -394,12 +396,19 @@ export class PaymentProviderResolver {
 }
 
 /**
- * Currency-to-Provider routing config map.
- * Business registered in Kenya: Paystack can only charge KES and USD.
- * For now: USD → Paystack, KES → Pesapal. Other currencies route to Flutterwave.
+ * Currency-to-Provider routing for subscription and booking payments.
+ *
+ * Platform constraint: UpBeat Africa is registered in Kenya.
+ * Paystack KE account supports KES ONLY (no domiciliary USD account).
+ *
+ * All other currencies route to their appropriate gateway:
+ *  - NGN, GHS, ZAR, UGX, RWF, XOF, XAF, ZMW → Flutterwave (Pan-Africa)
+ *  - TZS → Pesapal (primary East Africa mobile money for Tanzania)
+ *
+ * USD has been intentionally removed. Customers must pay in their local currency.
+ * The platform does NOT accept USD payments.
  */
 export const SUBSCRIPTION_CURRENCY_ROUTING: Record<string, PaymentGateway> = {
-  USD: PaymentGateway.PAYSTACK,
   KES: PaymentGateway.PAYSTACK,
   NGN: PaymentGateway.FLUTTERWAVE,
   GHS: PaymentGateway.FLUTTERWAVE,
