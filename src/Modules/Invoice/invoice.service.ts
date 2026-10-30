@@ -181,6 +181,7 @@ export class InvoiceServices {
         type: inv.type,
         createdAt: inv.createdAt,
         gateway: latestTx?.gateway || null,
+        channel: latestTx?.channel || null,
         method: latestTx?.channel || (inv.status === 'PAID' ? 'ONLINE' : null),
         transactionId: latestTx?.id || null,
         gatewayReference: latestTx?.gatewayReference || null,
@@ -304,10 +305,18 @@ export class InvoiceServices {
       invQuery.prismaArgs.where.type = invoiceType.toUpperCase();
     }
 
-    // 4. Includes
+    // 4. Filter by tenantId
+    const tenantIdParam = (query?.tenantId as string)?.trim();
+    if (tenantIdParam && isValidUuid(tenantIdParam)) {
+      invQuery.prismaArgs.where.tenantId = tenantIdParam;
+    } else {
+      delete invQuery.prismaArgs.where.tenantId;
+    }
+
+    // 5. Includes
     invQuery.prismaArgs.include = {
       user: {select: {email: true, firstName: true, lastName: true}},
-      tenant: {select: {subdomain: true, stageName: true}},
+      tenant: {select: {id: true, subdomain: true, stageName: true}},
       plan: {select: {name: true}},
       booking: {include: {client: {select: {name: true, email: true}}}},
       transactions: {
@@ -316,7 +325,7 @@ export class InvoiceServices {
       },
     };
 
-    // 5. Cleanup query builder filter artifacts
+    // 6. Cleanup query builder filter artifacts
     delete invQuery.prismaArgs.where.search;
     delete invQuery.prismaArgs.where.searchTerm;
     delete invQuery.prismaArgs.where.sortBy;
@@ -335,12 +344,15 @@ export class InvoiceServices {
         currencyCode: inv.currencyCode || 'KES',
         status: inv.status,
         type: inv.type,
+        dueDate: inv.dueDate,
         createdAt: inv.createdAt,
         gateway: latestTx?.gateway || null,
+        channel: latestTx?.channel || null,
         method: latestTx?.channel || (inv.status === 'PAID' ? 'ONLINE' : null),
         transactionId: latestTx?.id || null,
         gatewayReference: latestTx?.gatewayReference || null,
         transactions: inv.transactions,
+        tenant: inv.tenant,
       };
 
       if (isBooking && inv.booking) {

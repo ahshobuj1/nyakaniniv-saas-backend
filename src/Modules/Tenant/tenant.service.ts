@@ -90,6 +90,7 @@ export class TenantServices {
       id: true,
       subdomain: true,
       stageName: true,
+      logoUrl: true,
       isActive: true,
       activePlanId: true,
       user: {
@@ -98,6 +99,7 @@ export class TenantServices {
           email: true,
           firstName: true,
           lastName: true,
+          profileImg: true,
         },
       },
       _count: {
@@ -105,6 +107,8 @@ export class TenantServices {
           mixTapes: true,
           events: true,
           bookings: true,
+          invoices: true,
+          clients: true,
         },
       },
     };

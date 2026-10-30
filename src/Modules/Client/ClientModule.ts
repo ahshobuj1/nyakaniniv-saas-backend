@@ -27,6 +27,13 @@ export class ClientModule extends BaseModule {
     const controller = this.getController<ClientController>("ClientController");
 
     this.router.get(
+      "/admin/all",
+      authenticateUser,
+      authorizeRole([UserRole.SUPER_ADMIN]),
+      controller.getAllClientsAdmin.bind(controller),
+    );
+
+    this.router.get(
       "/",
       authenticateUser,
       authorizeRole([UserRole.DJ]),

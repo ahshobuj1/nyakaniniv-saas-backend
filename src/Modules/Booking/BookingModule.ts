@@ -99,6 +99,23 @@ export class BookingModule extends BaseModule {
     );
 
     // ==========================================
+    // Admin Booking Management Routes
+    // ==========================================
+    this.router.get(
+      "/admin/all",
+      authenticateUser,
+      authorizeRole([UserRole.SUPER_ADMIN, UserRole.ADMIN]),
+      controller.getAllBookings.bind(controller),
+    );
+
+    this.router.get(
+      "/admin/:id",
+      authenticateUser,
+      authorizeRole([UserRole.SUPER_ADMIN, UserRole.ADMIN]),
+      controller.getBookingById.bind(controller),
+    );
+
+    // ==========================================
     // 3. DJ Dashboard Routes
     // ==========================================
     this.router.get(

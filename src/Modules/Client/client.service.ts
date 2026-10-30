@@ -1,6 +1,7 @@
 import {PrismaClient} from '@/prisma/generated/client';
 import {NotFoundError} from '@/core/errors/AppError';
 import {QueryBuilder} from '@/utils/QueryBuilder';
+import {isValidUuid} from '@/utils/uuid';
 
 export class ClientServices {
   constructor(private prisma: PrismaClient) {}
@@ -69,5 +70,52 @@ export class ClientServices {
     }
 
     return client;
+  }
+  async getAllClientsAdmin(query: Record<string, unknown> = {}) {
+    const clientQuery = new QueryBuilder(this.prisma.client, query)
+      .search(['name', 'email', 'phone'])
+      .filter()
+      .sort()
+      .pagination()
+      .fields();
+
+    const tenantIdParam = (query?.tenantId as string)?.trim();
+    if (tenantIdParam && isValidUuid(tenantIdParam)) {
+      clientQuery.prismaArgs.where = {
+        ...clientQuery.prismaArgs.where,
+        tenantId: tenantIdParam,
+      };
+    } else {
+      delete clientQuery.prismaArgs.where?.tenantId;
+    }
+
+    if (!clientQuery.prismaArgs.select) {
+      clientQuery.prismaArgs.include = {
+        tenant: {
+          select: {
+            id: true,
+            stageName: true,
+            subdomain: true,
+            logoUrl: true,
+            user: {
+              select: {
+                profileImg: true,
+              },
+            },
+          },
+        },
+        _count: {select: {bookings: true}},
+        bookings: {
+          select: {id: true, eventType: true, eventDate: true, status: true, totalAmount: true, currencyCode: true},
+          orderBy: {createdAt: 'desc'},
+          take: 1,
+        },
+      };
+    }
+
+    const clients = await clientQuery.model.findMany(clientQuery.prismaArgs);
+    const meta = await clientQuery.countTotal();
+
+    return {clients, meta};
   }
 }

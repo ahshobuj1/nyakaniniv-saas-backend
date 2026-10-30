@@ -53,4 +53,8 @@ export class ClientController extends BaseController {
     const client = await this.clientService.getClientById(userId, id);
     this.sendResponse(req, res, 'Client retrieved successfully', undefined, client);
   }
+  public async getAllClientsAdmin(req: Request, res: Response): Promise<void> {
+    const { clients, meta } = await this.clientService.getAllClientsAdmin(req.query);
+    this.sendPaginatedResponse(req, res, meta, 'All clients retrieved successfully', clients);
+  }
 }

@@ -129,6 +129,18 @@ export class BookingController extends BaseController {
     );
   }
 
+  // Admin Dashboard: List all bookings
+  public async getAllBookings(req: Request, res: Response): Promise<void> {
+    const { bookings, meta } = await this.bookingService.getAllBookings(req.query);
+    this.sendPaginatedResponse(
+      req,
+      res,
+      meta,
+      'All bookings retrieved successfully',
+      bookings,
+    );
+  }
+
   // 4. DJ Booking Management
   public async getMyBookings(req: Request, res: Response): Promise<void> {
     const userId = req.user!.id;

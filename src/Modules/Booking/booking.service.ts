@@ -688,6 +688,62 @@ export class BookingServices {
     };
   }
 
+  // Admin Dashboard: List all bookings (Optionally filtered by tenantId)
+  async getAllBookings(query: Record<string, unknown>) {
+    const bookingQuery = new QueryBuilder(this.prisma.booking, query)
+      .search(['eventType', 'address', 'orderReference'])
+      .filter()
+      .sort()
+      .pagination()
+      .fields();
+
+    const tenantIdParam = query.tenantId as string | undefined;
+    if (tenantIdParam && isValidUuid(tenantIdParam)) {
+      bookingQuery.prismaArgs.where = {
+        ...bookingQuery.prismaArgs.where,
+        tenantId: tenantIdParam,
+      };
+    }
+
+    bookingQuery.prismaArgs.include = {
+      client: true,
+      tenant: {
+        select: {
+          id: true,
+          subdomain: true,
+          stageName: true,
+          logoUrl: true,
+          user: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              profileImg: true,
+            },
+          },
+        },
+      },
+      quotes: { orderBy: { version: 'desc' }, take: 1 },
+      agreement: true,
+      review: true,
+      _count: {
+        select: {
+          messages: true,
+          quotes: true,
+        },
+      },
+    };
+
+    const bookings = await this.prisma.booking.findMany(bookingQuery.prismaArgs);
+    const meta = await bookingQuery.countTotal();
+
+    return {
+      bookings,
+      meta,
+    };
+  }
+
   // DJ Dashboard: List all bookings
   async getMyBookings(userId: string, query: Record<string, unknown>) {
     const tenantId = await this.getTenantIdByUserId(userId);
