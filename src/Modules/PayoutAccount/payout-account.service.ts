@@ -35,7 +35,7 @@ export class PaystackConnectService {
       ghana: 'GHS', gh: 'GHS',
       'south africa': 'ZAR', za: 'ZAR',
     };
-    return map[(country || '').trim().toLowerCase()] || 'USD';
+    return map[(country || '').trim().toLowerCase()] || 'KES';
   }
 
   public async createSubaccount(

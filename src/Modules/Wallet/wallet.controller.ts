@@ -49,7 +49,7 @@ export class WalletController extends BaseController {
     const amount = Number(req.query.amount) || 0;
     const userTenant = (req.user as any)?.tenant;
     const currency =
-      (req.query.currency as string) || userTenant?.currencyCode || 'USD';
+      (req.query.currency as string) || userTenant?.currencyCode || 'KES';
     const country =
       (req.query.country as string) || userTenant?.country || 'KE';
 

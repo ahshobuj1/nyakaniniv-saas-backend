@@ -115,7 +115,9 @@ export class SubscriptionServices {
 
   async getAllPlans(currency?: string, all?: boolean) {
     const where = all ? {} : {isActive: true};
-    const targetCurrency = await this.resolveValidCurrency(currency);
+    // If no currency requested or KES requested, always present the platform base prices in KES directly from subscriptionPlan
+    const isBaseKes = !currency || currency.trim().toUpperCase() === 'KES';
+    const targetCurrency = isBaseKes ? 'KES' : await this.resolveValidCurrency(currency);
 
     const plans = await this.prisma.subscriptionPlan.findMany({
       where,
@@ -128,13 +130,17 @@ export class SubscriptionServices {
     });
 
     const mappedPlans = plans.map((plan) => {
-      let activePrice = plan.prices.find((p) => p.currencyCode === targetCurrency);
-      let displayCurrency = targetCurrency;
-
-      if (!activePrice && targetCurrency !== 'USD') {
-        activePrice = plan.prices.find((p) => p.currencyCode === 'USD');
-        if (activePrice) displayCurrency = 'USD';
+      if (isBaseKes) {
+        return {
+          ...plan,
+          currencyCode: 'KES',
+          priceMonthly: Number(plan.priceMonthly || 0),
+          priceAnnually: Number(plan.priceAnnually || 0),
+          availablePrices: plan.prices,
+        };
       }
+
+      const activePrice = plan.prices.find((p) => p.currencyCode === targetCurrency);
 
       const priceMonthly = activePrice
         ? Number(activePrice.priceMonthly)
@@ -144,15 +150,20 @@ export class SubscriptionServices {
         ? Number(activePrice.priceAnnually)
         : Number(plan.priceAnnually || 0);
 
-      if (!activePrice && !plan.prices.length) {
-        displayCurrency = 'USD';
+      // Compute actual discount percentage specific to this currency's monthly & annual prices
+      let discountPercentage = plan.discountPercentage;
+      if (activePrice && priceMonthly > 0 && priceAnnually > 0) {
+        const fullYearPrice = priceMonthly * 12;
+        const computedDiscount = Math.round(((fullYearPrice - priceAnnually) / fullYearPrice) * 100);
+        discountPercentage = computedDiscount > 0 ? computedDiscount : 0;
       }
 
       return {
         ...plan,
-        currencyCode: displayCurrency,
+        currencyCode: activePrice ? targetCurrency : 'KES',
         priceMonthly,
         priceAnnually,
+        discountPercentage,
         availablePrices: plan.prices,
       };
     });

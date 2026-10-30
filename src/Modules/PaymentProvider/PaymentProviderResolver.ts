@@ -73,7 +73,7 @@ export const COUNTRY_ROUTING_MATRIX: Record<string, CountryRoutingConfig> = {
     defaultCurrency: 'RWF',
     collectionGateway: PaymentGateway.FLUTTERWAVE,
     payoutGateway: PaymentGateway.FLUTTERWAVE,
-    supportedGateways: [PaymentGateway.FLUTTERWAVE, PaymentGateway.PESAPAL],
+    supportedGateways: [PaymentGateway.FLUTTERWAVE],
     enabled: true,
   },
   TZ: {

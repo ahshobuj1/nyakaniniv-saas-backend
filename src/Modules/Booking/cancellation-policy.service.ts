@@ -163,7 +163,7 @@ export class CancellationPolicyService {
       outcome = await this.refundTransaction(
         transaction,
         refundCalc.refundAmount,
-        transaction?.currency || booking.currencyCode || 'USD',
+        transaction?.currency || booking.currencyCode || 'KES',
       );
     }
 
@@ -243,7 +243,7 @@ export class CancellationPolicyService {
       const outcome = await this.refundTransaction(
         transaction,
         amount,
-        transaction?.currency || booking.currencyCode || 'USD',
+        transaction?.currency || booking.currencyCode || 'KES',
       );
 
       await this.saveDetails(

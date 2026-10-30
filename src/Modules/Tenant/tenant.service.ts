@@ -41,12 +41,12 @@ export class TenantServices {
       throw new ConflictError('Subdomain is already taken');
     }
 
-    // Resolve valid currency from country. If country currency is not active in DB, default to USD.
+    // Resolve valid currency from country. If country currency is not active in DB, default to KES.
     const candidateCurrency = (data.currencyCode || PaymentProviderResolver.resolveCurrencyFromCountry(data.country)).trim().toUpperCase();
     const activeCurrency = await this.prisma.currency.findUnique({
       where: { code: candidateCurrency },
     });
-    const currencyCode = (activeCurrency && activeCurrency.isActive) ? candidateCurrency : 'USD';
+    const currencyCode = (activeCurrency && activeCurrency.isActive) ? candidateCurrency : 'KES';
 
     const newTenant = await this.prisma.tenant.create({
       data: {
@@ -198,11 +198,11 @@ export class TenantServices {
     if (data.country && !data.currencyCode) {
       const candidateCurrency = PaymentProviderResolver.resolveCurrencyFromCountry(data.country);
       const active = await this.prisma.currency.findUnique({ where: { code: candidateCurrency } });
-      currencyCode = (active && active.isActive) ? candidateCurrency : 'USD';
+      currencyCode = (active && active.isActive) ? candidateCurrency : 'KES';
     } else if (data.currencyCode) {
       const active = await this.prisma.currency.findUnique({ where: { code: data.currencyCode.trim().toUpperCase() } });
       if (!active || !active.isActive) {
-        currencyCode = 'USD';
+        currencyCode = 'KES';
       }
     }
 
