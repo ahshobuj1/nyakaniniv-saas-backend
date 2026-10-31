@@ -1,4 +1,4 @@
-import { PrismaClient, TicketStatus } from '@/prisma/generated/client';
+import { PrismaClient, TicketStatus, NotificationType } from '@/prisma/generated/client';
 import { NotFoundError, BadRequestError, AuthorizationError } from '@/core/errors/AppError';
 import { CreateSupportTicketDTO, UpdateTicketStatusDTO } from './SupportTicketDTO';
 import { QueryBuilder } from '@/utils/QueryBuilder';
@@ -17,6 +17,14 @@ export class SupportTicketServices {
   async createTicket(data: CreateSupportTicketDTO, userId?: string) {
     if (userId && !isValidUuid(userId)) {
       userId = undefined;
+    }
+    if (!userId && data.email) {
+      const existingUser = await this.prisma.user.findUnique({
+        where: { email: data.email },
+      });
+      if (existingUser) {
+        userId = existingUser.id;
+      }
     }
     const ticket = await this.prisma.supportTicket.create({
       data: {
@@ -45,25 +53,171 @@ export class SupportTicketServices {
       );
     }
 
+    // Create system notification for Admin
+    await this.prisma.notification.create({
+      data: {
+        title: 'New Support Ticket',
+        message: `${data.fullName} submitted a support ticket: "${data.subject}"`,
+        type: NotificationType.system,
+        referenceId: ticket.id,
+      },
+    }).catch(err => {
+      console.error('Failed to create notification for support ticket:', err);
+    });
+
     return ticket;
   }
 
   async getAllTickets(query: Record<string, unknown> = {}) {
-    const ticketQuery = new QueryBuilder(this.prisma.supportTicket, query)
+    const { priority, plan, ...restQuery } = query;
+
+    const ticketQuery = new QueryBuilder(this.prisma.supportTicket, restQuery)
       .search(['fullName', 'email', 'subject', 'issue'])
       .filter()
       .sort()
       .pagination()
       .fields();
 
-    if (!ticketQuery.prismaArgs.select) {
-      ticketQuery.prismaArgs.include = {
-        user: true,
+    // Priority Support filter: Tickets submitted by DJs on plans with Priority Support (e.g. Elite)
+    if (priority === 'priority' || priority === 'high') {
+      ticketQuery.prismaArgs.where.user = {
+        subscriptions: {
+          some: {
+            status: 'active',
+            plan: {
+              name: { in: ['Elite', 'elite', 'ELITE'] },
+            },
+          },
+        },
+      };
+    } else if (priority === 'standard' || priority === 'regular') {
+      ticketQuery.prismaArgs.where.OR = [
+        { userId: null },
+        {
+          user: {
+            subscriptions: {
+              none: {
+                status: 'active',
+                plan: {
+                  name: { in: ['Elite', 'elite', 'ELITE'] },
+                },
+              },
+            },
+          },
+        },
+      ];
+    }
+
+    // Plan name filter
+    if (plan && plan !== 'all') {
+      ticketQuery.prismaArgs.where.user = {
+        subscriptions: {
+          some: {
+            status: 'active',
+            plan: {
+              name: { equals: String(plan), mode: 'insensitive' },
+            },
+          },
+        },
       };
     }
 
-    const tickets = await ticketQuery.model.findMany(ticketQuery.prismaArgs);
+    if (!ticketQuery.prismaArgs.select) {
+      ticketQuery.prismaArgs.include = {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            profileImg: true,
+            role: true,
+            tenant: {
+              select: {
+                id: true,
+                stageName: true,
+                subdomain: true,
+              },
+            },
+            subscriptions: {
+              where: {
+                status: 'active',
+              },
+              take: 1,
+              orderBy: {
+                createdAt: 'desc',
+              },
+              include: {
+                plan: true,
+              },
+            },
+          },
+        },
+      };
+    }
+
+    const rawTickets = await ticketQuery.model.findMany(ticketQuery.prismaArgs);
     const meta = await ticketQuery.countTotal();
+
+    // For any tickets without user linked, check if user exists by email
+    const missingEmails = rawTickets
+      .filter((t: any) => !t.user && t.email)
+      .map((t: any) => t.email.toLowerCase());
+
+    let usersByEmail: Record<string, any> = {};
+    if (missingEmails.length > 0) {
+      const foundUsers = await this.prisma.user.findMany({
+        where: { email: { in: missingEmails } },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          profileImg: true,
+          role: true,
+          tenant: {
+            select: {
+              id: true,
+              stageName: true,
+              subdomain: true,
+            },
+          },
+          subscriptions: {
+            where: {
+              status: 'active',
+            },
+            take: 1,
+            orderBy: {
+              createdAt: 'desc',
+            },
+            include: {
+              plan: true,
+            },
+          },
+        },
+      });
+      usersByEmail = Object.fromEntries(foundUsers.map(u => [u.email.toLowerCase(), u]));
+    }
+
+    const tickets = rawTickets.map((ticket: any) => {
+      const user = ticket.user || (ticket.email ? usersByEmail[ticket.email.toLowerCase()] : null);
+      const activeSubscription = user?.subscriptions?.[0] || null;
+      const activePlan = activeSubscription?.plan || null;
+      const planName = activePlan?.name || null;
+      const hasPrioritySupport =
+        Boolean(activePlan?.features?.PRIORITY_SUPPORT) ||
+        (typeof planName === 'string' && planName.toLowerCase() === 'elite');
+
+      return {
+        ...ticket,
+        user,
+        tenant: user?.tenant || null,
+        activePlan,
+        planName,
+        priority: hasPrioritySupport ? 'priority' : 'standard',
+        hasPrioritySupport,
+      };
+    });
 
     return { tickets, meta };
   }

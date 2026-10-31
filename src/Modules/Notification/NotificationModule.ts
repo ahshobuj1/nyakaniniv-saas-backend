@@ -53,6 +53,12 @@ export class NotificationModule extends BaseModule {
     );
 
     this.router.patch(
+      "/mark-all-read",
+      authenticateUser,
+      controller.markAllAsRead.bind(controller),
+    );
+
+    this.router.patch(
       "/:id/read",
       authenticateUser,
       controller.markAsRead.bind(controller),

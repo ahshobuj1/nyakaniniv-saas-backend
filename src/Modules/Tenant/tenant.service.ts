@@ -1,5 +1,5 @@
 // src/Modules/Tenant/tenant.service.ts
-import {PrismaClient} from '@/prisma/generated/client';
+import {PrismaClient, NotificationType} from '@/prisma/generated/client';
 import {AppLogger} from '@/core/logging/logger';
 import {ConflictError, NotFoundError} from '@/core/errors/AppError';
 import {CreateTenantDTO, UpdateTenantDTO} from './TenantDTO';
@@ -60,6 +60,18 @@ export class TenantServices {
         isActive: true, // Assuming active by default, or depends on subscription later
       },
       include: {user: true},
+    });
+
+    // Notify Admin of new DJ tenant registration
+    await this.prisma.notification.create({
+      data: {
+        title: 'New DJ Profile Created',
+        message: `${newTenant.stageName || newTenant.subdomain} registered a new DJ profile (${newTenant.subdomain}.deejay.africa)`,
+        type: NotificationType.system,
+        referenceId: newTenant.id,
+      },
+    }).catch(err => {
+      this.logger.error('Failed to create notification for new tenant:', err);
     });
 
     if (newTenant.user && newTenant.user.email) {

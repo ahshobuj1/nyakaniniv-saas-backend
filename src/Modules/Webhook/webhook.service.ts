@@ -239,6 +239,25 @@ export class WebhookServices {
             },
           });
         }
+
+        // Notify Admin of subscription payment
+        try {
+          const plan = await tx.subscriptionPlan.findUnique({ where: { id: invoice.planId } });
+          const user = await tx.user.findUnique({ where: { id: invoice.userId } });
+          const userName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.email || 'User';
+          const planName = plan?.name || 'Subscription';
+          await tx.notification.create({
+            data: {
+              userId: null,
+              title: 'Subscription Payment Received',
+              message: `${userName} subscribed to ${planName} Plan (${invoice.currencyCode || 'USD'} ${invoice.amount})`,
+              type: NotificationType.payment,
+              referenceId: invoice.id,
+            },
+          });
+        } catch (notifErr) {
+          this.logger.error('Failed to create admin notification for subscription payment:', notifErr);
+        }
       }
     });
 

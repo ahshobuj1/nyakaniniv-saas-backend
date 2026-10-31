@@ -7,6 +7,7 @@ export const createNotificationSchema = {
     title: z.string().min(2, "Title must be at least 2 characters"),
     message: z.string().min(5, "Message must be at least 5 characters"),
     type: z.nativeEnum(NotificationType).optional().default(NotificationType.system),
+    referenceId: z.string().optional(),
   }),
 };
 

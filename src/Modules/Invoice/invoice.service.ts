@@ -396,7 +396,7 @@ export class InvoiceServices {
     const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
     const tenantId = await this.getTenantIdByUserId(userId).catch(() => null);
 
-    const invoice = await this.prisma.invoice.findFirst({
+    let invoice = await this.prisma.invoice.findFirst({
       where: isAdmin
         ? {id}
         : {
@@ -443,6 +443,63 @@ export class InvoiceServices {
         },
       },
     });
+
+    if (!invoice) {
+      // Check if `id` is a transaction ID and resolve its invoice
+      const tx = await this.prisma.transaction.findUnique({
+        where: { id },
+        select: { invoiceId: true },
+      });
+      if (tx?.invoiceId) {
+        invoice = await this.prisma.invoice.findFirst({
+          where: isAdmin
+            ? { id: tx.invoiceId }
+            : {
+                id: tx.invoiceId,
+                OR: [
+                  { userId },
+                  ...(tenantId ? [{ tenantId }] : []),
+                  { booking: { clientId: userId } },
+                ],
+              },
+          include: {
+            user: {select: {firstName: true, lastName: true, email: true}},
+            plan: {select: {name: true}},
+            tenant: {
+              select: {
+                stageName: true,
+                country: true,
+                city: true,
+                user: {select: {firstName: true, lastName: true, email: true}},
+              },
+            },
+            booking: {
+              select: {
+                id: true,
+                eventDate: true,
+                eventType: true,
+                address: true,
+                client: {select: {name: true, email: true, phone: true}},
+              },
+            },
+            transactions: {
+              orderBy: {createdAt: 'desc'},
+              take: 1,
+              select: {
+                id: true,
+                gateway: true,
+                channel: true,
+                cardBrand: true,
+                cardLast4: true,
+                gatewayReference: true,
+                idempotencyKey: true,
+                createdAt: true,
+              },
+            },
+          },
+        });
+      }
+    }
 
     if (!invoice) {
       throw new NotFoundError('Invoice not found');
@@ -674,7 +731,7 @@ export class InvoiceServices {
       throw new NotFoundError('Invoice not found');
     }
 
-    const invoice = await this.prisma.invoice.findUnique({
+    let invoice = await this.prisma.invoice.findUnique({
       where: {id},
       include: {
         booking: {include: {client: true}},
@@ -687,6 +744,29 @@ export class InvoiceServices {
         },
       },
     });
+
+    if (!invoice) {
+      // Check if `id` is a transaction ID
+      const tx = await this.prisma.transaction.findUnique({
+        where: { id },
+        select: { invoiceId: true },
+      });
+      if (tx?.invoiceId) {
+        invoice = await this.prisma.invoice.findUnique({
+          where: { id: tx.invoiceId },
+          include: {
+            booking: {include: {client: true}},
+            tenant: {include: {user: true}},
+            user: true,
+            plan: true,
+            transactions: {
+              orderBy: {createdAt: 'desc'},
+              take: 1,
+            },
+          },
+        });
+      }
+    }
 
     if (!invoice) {
       throw new NotFoundError();

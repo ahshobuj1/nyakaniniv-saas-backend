@@ -15,6 +15,7 @@ import {
   PaymentChannel,
   TransactionStatus,
   PaymentGateway,
+  NotificationType,
 } from '@/prisma/generated/client';
 import {IEmailProvider} from '@/providers/EmailProvider';
 import {PaymentProviderResolver} from '@/Modules/PaymentProvider/PaymentProviderResolver';
@@ -528,6 +529,22 @@ export class SubscriptionServices {
               subscriptionStatus: SubscriptionStatus.active,
             },
           });
+        }
+
+        // Notify Admin of subscription upgrade
+        try {
+          const userName = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email || 'User';
+          await tx.notification.create({
+            data: {
+              userId: null,
+              title: 'Subscription Activated',
+              message: `${userName} upgraded to ${plan.name} Plan (${currency} 0.00 via credits)`,
+              type: NotificationType.payment,
+              referenceId: zeroInvoice.id,
+            },
+          });
+        } catch {
+          // ignore notification failure inside tx
         }
       });
 

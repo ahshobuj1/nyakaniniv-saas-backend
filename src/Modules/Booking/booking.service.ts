@@ -339,6 +339,19 @@ export class BookingServices {
       }
     }
 
+    // Notify Platform Admin of new booking
+    await this.prisma.notification.create({
+      data: {
+        userId: null,
+        title: 'New Platform Booking',
+        message: `${data.clientName} booked DJ ${tenant.stageName || tenant.subdomain} for ${data.eventType}`,
+        type: NotificationType.booking_request,
+        referenceId: booking.id,
+      },
+    }).catch((err) => {
+      this.logger.error('Failed to create admin notification for booking:', err);
+    });
+
     // Auto-reply email to Client
     const clientTz = booking.eventTimezone || 'Africa/Nairobi';
     const clientTimeDisplay = EmailTemplates.formatEventDateTimeWithZone(

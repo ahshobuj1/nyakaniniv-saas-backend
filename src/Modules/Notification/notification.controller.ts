@@ -25,6 +25,12 @@ export class NotificationController extends BaseController {
     this.sendResponse(req, res, 'Notification marked as read', undefined, notification);
   }
 
+  public async markAllAsRead(req: Request, res: Response): Promise<void> {
+    const userId = req.user!.id;
+    const result = await this.notificationService.markAllAsRead(userId);
+    this.sendResponse(req, res, 'All notifications marked as read', undefined, result);
+  }
+
   public async getUnreadCount(req: Request, res: Response): Promise<void> {
     const userId = req.user!.id;
     const count = await this.notificationService.getUnreadCount(userId);
