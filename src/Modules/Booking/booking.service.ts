@@ -3,6 +3,7 @@ import {
   BookingStatus,
   DirectPaymentStatus,
   NotificationType,
+  UserRole,
 } from '@/prisma/generated/client';
 import {
   BadRequestError,
@@ -804,9 +805,17 @@ export class BookingServices {
 
     const where: any = {id};
     if (userId) {
-      const tenant = await this.prisma.tenant.findUnique({where: {userId}});
-      if (tenant) {
-        where.tenantId = tenant.id;
+      const user = await this.prisma.user.findUnique({
+        where: {id: userId},
+        select: {role: true},
+      });
+      const isAdmin =
+        user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.ADMIN;
+      if (!isAdmin) {
+        const tenant = await this.prisma.tenant.findUnique({where: {userId}});
+        if (tenant) {
+          where.tenantId = tenant.id;
+        }
       }
     }
 
@@ -825,6 +834,14 @@ export class BookingServices {
         agreement: true,
         messages: {
           orderBy: {createdAt: 'asc'},
+        },
+        auditEvents: {
+          orderBy: {createdAt: 'asc'},
+        },
+        invoice: {
+          include: {
+            transactions: true,
+          },
         },
         review: true,
       },

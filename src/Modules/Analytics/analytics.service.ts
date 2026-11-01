@@ -5,7 +5,7 @@ export class AnalyticsServices {
 
   async getAdminAnalytics(filterCurrency?: string) {
     const isSpecificCurrency = !!filterCurrency && filterCurrency.trim().toUpperCase() !== 'ALL';
-    const targetCurrency = isSpecificCurrency ? filterCurrency!.trim().toUpperCase() : 'USD';
+    const targetCurrency = isSpecificCurrency ? filterCurrency!.trim().toUpperCase() : 'KES';
 
     const [
       totalUsers,
@@ -71,10 +71,14 @@ export class AnalyticsServices {
         orderBy: { createdAt: 'desc' },
         select: {
           id: true,
+          orderReference: true,
+          currencyCode: true,
           eventType: true,
           eventDate: true,
           address: true,
           status: true,
+          paymentStatus: true,
+          directPaymentStatus: true,
           totalAmount: true,
           createdAt: true,
           client: {
@@ -89,6 +93,8 @@ export class AnalyticsServices {
             select: {
               id: true,
               subdomain: true,
+              stageName: true,
+              logoUrl: true,
               user: {
                 select: {
                   firstName: true,
@@ -228,11 +234,14 @@ export class AnalyticsServices {
     };
   }
 
-  async getAdminCharts() {
+  async getAdminCharts(currency?: string) {
+    const isSpecific = !!currency && currency.trim().toUpperCase() !== 'ALL';
+    const targetCurrency = isSpecific ? currency!.trim().toUpperCase() : 'KES';
+
     const revenueChart = await this.prisma.$queryRaw`
       SELECT to_char(DATE_TRUNC('month', created_at), 'YYYY-MM') as month, COALESCE(SUM(amount), 0)::float as amount
-      FROM invoices
-      WHERE status = 'PAID' AND type = 'SUBSCRIPTION' AND created_at >= CURRENT_DATE - INTERVAL '12 months'
+      FROM transactions
+      WHERE status = 'SUCCEEDED' AND currency = ${targetCurrency} AND created_at >= CURRENT_DATE - INTERVAL '12 months'
       GROUP BY month
       ORDER BY month ASC;
     `;

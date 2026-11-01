@@ -24,7 +24,7 @@ export class PaystackProvider implements IPaymentProvider {
   private readonly logger = new AppLogger('PaystackProvider');
 
   /** Currencies supported by this Paystack Kenya business account (no domiciliary USD). */
-  private readonly SUPPORTED_CURRENCIES = new Set(['KES']);
+  private readonly SUPPORTED_CURRENCIES = new Set(['KES', 'NGN', 'GHS', 'ZAR']);
 
   constructor() {
     this.secretKey = process.env.PAYSTACK_SECRET_KEY || '';
@@ -58,16 +58,10 @@ export class PaystackProvider implements IPaymentProvider {
   public async initializePayment(input: PaymentInitializationInput): Promise<PaymentInitializationResult> {
     const currencyUpper = input.currency.trim().toUpperCase();
 
-    // Guard: Paystack KE account only supports KES
+    // Log warning if non-standard currency, but allow API initialization attempt
     if (!this.SUPPORTED_CURRENCIES.has(currencyUpper)) {
-      this.logger.error(
-        `[PaystackProvider] Unsupported currency: ${currencyUpper}. ` +
-        `Paystack Kenya supports: ${[...this.SUPPORTED_CURRENCIES].join(', ')}. ` +
-        `Route ${currencyUpper} payments to Flutterwave or Pesapal.`,
-      );
-      throw new Error(
-        `Paystack (Kenya account) does not support ${currencyUpper}. ` +
-        `Please use Flutterwave for NGN/GHS/ZAR/UGX/RWF or Pesapal for TZS.`,
+      this.logger.warn(
+        `[PaystackProvider] Initializing payment with currency ${currencyUpper}. Paystack primary currencies: ${[...this.SUPPORTED_CURRENCIES].join(', ')}.`,
       );
     }
 

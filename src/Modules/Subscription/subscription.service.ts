@@ -20,8 +20,11 @@ import {
 import {IEmailProvider} from '@/providers/EmailProvider';
 import {PaymentProviderResolver} from '@/Modules/PaymentProvider/PaymentProviderResolver';
 import {config} from '@/core/config';
+import {AppLogger} from '@/core/logging/logger';
 
 export class SubscriptionServices {
+  private readonly logger = new AppLogger('SubscriptionServices');
+
   constructor(
     private prisma: PrismaClient,
     private emailProvider: IEmailProvider,
@@ -588,26 +591,64 @@ export class SubscriptionServices {
       ? `UpBeat Upgrade: ${plan.name} (${data.billingCycle}) - Prorated (Credit: ${currency} ${preview.appliedCredit})`
       : `UpBeat Subscription: ${plan.name} (${data.billingCycle})`;
 
-    const paymentResult = await provider.initializePayment({
-      reference,
-      amount,
-      currency,
-      email: user.email,
-      name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'DJ',
-      description: paymentDescription,
-      callbackUrl,
-      cancelUrl,
-      paymentType: 'SUBSCRIPTION',
-      country,
-      metadata: {
-        userId,
-        planId: String(plan.id),
-        billingCycle: data.billingCycle,
-        invoiceId: invoice.id,
-        isUpgrade: preview.isUpgrade,
-        appliedCredit: preview.appliedCredit,
-      },
-    });
+    let paymentResult;
+    let actualGateway = provider.gateway;
+    try {
+      paymentResult = await provider.initializePayment({
+        reference,
+        amount,
+        currency,
+        email: user.email,
+        name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'DJ',
+        description: paymentDescription,
+        callbackUrl,
+        cancelUrl,
+        paymentType: 'SUBSCRIPTION',
+        country,
+        metadata: {
+          userId,
+          planId: String(plan.id),
+          billingCycle: data.billingCycle,
+          invoiceId: invoice.id,
+          isUpgrade: preview.isUpgrade,
+          appliedCredit: preview.appliedCredit,
+        },
+      });
+    } catch (primaryErr: any) {
+      if (provider.gateway !== PaymentGateway.FLUTTERWAVE) {
+        this.logger.warn(
+          `Primary gateway ${provider.gateway} failed for ${currency}. Attempting Flutterwave fallback... Reason: ${primaryErr?.message}`
+        );
+        try {
+          const fallbackProvider = PaymentProviderResolver.getProviderInstance(PaymentGateway.FLUTTERWAVE);
+          paymentResult = await fallbackProvider.initializePayment({
+            reference,
+            amount,
+            currency,
+            email: user.email,
+            name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'DJ',
+            description: paymentDescription,
+            callbackUrl,
+            cancelUrl,
+            paymentType: 'SUBSCRIPTION',
+            country,
+            metadata: {
+              userId,
+              planId: String(plan.id),
+              billingCycle: data.billingCycle,
+              invoiceId: invoice.id,
+              isUpgrade: preview.isUpgrade,
+              appliedCredit: preview.appliedCredit,
+            },
+          });
+          actualGateway = fallbackProvider.gateway;
+        } catch (fallbackErr: any) {
+          throw new BadRequestError(`Payment initialization failed: ${primaryErr?.message || fallbackErr?.message}`);
+        }
+      } else {
+        throw new BadRequestError(`Payment initialization failed: ${primaryErr?.message}`);
+      }
+    }
 
     // Create pending transaction record
     await this.prisma.transaction.create({
@@ -617,7 +658,7 @@ export class SubscriptionServices {
         tenantId: user.tenant?.id,
         amount,
         currency,
-        gateway: provider.gateway,
+        gateway: actualGateway,
         channel: PaymentChannel.UNKNOWN,
         status: TransactionStatus.PENDING,
         gatewayReference: reference,

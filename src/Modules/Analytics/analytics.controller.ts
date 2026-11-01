@@ -29,7 +29,8 @@ export class AnalyticsController extends BaseController {
 
   getAdminCharts = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const result = await this.analyticsServices.getAdminCharts();
+      const currency = req.query.currency as string | undefined;
+      const result = await this.analyticsServices.getAdminCharts(currency);
       return this.sendResponse(req, res, 'Admin charts retrieved successfully', 200, result);
     } catch (error) {
       next(error);

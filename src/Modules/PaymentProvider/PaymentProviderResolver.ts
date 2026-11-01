@@ -91,7 +91,7 @@ export class PaymentProviderResolver {
   private static logger = new AppLogger('PaymentProviderResolver');
   private static providers: Map<PaymentGateway, IPaymentProvider> = new Map();
 
-  private static getProviderInstance(
+  public static getProviderInstance(
     gateway: PaymentGateway,
   ): IPaymentProvider {
     if (!this.providers.has(gateway)) {
@@ -368,6 +368,9 @@ export class PaymentProviderResolver {
    * USD is not accepted on this platform.
    * Falls back to Paystack if currency is not in the routing map (should not happen in production).
    */
+  private static readonly PAYSTACK_CURRENCIES = new Set(['KES', 'NGN', 'GHS', 'ZAR']);
+  private static readonly PESAPAL_CURRENCIES = new Set(['TZS', 'KES', 'UGX']);
+
   public static resolveByCurrency(
     currency: string,
     requestedGateway?: string | null,
@@ -376,16 +379,22 @@ export class PaymentProviderResolver {
 
     if (requestedGateway) {
       const g = requestedGateway.trim().toUpperCase();
-      if (g === 'PAYSTACK')
+      if (g === 'PAYSTACK' && this.PAYSTACK_CURRENCIES.has(code)) {
         return this.getProviderInstance(PaymentGateway.PAYSTACK);
-      if (g === 'FLUTTERWAVE')
-        return this.getProviderInstance(PaymentGateway.FLUTTERWAVE);
-      if (g === 'PESAPAL')
+      }
+      if (g === 'PESAPAL' && this.PESAPAL_CURRENCIES.has(code)) {
         return this.getProviderInstance(PaymentGateway.PESAPAL);
+      }
+      if (g === 'FLUTTERWAVE') {
+        return this.getProviderInstance(PaymentGateway.FLUTTERWAVE);
+      }
+      this.logger.warn(
+        `Requested gateway ${g} is not optimal for ${code}. Auto-routing to optimal gateway.`
+      );
     }
 
     const gateway =
-      SUBSCRIPTION_CURRENCY_ROUTING[code] || PaymentGateway.PAYSTACK;
+      SUBSCRIPTION_CURRENCY_ROUTING[code] || PaymentGateway.FLUTTERWAVE;
     return this.getProviderInstance(gateway);
   }
 
