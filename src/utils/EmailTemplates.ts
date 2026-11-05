@@ -788,6 +788,27 @@ export class EmailTemplates {
     return this.getHtmlShell("Subscription Expiring Soon", content);
   }
 
+  // Case 18B: Subscription Grace Period (Portfolio remains live for 7 days)
+  static getSubscriptionGracePeriodTemplate(daysRemaining: number): string {
+    const renewUrl = `${config.clientUrl}/dashboard/billing`;
+    const content = `
+      <h2 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 700; color: #d97706;">Action Required: 7-Day Grace Period Active</h2>
+      <p style="margin: 0 0 16px 0; font-size: 15px; color: #4b5563; line-height: 1.6;">
+        Your UpBeat Africa subscription has reached its renewal date. We have activated your <strong>${daysRemaining}-day grace period</strong>, so your public DJ portfolio website remains online without disruption.
+      </p>
+      <p style="margin: 0 0 24px 0; font-size: 15px; color: #4b5563; line-height: 1.6;">
+        To prevent your website from going offline when the grace period ends, please renew your subscription below:
+      </p>
+      <div style="margin: 28px 0;">
+        <a href="${renewUrl}" style="display: block; width: 100%; box-sizing: border-box; background-color: #10B981; color: #ffffff; text-align: center; padding: 14px 20px; font-size: 15px; font-weight: 700; text-decoration: none; border-radius: 6px;">Renew Plan Now</a>
+      </div>
+      <p style="margin: 24px 0 0 0; font-size: 13px; color: #9ca3af; line-height: 1.5; border-top: 1px solid #f3f4f6; padding-top: 16px;">
+        If you recently completed payment, your dashboard will update as soon as the gateway confirmation arrives.
+      </p>
+    `;
+    return this.getHtmlShell("Subscription Grace Period Active", content);
+  }
+
   // Case 19: Subscription Expired
   static getSubscriptionExpiredTemplate(): string {
     const renewUrl = `${config.clientUrl}/dashboard/billing`;

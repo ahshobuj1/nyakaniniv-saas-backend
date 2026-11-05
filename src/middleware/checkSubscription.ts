@@ -31,15 +31,26 @@ export const checkSubscription = (requiredFeatures: string[] = []) => {
         throw new NotFoundError('Tenant profile not found for this user.');
       }
 
-      // 1. First, check if there is an actual active subscription
-      const activeSub = await prisma.subscription.findFirst({
-        where: { userId: user.id, status: 'active' },
+      // 1. First, check if there is an active or grace period subscription
+      const sub = await prisma.subscription.findFirst({
+        where: {
+          userId: user.id,
+          status: { in: ['active', 'past_due'] },
+        },
         orderBy: { createdAt: 'desc' }
       });
 
-      // 2. If no active sub exists, but tenant says active, heal it to canceled
-      if (!activeSub) {
-        if (tenant.subscriptionStatus === 'active') {
+      const now = new Date();
+      const GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000;
+      const isSubValid = Boolean(
+        sub &&
+        sub.periodEnd &&
+        (new Date(sub.periodEnd) > now || now.getTime() <= new Date(sub.periodEnd).getTime() + GRACE_PERIOD_MS)
+      );
+
+      // 2. If no valid active or grace sub exists, heal tenant to canceled and throw error
+      if (!isSubValid || !sub) {
+        if (tenant.subscriptionStatus === 'active' || tenant.subscriptionStatus === 'past_due') {
           await prisma.tenant.update({
             where: { id: tenant.id },
             data: { subscriptionStatus: 'canceled' }
@@ -48,16 +59,17 @@ export const checkSubscription = (requiredFeatures: string[] = []) => {
         throw new AuthorizationError('Subscription is inactive or expired. Please renew your subscription to access this feature.');
       }
 
-      // 3. If active sub exists, but tenant says otherwise, heal it to active
-      if (tenant.subscriptionStatus !== 'active') {
+      // 3. Keep tenant subscription status synchronized with the active/past_due sub
+      const expectedStatus = sub.status === 'past_due' ? 'past_due' : 'active';
+      if (tenant.subscriptionStatus !== expectedStatus || tenant.activePlanId !== sub.planId) {
         await prisma.tenant.update({
           where: { id: tenant.id },
           data: { 
-            subscriptionStatus: 'active', 
-            activePlanId: activeSub.planId 
+            subscriptionStatus: expectedStatus, 
+            activePlanId: sub.planId 
           }
         });
-        tenant.subscriptionStatus = 'active';
+        tenant.subscriptionStatus = expectedStatus;
       }
 
       // If required features are specified, verify them

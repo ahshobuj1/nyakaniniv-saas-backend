@@ -261,12 +261,26 @@ export class SupportTicketServices {
       data: { status: data.status },
     });
 
-    if (data.status === TicketStatus.resolved && updated.email) {
-      this.emailProvider.sendEmail(
-        updated.email,
-        "Support Ticket Resolved ✅ - UpBeat Entertainment Africa",
-        EmailTemplates.getSupportTicketResolvedTemplate(updated.subject || "Your Ticket")
-      );
+    if (data.status === TicketStatus.resolved) {
+      if (updated.email) {
+        this.emailProvider.sendEmail(
+          updated.email,
+          "Support Ticket Resolved ✅ - UpBeat Entertainment Africa",
+          EmailTemplates.getSupportTicketResolvedTemplate(updated.subject || "Your Ticket")
+        );
+      }
+
+      if (updated.userId) {
+        await this.prisma.notification.create({
+          data: {
+            userId: updated.userId,
+            title: 'Support Ticket Resolved ✅',
+            message: `Your support ticket "${updated.subject || 'Ticket'}" has been marked as resolved.`,
+            type: NotificationType.system,
+            referenceId: updated.id,
+          },
+        }).catch(() => {});
+      }
     }
 
     return updated;

@@ -4,6 +4,7 @@ import {
   PaymentStatus,
   InvoiceStatus,
   TransactionStatus,
+  NotificationType,
   Prisma,
 } from '@/prisma/generated/client';
 import { BadRequestError, NotFoundError } from '@/core/errors/AppError';
@@ -338,6 +339,18 @@ export class BookingStatusService {
           EmailTemplates.getHtmlShell('Booking Confirmed', djContent)
         );
       }
+
+      if (updated.tenant?.userId) {
+        await this.prisma.notification.create({
+          data: {
+            userId: updated.tenant.userId,
+            title: 'Booking Confirmed! 📅',
+            message: `Booking ${orderReference} for ${eventName} on ${eventDate} is officially confirmed.`,
+            type: NotificationType.booking_request,
+            referenceId: updated.id,
+          },
+        }).catch(() => {});
+      }
     }
 
     // COMPLETED: Invite client to leave rating and review
@@ -395,6 +408,18 @@ export class BookingStatusService {
             manageUrl: dashboardUrl,
           })
         );
+      }
+
+      if (cancelledBy !== 'DJ' && updated.tenant?.userId) {
+        await this.prisma.notification.create({
+          data: {
+            userId: updated.tenant.userId,
+            title: 'Booking Cancelled by Client',
+            message: `${clientName} cancelled booking ${orderReference} for ${eventName}. Reason: ${reason || 'No reason provided.'}`,
+            type: NotificationType.booking_request,
+            referenceId: updated.id,
+          },
+        }).catch(() => {});
       }
     }
   }

@@ -1,5 +1,5 @@
 import cron from 'node-cron';
-import { PrismaClient, BookingStatus, SubscriptionStatus } from '@/prisma/generated/client';
+import { PrismaClient, BookingStatus, SubscriptionStatus, NotificationType } from '@/prisma/generated/client';
 import { IEmailProvider } from '@/providers/EmailProvider';
 import { EmailTemplates } from '@/utils/EmailTemplates';
 import { AppLogger } from '@/core/logging/logger';
@@ -119,6 +119,20 @@ export class EmailCronJobs {
           EmailTemplates.getSubscriptionExpiryWarningTemplate(3)
         );
       }
+
+      if (sub.userId) {
+        await this.prisma.notification.create({
+          data: {
+            userId: sub.userId,
+            title: 'Subscription Expiring Soon (3 Days Left) 📅',
+            message: 'Your subscription will expire in 3 days. Renew now to keep your DJ portfolio uninterrupted.',
+            type: NotificationType.system,
+            referenceId: sub.id,
+          },
+        }).catch((err) => {
+          this.logger.error('Failed to create in-app expiry notification:', err);
+        });
+      }
     }
 
     this.logger.info(`[CRON] Processed ${expiringSubscriptions.length} subscription expiry warnings.`);
@@ -126,27 +140,89 @@ export class EmailCronJobs {
 
   private async runSubscriptionExpiry() {
     const now = new Date();
+    const GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000;
 
-    const expiredSubscriptions = await this.prisma.subscription.findMany({
+    // Stage 1: Subscriptions that just reached their periodEnd (active -> past_due: Grace Period starts)
+    // The DJ's portfolio remains LIVE during this 7-day grace period!
+    const newlyExpiredSubscriptions = await this.prisma.subscription.findMany({
       where: {
         status: SubscriptionStatus.active,
         periodEnd: {
-          lt: now
-        }
+          lt: now,
+        },
       },
-      include: { user: true }
+      include: { user: true },
     });
 
-    for (const sub of expiredSubscriptions) {
+    for (const sub of newlyExpiredSubscriptions) {
       await this.prisma.subscription.update({
         where: { id: sub.id },
-        data: { status: SubscriptionStatus.past_due }
+        data: { status: SubscriptionStatus.past_due },
       });
 
       if (sub.userId) {
         await this.prisma.tenant.updateMany({
           where: { userId: sub.userId },
-          data: { subscriptionStatus: SubscriptionStatus.past_due }
+          data: { subscriptionStatus: SubscriptionStatus.past_due },
+        });
+
+        await this.prisma.notification.create({
+          data: {
+            userId: sub.userId,
+            title: '7-Day Grace Period Active ⚠️',
+            message: 'Your subscription cycle ended. You have entered a 7-day grace period. Your portfolio remains online, but will go offline in 7 days if not renewed.',
+            type: NotificationType.system,
+            referenceId: sub.id,
+          },
+        }).catch((err) => {
+          this.logger.error('Failed to create in-app grace period notification:', err);
+        });
+      }
+
+      if (sub.user?.email) {
+        this.emailProvider.sendEmail(
+          sub.user.email,
+          "Action Required: Subscription Grace Period (7 Days Remaining) - UpBeat Entertainment Africa",
+          EmailTemplates.getSubscriptionGracePeriodTemplate(7),
+        );
+      }
+    }
+
+    // Stage 2: Subscriptions in past_due whose 7-day grace period has now fully expired
+    // Only now does the DJ's portfolio go offline (past_due -> canceled)
+    const graceCutoff = new Date(now.getTime() - GRACE_PERIOD_MS);
+    const graceExpiredSubscriptions = await this.prisma.subscription.findMany({
+      where: {
+        status: SubscriptionStatus.past_due,
+        periodEnd: {
+          lt: graceCutoff,
+        },
+      },
+      include: { user: true },
+    });
+
+    for (const sub of graceExpiredSubscriptions) {
+      await this.prisma.subscription.update({
+        where: { id: sub.id },
+        data: { status: SubscriptionStatus.canceled },
+      });
+
+      if (sub.userId) {
+        await this.prisma.tenant.updateMany({
+          where: { userId: sub.userId },
+          data: { subscriptionStatus: SubscriptionStatus.canceled },
+        });
+
+        await this.prisma.notification.create({
+          data: {
+            userId: sub.userId,
+            title: 'Subscription Expired - Portfolio Offline ⚠️',
+            message: 'Your 7-day grace period has ended and your public portfolio website is now offline. Please renew your plan to reactivate.',
+            type: NotificationType.system,
+            referenceId: sub.id,
+          },
+        }).catch((err) => {
+          this.logger.error('Failed to create in-app cancellation notification:', err);
         });
       }
 
@@ -154,11 +230,13 @@ export class EmailCronJobs {
         this.emailProvider.sendEmail(
           sub.user.email,
           "Subscription Expired - Portfolio Offline ⚠️ - UpBeat Entertainment Africa",
-          EmailTemplates.getSubscriptionExpiredTemplate()
+          EmailTemplates.getSubscriptionExpiredTemplate(),
         );
       }
     }
 
-    this.logger.info(`[CRON] Processed ${expiredSubscriptions.length} expired subscriptions.`);
+    this.logger.info(
+      `[CRON] Processed ${newlyExpiredSubscriptions.length} grace period entries and ${graceExpiredSubscriptions.length} grace-expired cancellations.`,
+    );
   }
 }
