@@ -200,14 +200,47 @@ export class WebhookServices {
         // Dynamic period calculation based on billing cycle (annually: 365 days, monthly: 30 days)
         const txMeta = (transaction?.metadata as any) || (params.metadata as any) || {};
         const cycle = txMeta.billingCycle || 'monthly';
+        const isUpgrade = Boolean(txMeta.isUpgrade);
+        const isRenewal = Boolean(txMeta.isRenewal);
         const durationDays = cycle === 'annually' ? 365 : 30;
-        const newPeriodEnd = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000);
+        const durationMs = durationDays * 24 * 60 * 60 * 1000;
+        const now = new Date();
+        const GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000;
 
-        // Find existing active subscription to update, or create a new one
+        // Find existing subscription (active OR past_due)
         const existingSub = await tx.subscription.findFirst({
-          where: { userId: invoice.userId, status: SubscriptionStatus.active },
+          where: {
+            userId: invoice.userId,
+            status: { in: [SubscriptionStatus.active, SubscriptionStatus.past_due] },
+          },
           orderBy: { createdAt: 'desc' },
         });
+
+        let newPeriodEnd: Date;
+        if (isUpgrade) {
+          // Scenario 1: UPGRADE (Plan upgrade or cycle change mid-cycle)
+          // Any unused days from previous subscription were already converted to credits/discount.
+          // The upgraded plan starts a full fresh cycle (30 days for monthly, 365 days for annually) from NOW.
+          newPeriodEnd = new Date(now.getTime() + durationMs);
+        } else if (existingSub && existingSub.periodEnd && (isRenewal || existingSub.planId === invoice.planId)) {
+          // Scenario 2: RENEWAL (same plan / explicit renewal)
+          const currentEnd = new Date(existingSub.periodEnd);
+          const gracePeriodEnd = new Date(currentEnd.getTime() + GRACE_PERIOD_MS);
+
+          if (now < currentEnd) {
+            // Early renewal (before expiration). Seamlessly extend from current periodEnd. No days lost!
+            newPeriodEnd = new Date(currentEnd.getTime() + durationMs);
+          } else if (now <= gracePeriodEnd) {
+            // Renewed during 7-day grace period. Extend from current periodEnd because portfolio remained live.
+            newPeriodEnd = new Date(currentEnd.getTime() + durationMs);
+          } else {
+            // Grace period passed, portfolio was offline. Fresh cycle starting from today (NOW).
+            newPeriodEnd = new Date(now.getTime() + durationMs);
+          }
+        } else {
+          // Scenario 3: Brand new subscription or plan change without active sub
+          newPeriodEnd = new Date(now.getTime() + durationMs);
+        }
 
         if (existingSub) {
           await tx.subscription.update({
@@ -236,9 +269,18 @@ export class WebhookServices {
             data: {
               subscriptionStatus: SubscriptionStatus.active,
               activePlanId: invoice.planId,
+              isActive: true,
             },
           });
         }
+
+        // Store exact periodEnd in invoice.dueDate so invoice record preserves accurate end date
+        await tx.invoice.update({
+          where: { id: invoice.id },
+          data: {
+            dueDate: newPeriodEnd,
+          },
+        });
 
         // Notify Admin of subscription payment
         try {
@@ -255,8 +297,26 @@ export class WebhookServices {
               referenceId: invoice.id,
             },
           });
+
+          // Notify DJ in-app
+          const isRenewal = Boolean((txMeta as any).isRenewal);
+          const formattedEnd = newPeriodEnd.toLocaleDateString('en-GB');
+          const djTitle = isRenewal ? 'Subscription Renewed Successfully 🎉' : 'Subscription Activated 🎉';
+          const djMsg = isRenewal
+            ? `Your ${planName} Plan has been renewed successfully! Your portfolio is active until ${formattedEnd}.`
+            : `Welcome to ${planName} Plan! Your portfolio website is now live until ${formattedEnd}.`;
+
+          await tx.notification.create({
+            data: {
+              userId: invoice.userId,
+              title: djTitle,
+              message: djMsg,
+              type: NotificationType.payment,
+              referenceId: invoice.id,
+            },
+          });
         } catch (notifErr) {
-          this.logger.error('Failed to create admin notification for subscription payment:', notifErr);
+          this.logger.error('Failed to create notification for subscription payment:', notifErr);
         }
       }
     });

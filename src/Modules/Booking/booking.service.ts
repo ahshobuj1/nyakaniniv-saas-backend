@@ -945,6 +945,18 @@ export class BookingServices {
     const dashboardUrl = `${config.clientUrl}/dashboard/bookings/${booking.id}`;
 
     if (senderType === 'CLIENT') {
+      if (booking.tenant?.userId) {
+        await this.prisma.notification.create({
+          data: {
+            userId: booking.tenant.userId,
+            title: `New Message from ${clientName}`,
+            message: `${clientName} sent a message regarding booking ${orderRef} (${booking.eventType || 'Event'}).`,
+            type: NotificationType.booking_request,
+            referenceId: booking.id,
+          },
+        }).catch(() => {});
+      }
+
       if (booking.tenant?.user?.email) {
         this.emailProvider.sendEmail(
           booking.tenant.user.email,
@@ -1097,20 +1109,34 @@ export class BookingServices {
           portalUrl: clientPortalUrl,
         }),
       );
-    } else if (proposer === 'CLIENT' && booking.tenant?.user?.email) {
-      this.emailProvider.sendEmail(
-        booking.tenant.user.email,
-        `Counterproposal Received from ${clientName} - Ref: ${orderRef}`,
-        EmailTemplates.getQuoteProposedTemplate({
-          recipientName: djName,
-          proposerName: clientName,
-          amount: data.amount,
-          currency,
-          notes: data.notes,
-          orderReference: orderRef,
-          portalUrl: `${config.clientUrl}/dashboard/bookings/${booking.id}`,
-        }),
-      );
+    } else if (proposer === 'CLIENT') {
+      if (booking.tenant?.userId) {
+        await this.prisma.notification.create({
+          data: {
+            userId: booking.tenant.userId,
+            title: `Counteroffer Received (${currency} ${Number(data.amount).toLocaleString()})`,
+            message: `${clientName} proposed a quotation for ${booking.eventType || 'Event'} (Ref: ${orderRef}).`,
+            type: NotificationType.booking_request,
+            referenceId: booking.id,
+          },
+        }).catch(() => {});
+      }
+
+      if (booking.tenant?.user?.email) {
+        this.emailProvider.sendEmail(
+          booking.tenant.user.email,
+          `Counterproposal Received from ${clientName} - Ref: ${orderRef}`,
+          EmailTemplates.getQuoteProposedTemplate({
+            recipientName: djName,
+            proposerName: clientName,
+            amount: data.amount,
+            currency,
+            notes: data.notes,
+            orderReference: orderRef,
+            portalUrl: `${config.clientUrl}/dashboard/bookings/${booking.id}`,
+          }),
+        );
+      }
     }
 
     return quote;
@@ -1245,6 +1271,19 @@ export class BookingServices {
       booking.orderReference || `UB-${booking.id.slice(0, 8).toUpperCase()}`;
 
     const acceptedByName = actor === 'CLIENT' ? clientName : djName;
+
+    // Notify DJ in-app if accepted by Client
+    if (actor === 'CLIENT' && booking.tenant?.userId) {
+      await this.prisma.notification.create({
+        data: {
+          userId: booking.tenant.userId,
+          title: 'Quote Accepted & Booking Confirmed! 🎉',
+          message: `${clientName} accepted your quotation of ${quote.currency} ${Number(quote.amount).toLocaleString()} for ${booking.eventType || 'Event'} (Ref: ${orderRef}).`,
+          type: NotificationType.booking_request,
+          referenceId: booking.id,
+        },
+      }).catch(() => {});
+    }
 
     if (booking.client?.email) {
       const clientPortalUrl = this.getClientPortalUrl(
@@ -1690,6 +1729,29 @@ export class BookingServices {
         },
       },
     });
+
+    // Notify DJ of new client review
+    try {
+      if (booking.tenantId) {
+        const tenantRecord = await this.prisma.tenant.findUnique({
+          where: { id: booking.tenantId },
+          select: { userId: true },
+        });
+        if (tenantRecord?.userId) {
+          await this.prisma.notification.create({
+            data: {
+              userId: tenantRecord.userId,
+              title: `New Client Review (${data.rating} ⭐)`,
+              message: `${booking.client?.name || 'A client'} left a ${data.rating}-star review for ${booking.eventType || 'Event'}.`,
+              type: NotificationType.system,
+              referenceId: booking.id,
+            },
+          });
+        }
+      }
+    } catch {
+      // ignore notification error
+    }
 
     return review;
   }

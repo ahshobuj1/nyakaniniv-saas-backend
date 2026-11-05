@@ -156,7 +156,7 @@ export class InvoiceServices {
         include: {
           user: {select: {email: true, firstName: true, lastName: true}},
           tenant: {select: {subdomain: true, stageName: true}},
-          plan: {select: {name: true}},
+          plan: {select: {id: true, name: true, priceMonthly: true, priceAnnually: true}},
           booking: {include: {client: {select: {name: true, email: true}}}},
           transactions: {
             orderBy: {createdAt: 'desc'},
@@ -171,6 +171,7 @@ export class InvoiceServices {
       const isBooking = inv.type === 'BOOKING';
       const item: any = {
         id: inv.id,
+        planId: inv.planId,
         amount: Number(inv.amount),
         currencyCode:
           inv.currencyCode ||
@@ -179,6 +180,8 @@ export class InvoiceServices {
           'KES',
         status: inv.status,
         type: inv.type,
+        dueDate: inv.dueDate,
+        billingCycle: (latestTx?.metadata as any)?.billingCycle || null,
         createdAt: inv.createdAt,
         gateway: latestTx?.gateway || null,
         channel: latestTx?.channel || null,
@@ -209,7 +212,10 @@ export class InvoiceServices {
         }
         if (inv.plan) {
           item.plan = {
+            id: inv.plan.id,
             name: inv.plan.name,
+            priceMonthly: Number(inv.plan.priceMonthly),
+            priceAnnually: Number(inv.plan.priceAnnually),
           };
         }
       }
@@ -804,8 +810,8 @@ export class InvoiceServices {
         const logoPath = path.resolve(process.cwd(), 'public/logo.png');
         if (fs.existsSync(logoPath)) {
           try {
-            doc.image(logoPath, boxX, currentY, {height: 32});
-            currentY += 40;
+            doc.image(logoPath, boxX, currentY, {width: 65});
+            currentY += 80;
           } catch (err) {
             // fallback
           }

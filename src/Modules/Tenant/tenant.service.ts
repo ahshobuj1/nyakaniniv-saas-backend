@@ -171,8 +171,7 @@ export class TenantServices {
           select: {
             subscriptions: {
               where: {
-                status: 'active',
-                periodEnd: { gt: new Date() },
+                status: { in: ['active', 'past_due'] },
               },
               orderBy: { createdAt: 'desc' },
               take: 1,
@@ -186,10 +185,23 @@ export class TenantServices {
       throw new NotFoundError('Tenant profile not found');
     }
 
-    const activeSub = tenant.user?.subscriptions?.[0];
-    const hasActiveSubscription =
-      tenant.subscriptionStatus === 'active' &&
-      Boolean(activeSub && activeSub.periodEnd && new Date(activeSub.periodEnd) > new Date());
+    const latestSub = tenant.user?.subscriptions?.[0];
+    const now = new Date();
+    const GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000;
+
+    let hasActiveSubscription = false;
+    if (latestSub && latestSub.periodEnd) {
+      const pEnd = new Date(latestSub.periodEnd);
+      if (latestSub.status === 'active' && pEnd > now) {
+        hasActiveSubscription = true;
+      } else if (latestSub.status === 'past_due' || pEnd <= now) {
+        const gracePeriodEnd = new Date(pEnd.getTime() + GRACE_PERIOD_MS);
+        // Website remains published during 7-day grace period
+        if (now <= gracePeriodEnd) {
+          hasActiveSubscription = true;
+        }
+      }
+    }
 
     const isPublished = Boolean(tenant.isActive !== false && hasActiveSubscription);
 

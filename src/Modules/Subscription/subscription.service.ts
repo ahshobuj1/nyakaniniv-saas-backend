@@ -177,7 +177,10 @@ export class SubscriptionServices {
 
   async getMySubscription(userId: string) {
     const subscription = await this.prisma.subscription.findFirst({
-      where: {userId, status: SubscriptionStatus.active},
+      where: {
+        userId,
+        status: { in: [SubscriptionStatus.active, SubscriptionStatus.past_due] },
+      },
       include: {plan: true},
       orderBy: {createdAt: 'desc'},
     });
@@ -186,7 +189,61 @@ export class SubscriptionServices {
       return null;
     }
 
-    return subscription;
+    const now = new Date();
+    const periodEnd = subscription.periodEnd ? new Date(subscription.periodEnd) : null;
+    const GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000;
+
+    let remainingDays = 0;
+    let isGracePeriod = false;
+    let graceDaysRemaining = 0;
+
+    if (periodEnd) {
+      if (periodEnd > now) {
+        remainingDays = Math.ceil((periodEnd.getTime() - now.getTime()) / 86400000);
+      } else {
+        const graceEnd = new Date(periodEnd.getTime() + GRACE_PERIOD_MS);
+        if (now <= graceEnd) {
+          isGracePeriod = true;
+          graceDaysRemaining = Math.max(0, Math.ceil((graceEnd.getTime() - now.getTime()) / 86400000));
+        }
+      }
+    }
+
+    const canRenew = remainingDays <= 7 || isGracePeriod || subscription.status === SubscriptionStatus.past_due;
+
+    // Detect billing cycle (annually vs monthly) from last paid subscription transaction
+    const lastInvoice = await this.prisma.invoice.findFirst({
+      where: {
+        userId,
+        type: InvoiceType.SUBSCRIPTION,
+        status: InvoiceStatus.PAID,
+      },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        transactions: {
+          where: { status: TransactionStatus.SUCCEEDED },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+    const lastTx = lastInvoice?.transactions?.[0];
+    const plan = subscription.plan;
+    let billingCycle: 'monthly' | 'annually' = 'monthly';
+    const metaCycle = (lastTx?.metadata as any)?.billingCycle;
+    if (metaCycle === 'annually' || metaCycle === 'monthly') {
+      billingCycle = metaCycle;
+    } else if (lastInvoice && plan && Number(lastInvoice.amount) > Number(plan.priceMonthly) * 2) {
+      billingCycle = 'annually';
+    }
+
+    return {
+      ...subscription,
+      billingCycle,
+      remainingDays,
+      isGracePeriod,
+      graceDaysRemaining,
+      canRenew,
+    };
   }
 
   async updatePlan(id: number, data: UpdateSubscriptionPlanDTO) {
@@ -276,7 +333,10 @@ export class SubscriptionServices {
     );
 
     const activeSub = await this.prisma.subscription.findFirst({
-      where: {userId, status: SubscriptionStatus.active},
+      where: {
+        userId,
+        status: { in: [SubscriptionStatus.active, SubscriptionStatus.past_due] },
+      },
       include: {plan: true},
       orderBy: {createdAt: 'desc'},
     });
@@ -284,6 +344,7 @@ export class SubscriptionServices {
     if (!activeSub) {
       return {
         isUpgrade: false,
+        isRenewal: false,
         isSamePlanAndCycle: false,
         currentPlan: null,
         targetPlan: {
@@ -308,17 +369,30 @@ export class SubscriptionServices {
         status: InvoiceStatus.PAID,
       },
       orderBy: {createdAt: 'desc'},
-      include: {transactions: true},
+      include: {
+        transactions: {
+          where: { status: TransactionStatus.SUCCEEDED },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
     });
 
     const lastTx = lastInvoice?.transactions?.[0];
-    const currentCycle: 'monthly' | 'annually' =
-      (lastTx?.metadata as any)?.billingCycle ||
-      (activeSub.periodEnd &&
-      activeSub.periodEnd.getTime() - (activeSub.createdAt?.getTime() || 0) >
-        40 * 86400000
-        ? 'annually'
-        : 'monthly');
+    const currentPlanRecord = await this.prisma.subscriptionPlan.findUnique({
+      where: { id: activeSub.planId || 0 },
+    });
+
+    let currentCycle: 'monthly' | 'annually' = 'monthly';
+    const metaCycle = (lastTx?.metadata as any)?.billingCycle;
+    if (metaCycle === 'annually' || metaCycle === 'monthly') {
+      currentCycle = metaCycle;
+    } else if (
+      lastInvoice &&
+      currentPlanRecord &&
+      Number(lastInvoice.amount) > Number(currentPlanRecord.priceMonthly) * 2
+    ) {
+      currentCycle = 'annually';
+    }
 
     let currentPrice = 0;
     if (activeSub.planId) {
@@ -351,13 +425,21 @@ export class SubscriptionServices {
 
     const isSamePlanAndCycle =
       activeSub.planId === targetPlan.id && currentCycle === targetCycle;
+
+    // Check if eligible for renewal (within 7 days of period end, or in grace period / expired)
+    const isRenewal =
+      isSamePlanAndCycle &&
+      (remainingDays <= 7 ||
+        activeSub.status === SubscriptionStatus.past_due ||
+        (activeSub.periodEnd ? activeSub.periodEnd <= now : false));
+
     const isDowngradeFromAnnual =
-      currentCycle === 'annually' && targetCycle === 'monthly';
+      !isRenewal && currentCycle === 'annually' && targetCycle === 'monthly';
 
     const isLowerTier = targetPlan.id < (activeSub.planId || 0);
 
     const isDowngrade =
-      isDowngradeFromAnnual || (isLowerTier && !isSamePlanAndCycle);
+      !isRenewal && (isDowngradeFromAnnual || (isLowerTier && !isSamePlanAndCycle));
 
     const formattedDate = activeSub.periodEnd
       ? new Date(activeSub.periodEnd).toLocaleDateString('en-GB')
@@ -367,19 +449,25 @@ export class SubscriptionServices {
       downgradeMessage = `You currently have an active Annual subscription valid until ${formattedDate}. Annual subscriptions cannot be downgraded to monthly mid-cycle.`;
     } else if (isLowerTier && !isSamePlanAndCycle) {
       downgradeMessage = `Downgrading to a lower plan tier is not supported mid-cycle. Your current plan remains fully active until ${formattedDate}.`;
+    } else if (isSamePlanAndCycle && !isRenewal) {
+      downgradeMessage = `Your subscription is active with ${remainingDays} days remaining. Renewals open 7 days prior to expiration.`;
     }
 
-    const amountToPay =
-      isSamePlanAndCycle || isDowngrade
+    const amountToPay = isRenewal
+      ? targetPrice
+      : isSamePlanAndCycle || isDowngrade
         ? 0
         : Math.max(0, Math.round((targetPrice - unusedCredit) * 100) / 100);
-    const appliedCredit =
-      isSamePlanAndCycle || isDowngrade
+
+    const appliedCredit = isRenewal
+      ? 0
+      : isSamePlanAndCycle || isDowngrade
         ? 0
         : Math.min(targetPrice, unusedCredit);
 
     return {
       isUpgrade: !isSamePlanAndCycle && !isDowngrade,
+      isRenewal,
       isSamePlanAndCycle,
       isDowngrade,
       downgradeMessage,
@@ -397,7 +485,7 @@ export class SubscriptionServices {
         billingCycle: targetCycle,
         price: targetPrice,
       },
-      unusedCredit,
+      unusedCredit: isRenewal ? 0 : unusedCredit,
       appliedCredit,
       amountToPay,
       currency,
@@ -442,9 +530,10 @@ export class SubscriptionServices {
       finalCurrency,
     );
 
-    if (preview.isSamePlanAndCycle) {
+    if (preview.isSamePlanAndCycle && !preview.isRenewal) {
       throw new BadRequestError(
-        'You are already subscribed to this plan with the same billing cycle.',
+        preview.downgradeMessage ||
+          'You are already subscribed to this plan with the same billing cycle. Renewals open 7 days before your period ends.',
       );
     }
 
@@ -464,6 +553,9 @@ export class SubscriptionServices {
         where: {userId, status: SubscriptionStatus.active},
       });
 
+      const durationDays = data.billingCycle === 'annually' ? 365 : 30;
+      const newPeriodEnd = new Date(Date.now() + durationDays * 86400000);
+
       await this.prisma.$transaction(async (tx) => {
         const zeroInvoice = await tx.invoice.create({
           data: {
@@ -474,6 +566,7 @@ export class SubscriptionServices {
             currencyCode: currency,
             type: InvoiceType.SUBSCRIPTION,
             status: InvoiceStatus.PAID,
+            dueDate: newPeriodEnd,
           },
         });
 
@@ -500,9 +593,6 @@ export class SubscriptionServices {
             },
           },
         });
-
-        const durationDays = data.billingCycle === 'annually' ? 365 : 30;
-        const newPeriodEnd = new Date(Date.now() + durationDays * 86400000);
 
         if (activeSub) {
           await tx.subscription.update({
@@ -546,6 +636,17 @@ export class SubscriptionServices {
               referenceId: zeroInvoice.id,
             },
           });
+
+          // Notify DJ in-app
+          await tx.notification.create({
+            data: {
+              userId,
+              title: 'Plan Upgraded Successfully 🎉',
+              message: `You upgraded to ${plan.name} Plan using your account credits. Valid until ${newPeriodEnd.toLocaleDateString('en-GB')}.`,
+              type: NotificationType.payment,
+              referenceId: zeroInvoice.id,
+            },
+          });
         } catch {
           // ignore notification failure inside tx
         }
@@ -566,6 +667,9 @@ export class SubscriptionServices {
       data.gateway,
     );
 
+    const durationDays = data.billingCycle === 'annually' ? 365 : 30;
+    const dueDate = new Date(Date.now() + durationDays * 86400000);
+
     // Create unpaid subscription invoice
     const invoice = await this.prisma.invoice.create({
       data: {
@@ -576,6 +680,7 @@ export class SubscriptionServices {
         currencyCode: currency,
         type: InvoiceType.SUBSCRIPTION,
         status: InvoiceStatus.UNPAID,
+        dueDate,
       },
     });
 
@@ -587,9 +692,11 @@ export class SubscriptionServices {
       data.cancelUrl ||
       `${config.clientUrl}/dashboard/billing?canceled=true&reference=${reference}`;
 
-    const paymentDescription = preview.isUpgrade
-      ? `UpBeat Upgrade: ${plan.name} (${data.billingCycle}) - Prorated (Credit: ${currency} ${preview.appliedCredit})`
-      : `UpBeat Subscription: ${plan.name} (${data.billingCycle})`;
+    const paymentDescription = preview.isRenewal
+      ? `UpBeat Subscription Renewal: ${plan.name} (${data.billingCycle})`
+      : preview.isUpgrade
+        ? `UpBeat Upgrade: ${plan.name} (${data.billingCycle}) - Prorated (Credit: ${currency} ${preview.appliedCredit})`
+        : `UpBeat Subscription: ${plan.name} (${data.billingCycle})`;
 
     let paymentResult;
     let actualGateway = provider.gateway;
@@ -611,6 +718,7 @@ export class SubscriptionServices {
           billingCycle: data.billingCycle,
           invoiceId: invoice.id,
           isUpgrade: preview.isUpgrade,
+          isRenewal: preview.isRenewal,
           appliedCredit: preview.appliedCredit,
         },
       });
@@ -638,6 +746,7 @@ export class SubscriptionServices {
               billingCycle: data.billingCycle,
               invoiceId: invoice.id,
               isUpgrade: preview.isUpgrade,
+              isRenewal: preview.isRenewal,
               appliedCredit: preview.appliedCredit,
             },
           });
@@ -669,6 +778,7 @@ export class SubscriptionServices {
           planId: plan.id,
           billingCycle: data.billingCycle,
           isUpgrade: preview.isUpgrade,
+          isRenewal: preview.isRenewal,
           appliedCredit: preview.appliedCredit,
         },
       },
@@ -677,6 +787,7 @@ export class SubscriptionServices {
     return {
       url: paymentResult.checkoutUrl,
       isUpgrade: preview.isUpgrade,
+      isRenewal: preview.isRenewal,
       appliedCredit: preview.appliedCredit,
       amountToPay: amount,
     };
