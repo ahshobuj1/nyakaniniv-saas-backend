@@ -409,6 +409,17 @@ export class SubscriptionServices {
     const totalDays = currentCycle === 'annually' ? 365 : 30;
     let unusedCredit = 0;
 
+    // Detect if subscription is in the 7-day grace period (periodEnd passed but within 7 days)
+    const GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000;
+    const periodEndDate = activeSub.periodEnd ? new Date(activeSub.periodEnd) : null;
+    const isExpired = periodEndDate ? periodEndDate <= now : false;
+    const graceEnd = periodEndDate ? new Date(periodEndDate.getTime() + GRACE_PERIOD_MS) : null;
+    const isInGracePeriod =
+      isExpired &&
+      graceEnd !== null &&
+      now <= graceEnd &&
+      activeSub.status !== SubscriptionStatus.canceled;
+
     if (activeSub.periodEnd && activeSub.periodEnd > now) {
       const remainingMs = Math.max(
         0,
@@ -426,20 +437,30 @@ export class SubscriptionServices {
     const isSamePlanAndCycle =
       activeSub.planId === targetPlan.id && currentCycle === targetCycle;
 
-    // Check if eligible for renewal (within 7 days of period end, or in grace period / expired)
+    // During grace period, subscription is effectively expired — treat any plan selection as a fresh subscribe (renewal/new)
+    // This allows downgrading during grace period (client requirement)
+    const isExpiredOrGrace =
+      isInGracePeriod ||
+      activeSub.status === SubscriptionStatus.past_due ||
+      (activeSub.periodEnd ? activeSub.periodEnd <= now : false);
+
+    // Check if eligible for renewal (within 7 days of period end, in grace period, or expired)
     const isRenewal =
       isSamePlanAndCycle &&
-      (remainingDays <= 7 ||
-        activeSub.status === SubscriptionStatus.past_due ||
-        (activeSub.periodEnd ? activeSub.periodEnd <= now : false));
+      (remainingDays <= 7 || isExpiredOrGrace);
 
+    // During grace/expired period, any plan choice is treated as a new subscribe — not a mid-cycle downgrade
     const isDowngradeFromAnnual =
-      !isRenewal && currentCycle === 'annually' && targetCycle === 'monthly';
+      !isRenewal && !isExpiredOrGrace && currentCycle === 'annually' && targetCycle === 'monthly';
 
     const isLowerTier = targetPlan.id < (activeSub.planId || 0);
 
+    // A downgrade is only blocked mid-cycle (subscription still active and not in grace/expired)
     const isDowngrade =
-      !isRenewal && (isDowngradeFromAnnual || (isLowerTier && !isSamePlanAndCycle));
+      !isRenewal && !isExpiredOrGrace && (isDowngradeFromAnnual || (isLowerTier && !isSamePlanAndCycle));
+
+    // If expired/grace and picking a different plan, it's a fresh subscription (not an upgrade or downgrade)
+    const isFreshSubscribeAfterExpiry = isExpiredOrGrace && !isSamePlanAndCycle;
 
     const formattedDate = activeSub.periodEnd
       ? new Date(activeSub.periodEnd).toLocaleDateString('en-GB')
@@ -447,30 +468,35 @@ export class SubscriptionServices {
     let downgradeMessage: string | null = null;
     if (isDowngradeFromAnnual) {
       downgradeMessage = `You currently have an active Annual subscription valid until ${formattedDate}. Annual subscriptions cannot be downgraded to monthly mid-cycle.`;
-    } else if (isLowerTier && !isSamePlanAndCycle) {
+    } else if (isLowerTier && !isSamePlanAndCycle && !isExpiredOrGrace) {
       downgradeMessage = `Downgrading to a lower plan tier is not supported mid-cycle. Your current plan remains fully active until ${formattedDate}.`;
-    } else if (isSamePlanAndCycle && !isRenewal) {
+    } else if (isSamePlanAndCycle && !isRenewal && !isExpiredOrGrace) {
       downgradeMessage = `Your subscription is active with ${remainingDays} days remaining. Renewals open 7 days prior to expiration.`;
     }
 
     const amountToPay = isRenewal
       ? targetPrice
-      : isSamePlanAndCycle || isDowngrade
-        ? 0
-        : Math.max(0, Math.round((targetPrice - unusedCredit) * 100) / 100);
+      : isFreshSubscribeAfterExpiry
+        ? targetPrice
+        : isSamePlanAndCycle || isDowngrade
+          ? 0
+          : Math.max(0, Math.round((targetPrice - unusedCredit) * 100) / 100);
 
     const appliedCredit = isRenewal
       ? 0
-      : isSamePlanAndCycle || isDowngrade
+      : isFreshSubscribeAfterExpiry
         ? 0
-        : Math.min(targetPrice, unusedCredit);
+        : isSamePlanAndCycle || isDowngrade
+          ? 0
+          : Math.min(targetPrice, unusedCredit);
 
     return {
-      isUpgrade: !isSamePlanAndCycle && !isDowngrade,
-      isRenewal,
+      isUpgrade: !isSamePlanAndCycle && !isDowngrade && !isFreshSubscribeAfterExpiry,
+      isRenewal: isRenewal || isFreshSubscribeAfterExpiry,
       isSamePlanAndCycle,
       isDowngrade,
       downgradeMessage,
+      isInGracePeriod,
       currentPlan: {
         id: activeSub.planId,
         name: activeSub.plan?.name || 'Current Plan',
@@ -485,7 +511,7 @@ export class SubscriptionServices {
         billingCycle: targetCycle,
         price: targetPrice,
       },
-      unusedCredit: isRenewal ? 0 : unusedCredit,
+      unusedCredit: (isRenewal || isFreshSubscribeAfterExpiry) ? 0 : unusedCredit,
       appliedCredit,
       amountToPay,
       currency,
