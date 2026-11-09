@@ -1,4 +1,5 @@
 import { PrismaClient, BookingStatus, SubscriptionStatus, InvoiceStatus, InvoiceType, TransactionStatus } from '@/prisma/generated/client';
+import { PaymentProviderResolver } from '@/Modules/PaymentProvider/PaymentProviderResolver';
 
 export class AnalyticsServices {
   constructor(private prisma: PrismaClient) {}
@@ -225,10 +226,23 @@ export class AnalyticsServices {
       completed: bookingStats.find((s: any) => s.status === BookingStatus.COMPLETED)?._count || 0,
     };
 
+    // DJ Operating currency: use tenant.currencyCode.
+    // If tenant.currencyCode was previously defaulted to KES but tenant.country is outside Kenya, resolve their country's local currency.
+    let resolvedCurrency = tenant.currencyCode;
+    if (
+      (!resolvedCurrency || (resolvedCurrency === 'KES' && tenant.country && !['KE', 'KENYA'].includes(tenant.country.trim().toUpperCase()))) &&
+      tenant.country
+    ) {
+      const countryCurr = PaymentProviderResolver.resolveCurrencyFromCountry(tenant.country);
+      if (countryCurr) {
+        resolvedCurrency = countryCurr;
+      }
+    }
+
     return {
       totalEarnings: completedEarnings._sum.totalAmount ? Number(completedEarnings._sum.totalAmount) : 0,
       pendingInvoices: pendingBookingAmounts._sum.totalAmount ? Number(pendingBookingAmounts._sum.totalAmount) : 0,
-      currencyCode: tenant.currencyCode || 'KES',
+      currencyCode: resolvedCurrency || 'KES',
       bookings,
       recentRequests
     };

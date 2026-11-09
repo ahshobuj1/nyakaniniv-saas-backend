@@ -41,12 +41,14 @@ export class TenantServices {
       throw new ConflictError('Subdomain is already taken');
     }
 
-    // Resolve valid currency from country. If country currency is not active in DB, default to KES.
-    const candidateCurrency = (data.currencyCode || PaymentProviderResolver.resolveCurrencyFromCountry(data.country)).trim().toUpperCase();
-    const activeCurrency = await this.prisma.currency.findUnique({
-      where: { code: candidateCurrency },
-    });
-    const currencyCode = (activeCurrency && activeCurrency.isActive) ? candidateCurrency : 'KES';
+    // Resolve valid currency for DJ operations (from input or country).
+    // Operating currency is the DJ's local business currency (e.g. BDT, USD, GBP, NGN, KES)
+    // and must not be restricted only to subscription billing currencies.
+    const currencyCode = (
+      data.currencyCode ||
+      PaymentProviderResolver.resolveCurrencyFromCountry(data.country) ||
+      'KES'
+    ).trim().toUpperCase();
 
     const newTenant = await this.prisma.tenant.create({
       data: {
@@ -222,16 +224,9 @@ export class TenantServices {
       throw new NotFoundError('Tenant profile not found');
     }
 
-    let currencyCode = data.currencyCode;
-    if (data.country && !data.currencyCode) {
-      const candidateCurrency = PaymentProviderResolver.resolveCurrencyFromCountry(data.country);
-      const active = await this.prisma.currency.findUnique({ where: { code: candidateCurrency } });
-      currencyCode = (active && active.isActive) ? candidateCurrency : 'KES';
-    } else if (data.currencyCode) {
-      const active = await this.prisma.currency.findUnique({ where: { code: data.currencyCode.trim().toUpperCase() } });
-      if (!active || !active.isActive) {
-        currencyCode = 'KES';
-      }
+    let currencyCode = data.currencyCode ? data.currencyCode.trim().toUpperCase() : undefined;
+    if (data.country && !currencyCode) {
+      currencyCode = PaymentProviderResolver.resolveCurrencyFromCountry(data.country);
     }
 
     const updatedTenant = await this.prisma.tenant.update({
