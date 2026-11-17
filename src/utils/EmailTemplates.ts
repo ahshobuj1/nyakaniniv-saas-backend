@@ -72,7 +72,7 @@ export class EmailTemplates {
               <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 520px; margin: 32px auto 0 auto;">
                 <tr>
                   <td align="center" style="color: #9ca3af; font-size: 12px; line-height: 1.6; text-align: center;">
-                    <p style="margin: 0 0 4px 0; color: #9ca3af;">&copy; ${new Date().getFullYear()} UpBeat Entertainment Africa. All rights reserved.</p>
+                    <p style="margin: 0 0 4px 0; color: #9ca3af;">&copy; ${new Date().getFullYear()} UpBeat Entertainment Africa by BExpand Limited. All rights reserved.</p>
                     <p style="margin: 0; color: #9ca3af;">The Premier Live Entertainment Platform for Africa</p>
                   </td>
                 </tr>
@@ -275,17 +275,17 @@ export class EmailTemplates {
   ): string {
     const data = typeof options === 'string'
       ? {
-          clientName: 'there',
-          djName: options,
-          eventType: legacyEventType || 'Event',
-          eventDate: '',
-          eventTime: '',
-          venue: '',
-          currency: 'KES',
-          amount: 0,
-          paymentUrl: legacyPaymentUrl || '#',
-          requestCashUrl: legacyRequestCashUrl || '#',
-        }
+        clientName: 'there',
+        djName: options,
+        eventType: legacyEventType || 'Event',
+        eventDate: '',
+        eventTime: '',
+        venue: '',
+        currency: 'KES',
+        amount: 0,
+        paymentUrl: legacyPaymentUrl || '#',
+        requestCashUrl: legacyRequestCashUrl || '#',
+      }
       : options;
 
     const amountDisplay = data.amount && data.amount > 0
@@ -581,16 +581,16 @@ export class EmailTemplates {
   ): string {
     const data = typeof options === 'string'
       ? {
-          clientName: 'there',
-          djName: options,
-          eventType: legacyEventType || 'Event',
-          eventDate: '',
-          eventTime: '',
-          currency: 'KES',
-          amount: 0,
-          paymentUrl: legacyPaymentUrl || '#',
-          manageUrl: '',
-        }
+        clientName: 'there',
+        djName: options,
+        eventType: legacyEventType || 'Event',
+        eventDate: '',
+        eventTime: '',
+        currency: 'KES',
+        amount: 0,
+        paymentUrl: legacyPaymentUrl || '#',
+        manageUrl: '',
+      }
       : options;
 
     const amountDisplay = data.amount && data.amount > 0
